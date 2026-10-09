@@ -39,10 +39,29 @@ import {
 } from "./messages/message.validation.js";
 import { addTicketEventHandler } from "./timeline/timeline.controller.js";
 import { createTicketEventSchema } from "./timeline/timeline.validation.js";
+import { getDashboardOverviewHandler } from "./dashboard/dashboard.controller.js";
 
 const ticketRoutes = express.Router();
 
 ticketRoutes.use(requireAuth);
+
+/**
+ * @openapi
+ * /tickets/dashboard:
+ *   get:
+ *     tags: [Tickets]
+ *     summary: Dashboard overview metrics from live ticket data
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard overview fetched successfully
+ */
+ticketRoutes.get(
+    "/tickets/dashboard",
+    asyncHandler(getDashboardOverviewHandler)
+);
 
 /**
  * @openapi

@@ -12,6 +12,8 @@ import Signup from "./pages/auth/Signup.jsx";
 import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
 import Agents from "./pages/agents/Agents.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
+import NewTicket from "./pages/tickets/NewTicket.jsx";
+import Tickets from "./pages/tickets/Tickets.jsx";
 
 export default function App() {
   return (
@@ -42,6 +44,8 @@ export default function App() {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/tickets" element={<Tickets />} />
+        <Route path="/tickets/new" element={<NewTicket />} />
         <Route
           path="/agents"
           element={
