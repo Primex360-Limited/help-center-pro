@@ -1,0 +1,34 @@
+[dotenv@17.3.1] injecting env (19) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+✅ MongoDB connected
+prisma:info Starting a postgresql pool with 13 connections.
+{"level":30,"time":"2026-10-09T13:24:33.544Z","module":"postgres","msg":"PostgreSQL database connected successfully"}
+✅ Default roles seeded (Super Admin, Admin, Agent)
+Dev test user updated: test@test.com
+Dev test user updated: jetsamjoseph@gmail.com
+Connecting to Redis...
+Redis connected
+Server running on port 4008
+Health: http://localhost:4008/health
+API docs: http://localhost:4008/api-docs
+[0mPOST /api/v1/auth/login [32m200[0m 124.656 ms - 1521[0m
+[0mOPTIONS /api/v1/auth/login [32m200[0m 0.665 ms - 0[0m
+[0mPOST /api/v1/auth/login [32m200[0m 142.233 ms - 1521[0m
+[0mOPTIONS /api/v1/users [32m200[0m 0.385 ms - 0[0m
+[0mOPTIONS /api/v1/roles/all [32m200[0m 0.595 ms - 0[0m
+[0mOPTIONS /api/v1/roles/all [32m200[0m 0.093 ms - 0[0m
+[0mGET /api/v1/roles/all [32m200[0m 15.577 ms - 1276[0m
+[0mGET /api/v1/users [32m200[0m 60.570 ms - 4779[0m
+[0mGET /api/v1/roles/all [36m304[0m 35.135 ms - -[0m
+[0mGET /api/v1/users [36m304[0m 37.902 ms - -[0m
+[0mOPTIONS /api/v1/auth/logout [32m200[0m 0.118 ms - 0[0m
+[0mPOST /api/v1/auth/logout [32m200[0m 24.420 ms - 56[0m
+[0mOPTIONS /api/v1/auth/forgot-password [32m200[0m 0.246 ms - 0[0m
+[auth] password reset email sent successfully
+[0mPOST /api/v1/auth/forgot-password [32m200[0m 4760.754 ms - 218[0m
+[0mOPTIONS /api/v1/auth/verify-email [32m200[0m 0.748 ms - 0[0m
+[0mOPTIONS /api/v1/auth/verify-email [32m200[0m 0.260 ms - 0[0m
+[0mPOST /api/v1/auth/verify-email [33m400[0m 16.318 ms - 56[0m
+[0mPOST /api/v1/auth/verify-email [33m400[0m 9.048 ms - 56[0m
+[0mOPTIONS /api/v1/auth/forgot-password [32m200[0m 0.359 ms - 0[0m
+[auth] password reset email sent successfully
+[0mPOST /api/v1/auth/forgot-password [32m200[0m 2104.206 ms - 218[0m

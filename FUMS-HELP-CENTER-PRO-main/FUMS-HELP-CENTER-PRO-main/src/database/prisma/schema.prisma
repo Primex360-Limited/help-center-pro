@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL_PRODUCTION")
+}
+
+/////////////////////////////////////////////
+// ENUMS (EXISTING + NEW)
+//////////////////////////////////////////////////////
+
+enum TicketStatus {
+  QUEUED
+  OPEN
+  PENDING
+  WAITING_FOR_REPLY
+  RESOLVED
+  CLOSED
+}
+
+enum MessageType {
+  message
+  internal_note
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketEventType {
+  EMAIL
+  CHAT
+  CALL
+  LOG
+}
+
+enum TicketChannel {
+  EMAIL
+  CHAT
+  PHONE
+}
+
+enum SenderType {
+  AGENT
+  CUSTOMER
+}
+
+enum CallEventType {
+  CALL_INITIATED
+  CALL_RECEIVED
+  CALL_PICKED
+  CALL_HANGUP
+}
+
+enum CallActor {
+  AGENT
+  CUSTOMER
+  SYSTEM
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+}
+
+//////////////////////////////////////////////////////
+// MAIN TICKET MODEL (EXTENDED - NON BREAKING)
+//////////////////////////////////////////////////////
+
+model Ticket {
+  id          String @id @default(uuid()) @db.Uuid
+  ticketId    String @unique
+  title       String
+  description String
+
+  // EXISTING
+  status           TicketStatus @default(OPEN)
+  assignedToUserId String?
+  assignedToName   String?
+  assignedToEmail  String?
+
+  createdByUserId String
+  createdByName   String
+  createdByEmail  String
+
+  updatedByUserId String?
+  updatedByName   String?
+  updatedByEmail  String?
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  priority  TicketPriority @default(MEDIUM)
+
+  // ✅ NEW CUSTOMER SNAPSHOT (ADDITIVE)
+  customerId    String?
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+  customerIp    String?
+
+  // Queue, SLA, and customer-waiting workflow fields.
+  queuedAt               DateTime?
+  pickedAt               DateTime?
+  resolutionDueAt        DateTime?
+  waitingForCustomerAt   DateTime?
+  lastCustomerResponseAt DateTime?
+  lastAgentResponseAt    DateTime?
+
+  // EXISTING RELATIONS
+  assignmentHistory TicketAssignmentHistory[]
+  messages          TicketMessage[]
+  statusHistory     TicketStatusHistory[]
+
+  // ✅ NEW RELATION
+  events TicketEvent[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToUserId])
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([customerIp])
+  @@index([resolutionDueAt])
+}
+
+//////////////////////////////////////////////////////
+// EXISTING MODELS (UNCHANGED)
+//////////////////////////////////////////////////////
+
+model TicketMessage {
+  id           String      @id @default(uuid()) @db.Uuid
+  ticketRefId  String      @db.Uuid
+  senderUserId String
+  senderName   String
+  senderEmail  String
+  messageType  MessageType @default(message)
+  content      String
+  createdAt    DateTime    @default(now())
+  ticket       Ticket      @relation(fields: [ticketRefId], references: [id], onDelete: Cascade)
+
+  @@index([ticketRefId, createdAt])
+  @@index([messageType])
+}
+
+model TicketAssignmentHistory {
+  id                       String   @id @default(uuid()) @db.Uuid
+  ticketRefId              String   @db.Uuid
+  previousAssignedToUserId String?
+  previousAssignedToName   String?
+  previousAssignedToEmail  String?
+  newAssignedToUserId      String
+  newAssignedToName        String
+  newAssignedToEmail       String
+  assignedByUserId         String
+  assignedByName           String
+  assignedByEmail          String
+  transferReason           String?
+  createdAt                DateTime @default(now())
+  ticket                   Ticket   @relation(fields: [ticketRefId], references: [id], onDelete: Cascade)
+
+  @@index([ticketRefId, createdAt])
+}
+
+model TicketStatusHistory {
+  id              String        @id @default(uuid()) @db.Uuid
+  ticketRefId     String        @db.Uuid
+  oldStatus       TicketStatus?
+  newStatus       TicketStatus
+  changedByUserId String
+  changedByName   String
+  changedByEmail  String
+  createdAt       DateTime      @default(now())
+  ticket          Ticket        @relation(fields: [ticketRefId], references: [id], onDelete: Cascade)
+
+  @@index([ticketRefId, createdAt])
+}
+
+//////////////////////////////////////////////////////
+// NEW: THREAD CORE
+//////////////////////////////////////////////////////
+
+model TicketEvent {
+  id        String          @id @default(uuid()) @db.Uuid
+  ticketId  String          @db.Uuid
+  type      TicketEventType
+  channel   TicketChannel
+  createdBy String // agent | customer | system
+  createdAt DateTime        @default(now())
+  metadata  Json?
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  // Relations to channel data
+  email TicketEmailMessage?
+  chat  TicketChatMessage?
+  call  TicketCall?
+
+  @@index([ticketId, createdAt])
+}
+
+//////////////////////////////////////////////////////
+// CHANNEL TABLES
+//////////////////////////////////////////////////////
+
+model TicketEmailMessage {
+  id            String @id @default(uuid()) @db.Uuid
+  ticketEventId String @unique @db.Uuid
+  subject       String
+  body          String
+  fromEmail     String
+  toEmail       String
+
+  event TicketEvent @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+}
+
+model TicketChatMessage {
+  id            String     @id @default(uuid()) @db.Uuid
+  ticketEventId String     @unique @db.Uuid
+  message       String
+  senderType    SenderType
+
+  event TicketEvent @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+}
+
+model TicketCall {
+  id            String  @id @default(uuid()) @db.Uuid
+  ticketEventId String  @unique @db.Uuid
+  duration      Int?
+  recordingUrl  String?
+
+  event TicketEvent     @relation(fields: [ticketEventId], references: [id], onDelete: Cascade)
+  logs  TicketCallLog[]
+}
+
+//////////////////////////////////////////////////////
+// CALL LOGS (AUDIT TRAIL)
+//////////////////////////////////////////////////////
+
+model TicketCallLog {
+  id        String         @id @default(uuid()) @db.Uuid
+  callId    String         @db.Uuid
+  eventType CallEventType
+  actor     CallActor
+  direction CallDirection?
+  timestamp DateTime       @default(now())
+
+  call TicketCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId, timestamp])
+}
