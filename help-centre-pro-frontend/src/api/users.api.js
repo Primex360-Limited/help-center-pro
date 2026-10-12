@@ -1,7 +1,8 @@
 import { apiRequest } from "./client.js";
 
-export async function listUsers() {
-  return apiRequest("/users", { auth: true });
+export async function listUsers({ includeStats = false } = {}) {
+  const query = includeStats ? "?includeStats=true" : "";
+  return apiRequest(`/users${query}`, { auth: true });
 }
 
 export async function getUser(id) {

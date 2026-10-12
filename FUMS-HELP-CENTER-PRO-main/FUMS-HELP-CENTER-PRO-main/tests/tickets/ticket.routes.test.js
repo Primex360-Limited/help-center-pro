@@ -9,7 +9,7 @@ const addEventToTicket = jest.fn();
 const requireAuth = (req, res, next) => {
     req.user = { sub: "admin-id" };
     req.currentUser = {
-        _id: "admin-id",
+        id: "admin-id",
         firstName: "Admin",
         lastName: "User",
         email: "admin@example.com",
@@ -19,6 +19,10 @@ const requireAuth = (req, res, next) => {
 };
 
 const requirePermission = () => (req, res, next) => next();
+const bindTenantToUser = (req, res, next) => {
+    req.tenantId = req.user?.tenant_id ?? null;
+    next();
+};
 const asyncHandler = (handler) => (req, res, next) =>
     Promise.resolve(handler(req, res, next)).catch(next);
 const validate = (_schema, location = "body") => (req, res, next) => {
@@ -55,6 +59,13 @@ jest.unstable_mockModule(
     "../../src/modules/roles/rbac.middleware.js",
     () => ({
         requirePermission
+    })
+);
+
+jest.unstable_mockModule(
+    "../../src/modules/tenants/tenant.middleware.js",
+    () => ({
+        bindTenantToUser
     })
 );
 

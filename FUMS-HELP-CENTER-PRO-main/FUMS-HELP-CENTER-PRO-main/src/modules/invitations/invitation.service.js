@@ -1,11 +1,12 @@
-import Invitation from "../../database/model/invitation.model.js";
-import Role from "../../database/model/role.model.js";
-import User from "../../database/model/user.model.js";
+import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { env } from "../../config/env.js";
 import {
     AUDIT_ACTION,
     INVITATION_STATUS,
-    USER_STATUS
+    TENANT_STATUS,
+    USER_STATUS,
+    USER_TYPE
 } from "../../shared/constants/system.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
 import {
@@ -14,17 +15,43 @@ import {
     hashPassword,
     hashToken
 } from "../auth/auth.utils.js";
-import { env } from "../../config/env.js";
 import { sendInvitationEmail } from "../auth/auth.email.js";
+import { safeSendEmail } from "../auth/auth.service.js";
+import { buildRoleSummary } from "../roles/role.service.js";
+
+/**
+ * Agent invitation service (Postgres / Prisma, Phase-1 multi-tenancy).
+ *
+ * Every invitation belongs to exactly one workspace (`AgentInvitation.tenantId`
+ * is required), and the invited role must live in that same workspace — so a
+ * tenant admin can only ever invite into their own tenant.
+ *
+ * The invited user row is created immediately (status `invited`,
+ * `mustChangePassword: true`) and is flipped to `active` when the invitee
+ * accepts the token, mirroring the legacy Mongo behaviour.
+ */
 
 const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
 
-async function findInvitationByToken(token) {
-    const tokenHash = hashToken(token);
+const INVITATION_INCLUDE = Object.freeze({
+    role: { include: { permissions: { include: { permission: true } } } },
+    user: true
+});
 
-    const invitation = await Invitation.findOne({ tokenHash })
-        .populate("roleId", "name description permissions")
-        .populate("userId");
+function normalizeEmail(email) {
+    return String(email || "").toLowerCase().trim();
+}
+
+/** Load a usable invitation by raw token, expiring it on the way if stale. */
+async function findInvitationByToken(token, client = prisma) {
+    if (!token) {
+        throw new AppError("Invalid invitation token", 400);
+    }
+
+    const invitation = await client.agentInvitation.findFirst({
+        where: { tokenHash: hashToken(token) },
+        include: INVITATION_INCLUDE
+    });
 
     if (!invitation) {
         throw new AppError("Invalid invitation token", 400);
@@ -41,8 +68,11 @@ async function findInvitationByToken(token) {
         invitation.status === INVITATION_STATUS.PENDING &&
         invitation.expiresAt < new Date()
     ) {
-        invitation.status = INVITATION_STATUS.EXPIRED;
-        await invitation.save();
+        await client.agentInvitation.update({
+            where: { id: invitation.id },
+            data: { status: INVITATION_STATUS.EXPIRED }
+        });
+
         throw new AppError("Invitation token expired", 400);
     }
 
@@ -50,26 +80,20 @@ async function findInvitationByToken(token) {
 }
 
 function buildInvitationPayload(invitation) {
-    const role = invitation.roleId;
-    const user = invitation.userId;
+    const user = invitation.user;
 
     return {
+        id: invitation.id,
+        tenantId: invitation.tenantId,
         email: invitation.email,
         firstName: invitation.firstName,
         lastName: invitation.lastName,
         expiresAt: invitation.expiresAt,
         invitationStatus: invitation.status,
-        role: role
-            ? {
-                id: role._id,
-                name: role.name,
-                description: role.description,
-                permissions: role.permissions || []
-            }
-            : null,
+        role: buildRoleSummary(invitation.role),
         user: user
             ? {
-                id: user._id,
+                id: user.id,
                 roleId: user.roleId,
                 emailVerified: user.emailVerified,
                 status: user.status,
@@ -79,15 +103,55 @@ function buildInvitationPayload(invitation) {
     };
 }
 
+/** `tenant_admins_invited` is a workspace-level event, `user_invited` an agent one. */
+async function resolveInviteAuditAction(invitedBy, client = prisma) {
+    if (!invitedBy) {
+        return AUDIT_ACTION.USER_INVITED;
+    }
+
+    const inviter = await client.user.findUnique({
+        where: { id: invitedBy },
+        select: { userType: true }
+    });
+
+    return inviter?.userType === USER_TYPE.PROVIDER
+        ? AUDIT_ACTION.TENANT_ADMIN_INVITED
+        : AUDIT_ACTION.USER_INVITED;
+}
+
+/**
+ * Invite someone into a workspace and hand them a role.
+ *
+ * `tenantId` is mandatory: an agent always belongs to a workspace. A provider
+ * super admin passes the workspace being provisioned, a tenant admin passes
+ * their own workspace (resolved from `req.tenantId` by the controller).
+ */
 export async function createInvitation({
     email,
     firstName,
     lastName,
     roleId,
-    invitedBy
+    invitedBy,
+    tenantId = null
 }) {
-    const normalizedEmail = email.toLowerCase().trim();
-    const role = await Role.findById(roleId);
+    const normalizedEmail = normalizeEmail(email);
+
+    if (!normalizedEmail) {
+        throw new AppError("Email is required", 400);
+    }
+
+    if (!tenantId) {
+        throw new AppError("A workspace is required to invite a user", 400);
+    }
+
+    if (!invitedBy) {
+        throw new AppError("Invitation sender could not be resolved", 400);
+    }
+
+    const role = await prisma.role.findFirst({
+        where: { id: roleId, tenantId },
+        include: { permissions: { include: { permission: true } } }
+    });
 
     if (!role) {
         throw new AppError("Role not found", 404);
@@ -96,135 +160,170 @@ export async function createInvitation({
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
 
-    let user = await User.findOne({ email: normalizedEmail }).select("+passwordHash");
+    const existingUser = await prisma.user.findFirst({
+        where: { tenantId, email: normalizedEmail },
+        select: { id: true, status: true }
+    });
 
-    if (user && user.status !== USER_STATUS.INVITED) {
+    if (existingUser && existingUser.status !== USER_STATUS.INVITED) {
         throw new AppError("A user with this email already exists", 409);
     }
 
-    if (!user) {
-        user = await User.create({
-            email: normalizedEmail,
-            passwordHash,
-            firstName,
-            lastName,
-            roleId,
-            status: USER_STATUS.INVITED,
-            emailVerified: false,
-            mustChangePassword: true,
-            invitedBy,
-            deniedPermissions: []
-        });
-    } else {
-        user.firstName = firstName;
-        user.lastName = lastName;
-        user.passwordHash = passwordHash;
-        user.roleId = roleId;
-        user.status = USER_STATUS.INVITED;
-        user.emailVerified = false;
-        user.emailVerifiedAt = null;
-        user.mustChangePassword = true;
-        user.invitedBy = invitedBy;
-        user.deniedPermissions = [];
-        await user.save();
-    }
+    const invitedUserData = {
+        tenantId,
+        userType: USER_TYPE.TENANT,
+        email: normalizedEmail,
+        passwordHash,
+        firstName,
+        lastName,
+        roleId: role.id,
+        status: USER_STATUS.INVITED,
+        emailVerified: false,
+        emailVerifiedAt: null,
+        mustChangePassword: true,
+        invitedById: invitedBy,
+        deniedPermissions: []
+    };
 
-    await Invitation.updateMany(
-        {
+    const user = existingUser
+        ? await prisma.user.update({
+              where: { id: existingUser.id },
+              data: invitedUserData
+          })
+        : await prisma.user.create({ data: invitedUserData });
+
+    // A fresh invite invalidates any pending invite for the same address.
+    await prisma.agentInvitation.updateMany({
+        where: {
+            tenantId,
             email: normalizedEmail,
             status: INVITATION_STATUS.PENDING
         },
-        {
-            $set: {
-                status: INVITATION_STATUS.REVOKED
-            }
+        data: {
+            status: INVITATION_STATUS.REVOKED,
+            revokedAt: new Date()
         }
-    );
+    });
 
     const rawToken = generateRandomToken();
-    const invitation = await Invitation.create({
-        userId: user._id,
-        email: normalizedEmail,
-        firstName,
-        lastName,
-        roleId,
-        invitedBy,
-        tokenHash: hashToken(rawToken),
-        status: INVITATION_STATUS.PENDING,
-        expiresAt: new Date(Date.now() + FORTY_EIGHT_HOURS_IN_MS)
+    const invitation = await prisma.agentInvitation.create({
+        data: {
+            tenantId,
+            userId: user.id,
+            email: normalizedEmail,
+            firstName,
+            lastName,
+            roleId: role.id,
+            invitedById: invitedBy,
+            tokenHash: hashToken(rawToken),
+            status: INVITATION_STATUS.PENDING,
+            expiresAt: new Date(Date.now() + FORTY_EIGHT_HOURS_IN_MS)
+        }
     });
 
-    try {
-        await sendInvitationEmail({
-            to: normalizedEmail,
-            firstName,
-            token: rawToken,
-            roleName: role.name,
-            temporaryPassword
-        });
-    } catch (error) {
-        if (env.NODE_ENV === "production") {
-            throw error;
-        }
-
-        console.warn("[invitations] email skipped in development:", error.message);
-    }
+    const emailSent = await safeSendEmail(
+        () =>
+            sendInvitationEmail({
+                to: normalizedEmail,
+                firstName,
+                token: rawToken,
+                roleName: role.name,
+                temporaryPassword
+            }),
+        `invitation email to ${normalizedEmail}`
+    );
 
     await recordAuditLog({
+        tenantId,
         userId: invitedBy,
-        action: AUDIT_ACTION.USER_INVITED,
+        action: await resolveInviteAuditAction(invitedBy),
         entity: "Invitation",
-        entityId: invitation._id,
+        entityId: invitation.id,
         metadata: {
             email: normalizedEmail,
-            roleId,
-            invitedUserId: user._id
+            roleId: role.id,
+            invitedUserId: user.id,
+            emailSent
         }
     });
 
-    const payload = invitation.toObject ? invitation.toObject() : invitation;
-
     return {
-        ...payload,
+        ...invitation,
         ...(env.NODE_ENV !== "production"
-            ? {
-                inviteToken: rawToken,
-                temporaryPassword
-            }
+            ? { inviteToken: rawToken, temporaryPassword }
             : {})
     };
 }
 
+/** Public preview of an invitation (no secrets are exposed). */
 export async function previewInvitation(token) {
     const invitation = await findInvitationByToken(token);
 
     return buildInvitationPayload(invitation);
 }
 
+/**
+ * Accept an invitation: the invite row becomes `accepted` and the invited user
+ * is verified + activated in the same transaction.
+ */
 export async function acceptInvitation({ token }) {
     const invitation = await findInvitationByToken(token);
-    const user = invitation.userId;
 
-    if (!user) {
+    if (!invitation.userId) {
         throw new AppError("Invited user record no longer exist", 404);
     }
 
     if (invitation.status === INVITATION_STATUS.PENDING) {
-        invitation.status = INVITATION_STATUS.ACCEPTED;
-        invitation.acceptedAt = new Date();
-        user.emailVerified = true;
-        user.emailVerifiedAt = new Date();
-        user.status = USER_STATUS.ACTIVE;
-        await Promise.all([invitation.save(), user.save()]);
+        const acceptedAt = new Date();
+
+        await prisma.$transaction([
+            prisma.agentInvitation.update({
+                where: { id: invitation.id },
+                data: {
+                    status: INVITATION_STATUS.ACCEPTED,
+                    acceptedAt
+                }
+            }),
+            prisma.user.update({
+                where: { id: invitation.userId },
+                data: {
+                    emailVerified: true,
+                    emailVerifiedAt: acceptedAt,
+                    status: USER_STATUS.ACTIVE
+                }
+            })
+        ]);
 
         await recordAuditLog({
-            userId: user._id,
+            tenantId: invitation.tenantId,
+            userId: invitation.userId,
             action: AUDIT_ACTION.INVITATION_ACCEPTED,
             entity: "Invitation",
-            entityId: invitation._id,
-            metadata: { roleId: invitation.roleId?._id || invitation.roleId }
+            entityId: invitation.id,
+            metadata: { roleId: invitation.roleId }
         });
+
+        if (invitation.tenantId) {
+            await prisma.tenant.updateMany({
+                where: {
+                    id: invitation.tenantId,
+                    status: { not: TENANT_STATUS.ACTIVE }
+                },
+                data: {
+                    status: TENANT_STATUS.ACTIVE,
+                    suspendedAt: null,
+                    suspendedReason: null
+                }
+            });
+        }
     }
 
-    return buildInvitationPayload(invitation);
+    const accepted = await prisma.agentInvitation.findFirst({
+        where: { id: invitation.id },
+        include: INVITATION_INCLUDE
+    });
+
+    return buildInvitationPayload(accepted ?? invitation);
 }
+
+export default createInvitation;

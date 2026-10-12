@@ -1,7 +1,16 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-export default function ProtectedRoute({ children, permission }) {
+function isProviderUser(user) {
+  return Boolean(user?.isSuperAdmin || user?.userType === "provider");
+}
+
+export default function ProtectedRoute({
+  children,
+  permission,
+  providerOnly = false,
+  tenantOnly = false,
+}) {
   const { loading, isAuthenticated, user, hasPermission } = useAuth();
   const location = useLocation();
 
@@ -14,15 +23,29 @@ export default function ProtectedRoute({ children, permission }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    const loginPath = providerOnly ? "/admin/login" : "/login";
+    return <Navigate to={loginPath} replace state={{ from: location }} />;
   }
 
   if (user?.mustChangePassword && location.pathname !== "/change-password") {
     return <Navigate to="/change-password" replace />;
   }
 
-  if (permission && !hasPermission(permission)) {
+  if (providerOnly && !isProviderUser(user)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (tenantOnly && isProviderUser(user)) {
+    return <Navigate to="/admin/overview" replace />;
+  }
+
+  if (permission && !hasPermission(permission)) {
+    return (
+      <Navigate
+        to={isProviderUser(user) ? "/admin/overview" : "/dashboard"}
+        replace
+      />
+    );
   }
 
   return children;

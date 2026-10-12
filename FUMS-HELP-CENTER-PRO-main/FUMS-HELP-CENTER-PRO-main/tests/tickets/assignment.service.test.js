@@ -62,7 +62,7 @@ describe("assignTicket", () => {
             assignedToUserId: null
         });
         getUserById.mockResolvedValue({
-            _id: "agent-id",
+            id: "agent-id",
             firstName: "Inactive",
             lastName: "Agent",
             email: "inactive@example.com",
@@ -91,7 +91,7 @@ describe("assignTicket", () => {
         });
 
         getUserById.mockResolvedValue({
-            _id: "agent-id",
+            id: "agent-id",
             firstName: "Assigned",
             lastName: "Agent",
             email: "agent@example.com",

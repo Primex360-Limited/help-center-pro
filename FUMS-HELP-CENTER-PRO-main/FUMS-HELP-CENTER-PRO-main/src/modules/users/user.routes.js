@@ -2,6 +2,7 @@ import express from "express";
 import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { bindTenantToUser } from "../tenants/tenant.middleware.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
     deleteUserHandler,
@@ -18,10 +19,17 @@ const userRoutes = express.Router();
  * /users:
  *   get:
  *     tags: [Users]
- *     summary: Get all users
+ *     summary: Get all workspace users / agents
+ *     description: Pass includeStats=true to attach live Assigned / Open / Resolved ticket counters for the Agents screen.
  *     security:
  *       - bearerAuth: []
  *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: includeStats
+ *         schema:
+ *           type: boolean
+ *         description: When true, each user includes ticketStats { assigned, open, resolved }
  *     responses:
  *       200:
  *         description: Users fetched
@@ -33,7 +41,8 @@ const userRoutes = express.Router();
 userRoutes.get(
     "/users",
     requireAuth,
-    requirePermission("manage_users"),
+    bindTenantToUser,
+    requirePermission("agent:read"),
     asyncHandler(getUsersHandler)
 );
 
@@ -63,7 +72,8 @@ userRoutes.get(
 userRoutes.get(
     "/users/:id",
     requireAuth,
-    requirePermission("manage_users"),
+    bindTenantToUser,
+    requirePermission("agent:read"),
     validate(userIdParamSchema, "params"),
     asyncHandler(getUserHandler)
 );
@@ -100,7 +110,8 @@ userRoutes.get(
 userRoutes.patch(
     "/users/:id",
     requireAuth,
-    requirePermission("manage_users"),
+    bindTenantToUser,
+    requirePermission("agent:update"),
     validate(userIdParamSchema, "params"),
     validate(updateUserSchema),
     asyncHandler(updateUserHandler)
@@ -132,7 +143,8 @@ userRoutes.patch(
 userRoutes.delete(
     "/users/:id",
     requireAuth,
-    requirePermission("manage_users"),
+    bindTenantToUser,
+    requirePermission("agent:deactivate"),
     validate(userIdParamSchema, "params"),
     asyncHandler(deleteUserHandler)
 );

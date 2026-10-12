@@ -222,3 +222,11 @@ prisma:query SELECT "public"."Ticket"."id" FROM "public"."Ticket" WHERE "public"
 prisma:query SELECT COUNT(*) AS "_count$_all" FROM (SELECT "public"."Ticket"."id" FROM "public"."Ticket" WHERE "public"."Ticket"."status" IN (CAST($1::text AS "public"."TicketStatus"),CAST($2::text AS "public"."TicketStatus")) OFFSET $3) AS "sub"
 prisma:query SELECT "public"."TicketEvent"."id", "public"."TicketEvent"."ticketId", "public"."TicketEvent"."channel"::text FROM "public"."TicketEvent" WHERE ("public"."TicketEvent"."ticketId" IN ($1,$2) AND "public"."TicketEvent"."channel" IN (CAST($3::text AS "public"."TicketChannel"),CAST($4::text AS "public"."TicketChannel"),CAST($5::text AS "public"."TicketChannel"))) ORDER BY "public"."TicketEvent"."createdAt" ASC OFFSET $6
 [0mGET /api/v1/tickets/dashboard [32m200[0m 15.707 ms - 1650[0m
+[0mOPTIONS /api/v1/auth/me [32m200[0m 12.550 ms - 0[0m
+[0mOPTIONS /api/v1/auth/me [32m200[0m 0.120 ms - 0[0m
+[0mGET /api/v1/auth/me [33m401[0m 57.680 ms - 61[0m
+[0mGET /api/v1/auth/me [33m401[0m 4.564 ms - 61[0m
+[0mOPTIONS /api/v1/auth/login [32m200[0m 7.502 ms - 0[0m
+[0mPOST /api/v1/auth/login [33m401[0m 365.698 ms - 55[0m
+[0mOPTIONS /api/v1/auth/login [32m200[0m 1.210 ms - 0[0m
+[0mPOST /api/v1/auth/login [33m401[0m 155.264 ms - 55[0m

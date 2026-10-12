@@ -16,9 +16,10 @@ function normalizeUser(user) {
   return {
     ...user,
     id: user.id || user._id,
+    userType: user.userType || user.user_type || null,
     roleName: user.role?.name || user.roleId?.name || null,
     permissions: user.allowedPermissions || user.permissions || [],
-    isSuperAdmin: Boolean(user.isSuperAdmin),
+    isSuperAdmin: Boolean(user.isSuperAdmin || user.is_super_admin),
   };
 }
 
@@ -81,8 +82,9 @@ export function AuthProvider({ children }) {
       logout,
       refreshUser,
       hasPermission,
-      canManageUsers: hasPermission("manage_users"),
-      canManageRoles: hasPermission("manage_roles"),
+      canManageUsers:
+        hasPermission("agent:read") || hasPermission("agent:invite"),
+      canManageRoles: hasPermission("role:read") || hasPermission("role:manage"),
     }),
     [user, loading, login, logout, refreshUser, hasPermission]
   );

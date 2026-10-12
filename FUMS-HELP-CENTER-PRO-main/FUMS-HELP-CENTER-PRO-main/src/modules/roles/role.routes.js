@@ -2,6 +2,7 @@ import express from "express";
 import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { bindTenantToUser } from "../tenants/tenant.middleware.js";
 import { requirePermission } from "./rbac.middleware.js";
 import {
     createRoleHandler,
@@ -49,7 +50,8 @@ const roleRoutes = express.Router();
 roleRoutes.post(
     "/roles",
     requireAuth,
-    requirePermission("manage_roles"),
+    bindTenantToUser,
+    requirePermission("role:manage"),
     validate(createRoleSchema),
     asyncHandler(createRoleHandler)
 );
@@ -74,7 +76,8 @@ roleRoutes.post(
 roleRoutes.get(
     "/roles/all",
     requireAuth,
-    requirePermission("manage_roles", "manage_users"),
+    bindTenantToUser,
+    requirePermission("role:read", "agent:read", "agent:invite"),
     asyncHandler(getRolesHandler)
 );
 
@@ -110,7 +113,8 @@ roleRoutes.get(
 roleRoutes.get(
     "/roles/:id",
     requireAuth,
-    requirePermission("manage_roles"),
+    bindTenantToUser,
+    requirePermission("role:read", "agent:invite"),
     validate(roleIdParamSchema, "params"),
     asyncHandler(getRoleHandler)
 );
@@ -153,7 +157,8 @@ roleRoutes.get(
 roleRoutes.patch(
     "/roles/:id",
     requireAuth,
-    requirePermission("manage_roles"),
+    bindTenantToUser,
+    requirePermission("role:manage"),
     validate(roleIdParamSchema, "params"),
     validate(updateRoleSchema),
     asyncHandler(updateRoleHandler)

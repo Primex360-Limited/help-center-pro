@@ -14,6 +14,17 @@ import {
 } from "./auth.service.js";
 import { setAuthCookies, clearAuthCookies } from "./auth.cookie.js";
 
+/**
+ * Workspace resolved by the tenant middleware for this request.
+ *
+ * Unauthenticated endpoints have no `req.tenantId` yet, so the resolved host
+ * (`req.tenant`) is the only trustworthy source there.
+ */
+function requestTenantId(req) {
+    return req.tenant?.id ?? req.tenantId ?? null;
+}
+
+
 export async function registerInitialSuperAdmin(req, res) {
     const result = await registerSuperAdmin(req.validatedBody);
 
@@ -34,6 +45,7 @@ export async function registerInitialSuperAdmin(req, res) {
 export async function login(req, res) {
     const result = await loginUser({
         ...req.validatedBody,
+        tenantId: requestTenantId(req),
         deviceInfo: req.headers["user-agent"] || "unknown",
         ipAddress: req.ip,
     });
@@ -87,13 +99,19 @@ export async function verifyEmail(req, res) {
 }
 
 export async function verificationStatus(req, res) {
-    const result = await getEmailVerificationStatus(req.validatedBody);
+    const result = await getEmailVerificationStatus({
+        ...req.validatedBody,
+        tenantId: requestTenantId(req)
+    });
 
     return successResponse(res, "Verification status fetched", result);
 }
 
 export async function resendVerification(req, res) {
-    const result = await resendVerificationEmail(req.validatedBody);
+    const result = await resendVerificationEmail({
+        ...req.validatedBody,
+        tenantId: requestTenantId(req)
+    });
 
     return successResponse(
         res,
@@ -103,7 +121,10 @@ export async function resendVerification(req, res) {
 }
 
 export async function forgotPassword(req, res) {
-    const result = await requestPasswordReset(req.validatedBody);
+    const result = await requestPasswordReset({
+        ...req.validatedBody,
+        tenantId: requestTenantId(req)
+    });
 
     return successResponse(
         res,

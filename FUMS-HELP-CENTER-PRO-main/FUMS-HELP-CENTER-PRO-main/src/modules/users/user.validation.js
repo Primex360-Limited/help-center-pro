@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { USER_STATUS } from "../../shared/constants/system.js";
+import { UUID_PATTERN } from "../../shared/utils/uuid.js";
 
-const objectIdSchema = z
+/** Every identity-layer primary key is a Postgres `uuid`. */
+const uuidSchema = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, "Invalid identifier");
+  .regex(UUID_PATTERN, "Invalid identifier");
+
 
 export const userIdParamSchema = z.object({
-  id: objectIdSchema
+  id: uuidSchema
 });
 
 export const updateUserSchema = z.object({
@@ -15,7 +18,7 @@ export const updateUserSchema = z.object({
   profileImage: z.string().optional(),
   phoneNumber: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
-  roleId: z.union([objectIdSchema, z.null()]).optional(),
+  roleId: z.union([uuidSchema, z.null()]).optional(),
   status: z.enum([
     USER_STATUS.ACTIVE,
     USER_STATUS.INACTIVE,

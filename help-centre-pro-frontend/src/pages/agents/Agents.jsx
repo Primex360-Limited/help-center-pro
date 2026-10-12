@@ -1,42 +1,65 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Mail, Plus } from "lucide-react";
 import { inviteUser } from "../../api/invitations.api.js";
 import { listRoles } from "../../api/roles.api.js";
-import { deleteUser, listUsers, updateUser } from "../../api/users.api.js";
+import { listUsers } from "../../api/users.api.js";
+import AddAgentModal from "../../components/agents/AddAgentModal.jsx";
+import InviteSentModal from "../../components/agents/InviteSentModal.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import "../../styles/app.css";
 import "../../styles/auth.css";
+import "../../styles/agents.css";
 
-const emptyInvite = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  roleId: "",
-};
+function displayName(user) {
+  const local = user.email?.split("@")[0] || "";
+  if (!user.lastName || user.lastName === "User") {
+    return local || user.firstName || "Agent";
+  }
+  const full = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return full || local || "Agent";
+}
+
+function initials(user) {
+  const name = displayName(user);
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function roleChip(roleName = "") {
+  if (roleName.includes("Admin") || roleName === "Admin") return "admin";
+  if (roleName.includes("Supervisor")) return "supervisor";
+  return "agent";
+}
+
+function roleLabel(roleName = "") {
+  if (roleName === "Tenant Admin" || roleName === "Admin") return "admin";
+  if (roleName === "Tenant Supervisor") return "supervisor";
+  if (roleName === "Tenant Agent" || roleName === "Agent") return "agent";
+  return (roleName || "agent").toLowerCase();
+}
 
 export default function Agents() {
+  const { hasPermission } = useAuth();
+  const canInvite = hasPermission("agent:invite");
+
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
-  const [invite, setInvite] = useState(emptyInvite);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [devInvite, setDevInvite] = useState(null);
-
-  const assignableRoles = useMemo(
-    () =>
-      roles.filter((role) =>
-        ["Admin", "Agent", "Tenant Admin", "Tenant Supervisor", "Tenant Agent"].includes(
-          role.name
-        )
-      ),
-    [roles]
-  );
+  const [modalError, setModalError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [inviteSentEmail, setInviteSentEmail] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [usersRes, rolesRes] = await Promise.all([listUsers(), listRoles()]);
+      const [usersRes, rolesRes] = await Promise.all([
+        listUsers({ includeStats: true }),
+        listRoles(),
+      ]);
       setUsers(usersRes?.data?.users || []);
       setRoles(
         (rolesRes?.data?.roles || []).map((role) => ({
@@ -45,7 +68,7 @@ export default function Agents() {
         }))
       );
     } catch (err) {
-      setError(err.message || "Failed to load team");
+      setError(err.message || "Failed to load agents");
     } finally {
       setLoading(false);
     }
@@ -55,264 +78,138 @@ export default function Agents() {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    if (!invite.roleId && assignableRoles.length) {
-      const agentRole =
-        assignableRoles.find((role) => role.name === "Agent") || assignableRoles[0];
-      setInvite((prev) => ({ ...prev, roleId: agentRole.id }));
-    }
-  }, [assignableRoles, invite.roleId]);
+  const agents = useMemo(
+    () =>
+      users.filter((user) => {
+        const roleName = user.role?.name || "";
+        return (
+          user.userType !== "provider" &&
+          !roleName.includes("Provider")
+        );
+      }),
+    [users]
+  );
 
-  async function handleInvite(event) {
-    event.preventDefault();
+  async function handleInvite({ email, roleId }) {
     setSubmitting(true);
-    setError("");
-    setNotice("");
-    setDevInvite(null);
-
+    setModalError("");
     try {
-      const result = await inviteUser({
-        firstName: invite.firstName.trim(),
-        lastName: invite.lastName.trim(),
-        email: invite.email.trim(),
-        roleId: invite.roleId,
-      });
-
-      const invitation = result?.data?.invitation;
-      setNotice("Invitation sent successfully.");
-      if (invitation?.inviteToken || invitation?.temporaryPassword) {
-        setDevInvite({
-          token: invitation.inviteToken,
-          temporaryPassword: invitation.temporaryPassword,
-        });
-      }
-      setInvite((prev) => ({ ...emptyInvite, roleId: prev.roleId }));
+      await inviteUser({ email, roleId });
+      setShowAddModal(false);
+      setInviteSentEmail(email);
       await loadData();
     } catch (err) {
-      setError(err.message || "Unable to invite user");
+      setModalError(err.message || "Unable to send invitation");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleStatusChange(user, status) {
-    setError("");
-    try {
-      await updateUser(user.id || user._id, { status });
-      await loadData();
-    } catch (err) {
-      setError(err.message || "Unable to update user");
-    }
-  }
-
-  async function handleRoleChange(user, roleId) {
-    setError("");
-    try {
-      await updateUser(user.id || user._id, { roleId });
-      await loadData();
-    } catch (err) {
-      setError(err.message || "Unable to update role");
-    }
-  }
-
-  async function handleDelete(user) {
-    if (!window.confirm(`Remove ${user.email} from the workspace?`)) return;
-    setError("");
-    try {
-      await deleteUser(user.id || user._id);
-      await loadData();
-    } catch (err) {
-      setError(err.message || "Unable to delete user");
-    }
-  }
-
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      <div className="panel">
-        <div className="panel__header">
-          <div>
-            <h2>Invite agent or admin</h2>
-            <p>
-              Send a secure invite. New teammates set access via email and a
-              temporary password.
-            </p>
-          </div>
+    <div className="agents-page">
+      <header className="agents-page__header">
+        <div>
+          <h1>Agents</h1>
+          <p>Manage your support Team and Agents.</p>
         </div>
-
-        <form className="form-grid" onSubmit={handleInvite}>
-          <div className="field">
-            <label htmlFor="invite-first">First name</label>
-            <input
-              id="invite-first"
-              value={invite.firstName}
-              onChange={(e) =>
-                setInvite((prev) => ({ ...prev, firstName: e.target.value }))
-              }
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="invite-last">Last name</label>
-            <input
-              id="invite-last"
-              value={invite.lastName}
-              onChange={(e) =>
-                setInvite((prev) => ({ ...prev, lastName: e.target.value }))
-              }
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="invite-email">Email</label>
-            <input
-              id="invite-email"
-              type="email"
-              value={invite.email}
-              onChange={(e) =>
-                setInvite((prev) => ({ ...prev, email: e.target.value }))
-              }
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="invite-role">Role</label>
-            <select
-              id="invite-role"
-              value={invite.roleId}
-              onChange={(e) =>
-                setInvite((prev) => ({ ...prev, roleId: e.target.value }))
-              }
-              required
-            >
-              <option value="" disabled>
-                Select role
-              </option>
-              {assignableRoles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="full">
-            <button className="primary-btn" type="submit" disabled={submitting}>
-              {submitting ? "Sending invite..." : "Send invitation"}
-            </button>
-          </div>
-        </form>
-
-        {error ? (
-          <p className="auth-error" style={{ marginTop: 16 }}>
-            {error}
-          </p>
-        ) : null}
-        {notice ? (
-          <p className="auth-success" style={{ marginTop: 16 }}>
-            {notice}
-          </p>
-        ) : null}
-        {devInvite ? (
-          <div className="inline-note">
-            <strong>Local development invite details</strong>
-            <div>Temp password: {devInvite.temporaryPassword}</div>
-            <div>
-              Accept link:{" "}
-              {`${window.location.origin}/accept-invitation?token=${devInvite.token}`}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="panel">
-        <div className="panel__header">
-          <div>
-            <h2>Team members</h2>
-            <p>Manage agent status, roles, and access.</p>
-          </div>
-          <button className="ghost-btn" type="button" onClick={loadData}>
-            Refresh
+        {canInvite ? (
+          <button
+            type="button"
+            className="primary-btn agents-page__add"
+            onClick={() => {
+              setModalError("");
+              setShowAddModal(true);
+            }}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Add New Agent
           </button>
-        </div>
+        ) : null}
+      </header>
 
-        {loading ? (
-          <p className="auth-subtitle">Loading team...</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="agents-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => {
-                  const id = user.id || user._id;
-                  const roleName = user.role?.name || "Unassigned";
-                  const status = user.status || "active";
-                  return (
-                    <tr key={id}>
-                      <td>
-                        {user.firstName} {user.lastName}
-                      </td>
-                      <td>{user.email}</td>
-                      <td>
-                        <select
-                          value={user.role?.id || user.roleId || ""}
-                          onChange={(e) => handleRoleChange(user, e.target.value)}
-                          disabled={roleName === "Super Admin"}
-                        >
-                          {roles.map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <span className={`badge badge--${status}`}>{status}</span>
-                      </td>
-                      <td>
-                        <div className="row-actions">
-                          {status !== "active" ? (
-                            <button
-                              className="ghost-btn"
-                              type="button"
-                              onClick={() => handleStatusChange(user, "active")}
-                            >
-                              Activate
-                            </button>
-                          ) : (
-                            <button
-                              className="ghost-btn"
-                              type="button"
-                              onClick={() => handleStatusChange(user, "inactive")}
-                            >
-                              Deactivate
-                            </button>
-                          )}
-                          {roleName !== "Super Admin" ? (
-                            <button
-                              className="danger-btn"
-                              type="button"
-                              onClick={() => handleDelete(user)}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {error ? <p className="dashboard__error">{error}</p> : null}
+
+      {loading ? (
+        <p className="dash-empty">Loading agents...</p>
+      ) : agents.length ? (
+        <div className="agents-grid">
+          {agents.map((user) => {
+            const stats = user.ticketStats || {
+              assigned: 0,
+              open: 0,
+              resolved: 0,
+            };
+            const pending = user.status === "invited";
+            return (
+              <article key={user.id || user.email} className="agent-card">
+                {pending ? <span className="agent-card__pending">Pending</span> : null}
+                <div className="agent-card__top">
+                  <div className="agent-card__avatar" aria-hidden="true">
+                    {initials(user)}
+                  </div>
+                  <div className="agent-card__identity">
+                    <div className="agent-card__name-row">
+                      <h3>{displayName(user)}</h3>
+                      <span className={`agent-card__role agent-card__role--${roleChip(user.role?.name)}`}>
+                        {roleLabel(user.role?.name)}
+                      </span>
+                    </div>
+                    <div className="agent-card__email">
+                      <Mail size={14} />
+                      <span>{user.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="agent-card__stats">
+                  <div>
+                    <strong>{stats.assigned}</strong>
+                    <span>Assigned</span>
+                  </div>
+                  <div>
+                    <strong className="is-open">{stats.open}</strong>
+                    <span>Open</span>
+                  </div>
+                  <div>
+                    <strong className="is-resolved">{stats.resolved}</strong>
+                    <span>Resolved</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="agents-empty">
+          <p>No agents in this workspace yet.</p>
+          {canInvite ? (
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={() => setShowAddModal(true)}
+            >
+              <Plus size={16} />
+              Add New Agent
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {showAddModal ? (
+        <AddAgentModal
+          roles={roles}
+          submitting={submitting}
+          error={modalError}
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleInvite}
+        />
+      ) : null}
+
+      {inviteSentEmail ? (
+        <InviteSentModal
+          email={inviteSentEmail}
+          onClose={() => setInviteSentEmail("")}
+        />
+      ) : null}
     </div>
   );
 }

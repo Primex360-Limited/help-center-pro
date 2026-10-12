@@ -1,15 +1,17 @@
 import { z } from "zod";
+import { UUID_PATTERN } from "../../../shared/utils/uuid.js";
 
-const objectIdSchema = z
+/** Ticket assignees are Postgres `uuid` user ids. */
+const uuidSchema = z
     .string()
-    .regex(/^[0-9a-fA-F]{24}$/, "Assigned user identitifier must be a valid MongoDB user id");
+    .regex(UUID_PATTERN, "Invalid identifier");
 
 export const assignTicketSchema = z.object({
-    assignedToUserId: objectIdSchema,
+    assignedToUserId: uuidSchema,
     transferReason: z.string().trim().min(3).optional()
 });
 
 export const transferTicketSchema = z.object({
-    assignedToUserId: objectIdSchema,
+    assignedToUserId: uuidSchema,
     transferReason: z.string().trim().min(3, "Transfer reason is required")
 });

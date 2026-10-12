@@ -11,7 +11,7 @@ describe("ticket utils", () => {
         const actor = buildActorSnapshotFromRequest({
             user: { sub: "mongo-user-id" },
             currentUser: {
-                _id: "mongo-user-id",
+                id: "mongo-user-id",
                 firstName: "Caroline",
                 lastName: "Susan",
                 email: "caroline@example.com"

@@ -1,9 +1,14 @@
 import { Server } from "socket.io";
-import User from "../../../database/model/user.model.js";
+import prisma from "../../../database/prisma/client.js";
 import allowedCors from "../../../config/corsConfig.js";
 import { USER_STATUS } from "../../../shared/constants/system.js";
+import { isUuid } from "../../../shared/utils/uuid.js";
 import { verifyAccessToken } from "../../auth/auth.utils.js";
-import { getEffectivePermissionsFromUser, isSuperAdminUser } from "../../roles/role.service.js";
+import {
+    findUserWithRole,
+    getEffectivePermissionsFromUser,
+    isSuperAdminUser
+} from "../../roles/role.service.js";
 import { canReceiveTicketAssignment } from "../helpers/ticket-assignee.js";
 import { mapTicketResponse } from "../helpers/map-ticket-response.js";
 import { createTicket } from "../ticket.service.js";
@@ -148,6 +153,28 @@ function buildCustomerPayload(socket, payload = {}) {
     };
 }
 
+/**
+ * Persist agent presence. Best-effort: a deleted row (or invalid id) must not
+ * tear down the socket, mirroring the previous `findByIdAndUpdate` behaviour.
+ */
+async function setUserPresence(userId, isOnline) {
+    if (!isUuid(userId)) {
+        return;
+    }
+
+    try {
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                isOnline,
+                lastSeenAt: new Date()
+            }
+        });
+    } catch (error) {
+        console.warn("[tickets] presence update skipped:", error.message);
+    }
+}
+
 async function authenticateSocket(socket, next) {
     try {
         const token = getSocketToken(socket);
@@ -161,10 +188,11 @@ async function authenticateSocket(socket, next) {
         }
 
         const decoded = verifyAccessToken(token);
-        const user = await User.findById(decoded.sub).populate(
-            "roleId",
-            "name description permissions"
-        );
+
+        // Access tokens carry the PRD claim set; `sub` is a Postgres uuid.
+        const user = isUuid(decoded.sub)
+            ? await findUserWithRole(decoded.sub)
+            : null;
 
         if (!user) {
             return next(new Error("Authenticated user no longer exists"));
@@ -176,6 +204,8 @@ async function authenticateSocket(socket, next) {
 
         socket.data.connectionType = "agent";
         socket.data.user = user;
+        socket.data.tenantId =
+            decoded.tenant_id ?? user.tenantId ?? null;
         socket.data.actor = buildUserSnapshot(user);
         socket.data.permissions = getEffectivePermissionsFromUser(user);
 
@@ -186,29 +216,24 @@ async function authenticateSocket(socket, next) {
 }
 
 async function markUserOnline(socket) {
-    if (!socket.data.user?._id) {
+    if (!socket.data.user?.id) {
         return;
     }
 
-    const userId = socket.data.user._id.toString();
+    const userId = socket.data.user.id.toString();
     const existingSockets = activeUserSockets.get(userId) || new Set();
     existingSockets.add(socket.id);
     activeUserSockets.set(userId, existingSockets);
 
-    await User.findByIdAndUpdate(userId, {
-        $set: {
-            isOnline: true,
-            lastSeenAt: new Date()
-        }
-    });
+    await setUserPresence(userId, true);
 }
 
 async function markUserOfflineIfNeeded(socket) {
-    if (!socket.data.user?._id) {
+    if (!socket.data.user?.id) {
         return;
     }
 
-    const userId = socket.data.user._id.toString();
+    const userId = socket.data.user.id.toString();
     const existingSockets = activeUserSockets.get(userId);
 
     if (!existingSockets) {
@@ -224,12 +249,7 @@ async function markUserOfflineIfNeeded(socket) {
 
     activeUserSockets.delete(userId);
 
-    await User.findByIdAndUpdate(userId, {
-        $set: {
-            isOnline: false,
-            lastSeenAt: new Date()
-        }
-    });
+    await setUserPresence(userId, false);
 }
 
 async function joinDefaultAgentRooms(socket) {

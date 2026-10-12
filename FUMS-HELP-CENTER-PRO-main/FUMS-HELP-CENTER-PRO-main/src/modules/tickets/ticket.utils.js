@@ -10,7 +10,7 @@ export function buildActorSnapshotFromRequest(req) {
         throw new AppError("Authenticated user information is missing", 401);
     }
 
-    const userId = req.currentUser._id?.toString() || req.user?.sub;
+    const userId = req.currentUser.id || req.user?.sub;
     const name = [req.currentUser.firstName, req.currentUser.lastName]
         .filter(Boolean)
         .join(" ")
@@ -29,7 +29,7 @@ export function buildUserSnapshot(user) {
     }
 
     return {
-        userId: user._id?.toString() || user.id.toString() || user.userId,
+        userId: user.id || user.userId || null,
         name: [user.firstName, user.lastName]
             .filter(Boolean)
             .join(" ")

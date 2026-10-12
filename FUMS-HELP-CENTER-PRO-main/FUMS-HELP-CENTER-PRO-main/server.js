@@ -2,7 +2,7 @@ import app from "./src/app.js";
 import connectDB, { disconnectDB } from "./src/config/db.js";
 import connectPostgres, { disconnectPostgres } from "./src/config/postgres.js";
 import { connectRedis, disconnectRedis } from "./src/config/redis.js";
-import { seedDefaultRoles } from "./src/modules/roles/seedDefaultRoles.js";
+import { seedSystemRoles } from "./src/modules/roles/seedSystemRoles.js";
 import { seedTestUser } from "./src/modules/auth/seedTestUser.js";
 import { assertCriticalEnv, env } from "./src/config/env.js";
 import {
@@ -57,8 +57,8 @@ async function startServer() {
 
         await connectDB();
         await connectPostgres();
-        await seedDefaultRoles();
-        console.log("✅ Default roles seeded (Super Admin, Admin, Agent)");
+        await seedSystemRoles();
+        console.log("✅ System roles and permission catalog seeded (Postgres)");
 
         if (env.SEED_TEST_USER && env.NODE_ENV !== "production") {
             await seedTestUser();

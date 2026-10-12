@@ -1,16 +1,13 @@
-import PasswordResetToken from "../../database/model/passwordResetToken.model.js";
-import Role from "../../database/model/role.model.js";
-import Session from "../../database/model/session.model.js";
-import User from "../../database/model/user.model.js";
-import VerificationToken from "../../database/model/verificationToken.model.js";
+import prisma from "../../database/prisma/client.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import {
     AUDIT_ACTION,
-    DEFAULT_SYSTEM_PERMISSIONS,
-    SYSTEM_ROLE,
-    USER_STATUS
+    TENANT_STATUS,
+    USER_STATUS,
+    USER_TYPE
 } from "../../shared/constants/system.js";
+import { PROVIDER_ROLE, SUPER_ADMIN_ROLE_NAMES } from "../../shared/constants/roles.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
 import sendVerificationEmail, { sendPasswordResetEmail } from "./auth.email.js";
 import {
@@ -20,12 +17,36 @@ import {
     generateRefreshToken,
     hashPassword,
     hashToken,
-    verifyRefreshToken,
+    verifyRefreshToken
 } from "./auth.utils.js";
-import { getUserAccessProfile, normalizePermissionList } from "../roles/role.service.js";
-import { seedDefaultRoles } from "../roles/seedDefaultRoles.js";
+import {
+    buildUserAccessProfile,
+    findUserWithRole,
+    getEffectivePermissionsFromUser,
+    isSuperAdminUser
+} from "../roles/role.service.js";
+import { seedSystemRoles } from "../roles/seedSystemRoles.js";
 
-async function safeSendEmail(sendFn, label) {
+/**
+ * Authentication service (Postgres / Prisma, Phase-1 multi-tenancy).
+ *
+ * Contract notes:
+ *  - Every export name from the Mongo era is preserved.
+ *  - Email lookups are tenant-aware: `User.email` is unique per workspace only
+ *    (`@@unique([tenantId, email])`), because Postgres treats NULLs as
+ *    distinct. Whenever a caller knows the workspace it MUST pass `tenantId`
+ *    so the right row is selected; without it the provider-scope row wins and
+ *    an email that exists in several workspaces is rejected as ambiguous.
+ *  - Access tokens carry the PRD claim set
+ *    (`sub`, `user_id`, `tenant_id`, `role_id`, `user_type`, `permissions`)
+ *    so downstream guards never need a second database read.
+ */
+
+/**
+ * Send an email without breaking the surrounding request in development:
+ * a failed send is logged and reported as `false`. In production it rethrows.
+ */
+export async function safeSendEmail(sendFn, label) {
     try {
         await sendFn();
         console.info(`[auth] ${label} sent successfully`);
@@ -43,90 +64,109 @@ async function safeSendEmail(sendFn, label) {
 const SEVEN_DAYS_IN_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_HOUR_IN_MS = 60 * 60 * 1000;
 
-const buildAuthPayload = (user) => ({
-    sub: user._id.toString(),
-    email: user.email,
-});
+/** Drop secrets before a user row is handed to the API layer. */
+function sanitizeUser(user) {
+    if (!user) {
+        return null;
+    }
 
-function sanitizeUserDocument(user) {
-    return typeof user.toJSON === "function" ? user.toJSON() : user;
+    const { passwordHash, ...rest } = user;
+
+    return rest;
 }
 
+/** Lower-cased, trimmed email used for every lookup and write. */
+function normalizeEmail(email) {
+    return String(email || "").toLowerCase().trim();
+}
+
+/**
+ * JWT claims for a hydrated user (loaded with `USER_ROLE_INCLUDE`).
+ * `sub` is kept alongside `user_id` for backward compatibility.
+ */
+function buildAuthPayload(user) {
+    return {
+        sub: user.id,
+        user_id: user.id,
+        email: user.email,
+        user_type: user.userType,
+        tenant_id: user.tenantId ?? null,
+        role_id: user.role?.id ?? user.roleId ?? null,
+        is_super_admin: isSuperAdminUser(user),
+        permissions: getEffectivePermissionsFromUser(user)
+    };
+}
+
+/** Hydrate a user + its access profile into the API shape. */
 async function attachAccessProfile(userOrId) {
-    const userId = userOrId?._id || userOrId?.id || userOrId;
-    const hydratedUser = await User.findById(userId).populate(
-        "roleId",
-        "name description permissions"
-    );
+    const userId = typeof userOrId === "string" ? userOrId : userOrId?.id;
+    const hydratedUser = await findUserWithRole(userId);
 
     if (!hydratedUser) {
         throw new AppError("User not found", 404);
     }
 
-    const accessProfile = await getUserAccessProfile(hydratedUser._id);
-    const sanitizedUser = sanitizeUserDocument(hydratedUser);
-
-    if (accessProfile.role) {
-        sanitizedUser.roleId = accessProfile.role.id;
-    }
-
     return {
-        ...sanitizedUser,
-        ...accessProfile
+        ...sanitizeUser(hydratedUser),
+        ...buildUserAccessProfile(hydratedUser)
     };
 }
 
-async function ensureSuperAdminRoleWithPermissions() {
-    const defaultPermissions = normalizePermissionList(DEFAULT_SYSTEM_PERMISSIONS);
-    let superAdminRole = await Role.findOne({ name: SYSTEM_ROLE.SUPER_ADMIN });
+/**
+ * Resolve the provider super-admin role, seeding the identity layer first.
+ * Accepts the legacy `"Super Admin"` name so a Mongo-era database keeps
+ * working after the cutover.
+ */
+async function ensureSuperAdminRole() {
+    await seedSystemRoles();
 
-    if (!superAdminRole) {
-        superAdminRole = await Role.create({
-            name: SYSTEM_ROLE.SUPER_ADMIN,
-            description: "Platform super administrator",
-            permissions: defaultPermissions
-        });
+    const existingRole = await prisma.role.findFirst({
+        where: { tenantId: null, name: { in: [...SUPER_ADMIN_ROLE_NAMES] } },
+        orderBy: { createdAt: "asc" }
+    });
 
-        return superAdminRole;
+    if (existingRole) {
+        return existingRole;
     }
 
-    const mergedPermissions = normalizePermissionList([
-        ...(superAdminRole.permissions || []),
-        ...defaultPermissions
-    ]);
-
-    if (
-        mergedPermissions.length !== (superAdminRole.permissions || []).length
-    ) {
-        superAdminRole.permissions = mergedPermissions;
-        await superAdminRole.save();
-    }
-
-    return superAdminRole;
+    return prisma.role.create({
+        data: {
+            tenantId: null,
+            name: PROVIDER_ROLE.SUPER_ADMIN,
+            description:
+                "Help Centre Pro platform operator - provisions and manages tenants",
+            isSystem: true
+        }
+    });
 }
-
+/**
+ * Register the initial provider super admin.
+ *
+ * Only provider-scope accounts (`tenantId IS NULL`) are considered, so the same
+ * email may still exist inside a tenant workspace.
+ */
 export async function registerSuperAdmin({
     email,
     password,
     firstName,
     lastName
 }) {
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
+    const superAdminRole = await ensureSuperAdminRole();
 
-    await seedDefaultRoles();
-
-    const [existingUser, superAdminRole] = await Promise.all([
-        User.findOne({ email: normalizedEmail }),
-        ensureSuperAdminRoleWithPermissions()
-    ]);
+    const existingUser = await prisma.user.findFirst({
+        where: { email: normalizedEmail, tenantId: null },
+        select: { id: true }
+    });
 
     if (existingUser) {
         throw new AppError("User with this email already exists", 409);
     }
 
-    const existingSuperAdmin = await User.findOne({
-        roleId: superAdminRole._id
-    }).lean();
+    const existingSuperAdmin = await prisma.user.findFirst({
+        where: { roleId: superAdminRole.id, userType: USER_TYPE.PROVIDER },
+        select: { id: true }
+    });
 
     if (existingSuperAdmin) {
         throw new AppError(
@@ -137,24 +177,31 @@ export async function registerSuperAdmin({
 
     const passwordHash = await hashPassword(password);
 
-    const user = await User.create({
-        email: normalizedEmail,
-        passwordHash,
-        firstName,
-        lastName,
-        roleId: superAdminRole._id,
-        status: USER_STATUS.ACTIVE,
-        mustChangePassword: true,
-        deniedPermissions: []
+    const user = await prisma.user.create({
+        data: {
+            tenantId: null,
+            userType: USER_TYPE.PROVIDER,
+            email: normalizedEmail,
+            passwordHash,
+            firstName,
+            lastName,
+            roleId: superAdminRole.id,
+            status: USER_STATUS.ACTIVE,
+            emailVerified: false,
+            mustChangePassword: true,
+            deniedPermissions: []
+        },
+        include: { role: { include: { permissions: { include: { permission: true } } } } }
     });
 
     const rawVerificationToken = generateRandomToken();
-    const verificationTokenHash = hashToken(rawVerificationToken);
 
-    await VerificationToken.create({
-        userId: user._id,
-        tokenHash: verificationTokenHash,
-        expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS),
+    await prisma.verificationToken.create({
+        data: {
+            userId: user.id,
+            tokenHash: hashToken(rawVerificationToken),
+            expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS)
+        }
     });
 
     const emailSent = await safeSendEmail(
@@ -167,19 +214,24 @@ export async function registerSuperAdmin({
     );
 
     await recordAuditLog({
-        userId: user._id,
+        tenantId: null,
+        userId: user.id,
         action: AUDIT_ACTION.USER_REGISTERED,
         entity: "User",
-        entityId: user._id,
+        entityId: user.id,
         metadata: { email: user.email, registrationType: "super_admin" }
     });
 
     await recordAuditLog({
-        userId: user._id,
+        tenantId: null,
+        userId: user.id,
         action: AUDIT_ACTION.ROLE_ASSIGNED,
         entity: "User",
-        entityId: user._id,
-        metadata: { roleId: superAdminRole._id, registrationType: "super_admin" }
+        entityId: user.id,
+        metadata: {
+            roleId: superAdminRole.id,
+            registrationType: "super_admin"
+        }
     });
 
     return {
@@ -191,17 +243,100 @@ export async function registerSuperAdmin({
     };
 }
 
+/** Resolve the workspace a login attempt belongs to (`tenantId` wins). */
+async function resolveLoginTenant({ tenantId, tenantSlug }) {
+    if (tenantId) {
+        return prisma.tenant.findUnique({ where: { id: tenantId } });
+    }
+
+    if (tenantSlug) {
+        return prisma.tenant.findFirst({
+            where: {
+                OR: [{ slug: tenantSlug }, { primaryDomain: tenantSlug }]
+            }
+        });
+    }
+
+    return null;
+}
+
+/**
+ * Find the user behind a login attempt.
+ *
+ * Provider-scope rows win when no workspace is known; an email that exists in
+ * several workspaces without a resolvable host is ambiguous and rejected.
+ */
+async function resolveLoginUser({ email, tenantId, tenantSlug }) {
+    const normalizedEmail = normalizeEmail(email);
+    const tenant = await resolveLoginTenant({ tenantId, tenantSlug });
+
+    if (tenantId || tenantSlug) {
+        const scopedUser = await prisma.user.findFirst({
+            where: { email: normalizedEmail, tenantId: tenant?.id ?? tenantId },
+            include: { role: { include: { permissions: { include: { permission: true } } } } }
+        });
+
+        return { user: scopedUser, tenant };
+    }
+
+    const candidates = await prisma.user.findMany({
+        where: { email: normalizedEmail },
+        include: { role: { include: { permissions: { include: { permission: true } } } } }
+    });
+
+    if (!candidates.length) {
+        return { user: null, tenant: null };
+    }
+
+    const providerUser = candidates.find((candidate) => candidate.tenantId === null);
+
+    if (providerUser) {
+        return { user: providerUser, tenant: null };
+    }
+
+    if (candidates.length > 1) {
+        throw new AppError(
+            "This email belongs to several workspaces. Sign in from your workspace URL.",
+            409
+        );
+    }
+
+    const [user] = candidates;
+
+    return {
+        user,
+        tenant: user.tenantId
+            ? await prisma.tenant.findUnique({ where: { id: user.tenantId } })
+            : null
+    };
+}
+/**
+ * Authenticate a user inside a workspace (or the provider portal).
+ *
+ * @param {object} params
+ * @param {string} params.email
+ * @param {string} params.password
+ * @param {string} [params.deviceInfo]
+ * @param {string} [params.ipAddress]
+ * @param {string|null} [params.tenantId]  Workspace resolved from the request host.
+ * @param {string|null} [params.tenantSlug] Fallback when only a slug is known.
+ */
 export async function loginUser({
     email,
     password,
     deviceInfo,
     ipAddress,
+    tenantId = null,
+    tenantSlug = null
 }) {
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
-        .select("+passwordHash");
+    const { user, tenant } = await resolveLoginUser({ email, tenantId, tenantSlug });
 
     if (!user) {
         throw new AppError("Invalid email or password", 401);
+    }
+
+    if (tenant?.status === TENANT_STATUS.SUSPENDED) {
+        throw new AppError("This workspace has been suspended", 403);
     }
 
     const isPasswordValid = await comparePassword(password, user.passwordHash);
@@ -230,35 +365,45 @@ export async function loginUser({
     const refreshToken = generateRefreshToken(payload);
     const refreshTokenHash = hashToken(refreshToken);
 
-    await Session.create({
-        userId: user._id,
-        deviceInfo,
-        ipAddress,
-        refreshTokenHash,
-        expiresAt: new Date(Date.now() + SEVEN_DAYS_IN_MS),
+    await prisma.session.create({
+        data: {
+            userId: user.id,
+            tenantId: user.tenantId ?? null,
+            deviceInfo: deviceInfo ?? null,
+            ipAddress: ipAddress ?? null,
+            refreshTokenHash,
+            expiresAt: new Date(Date.now() + SEVEN_DAYS_IN_MS)
+        }
     });
 
     const loginTime = new Date();
-    user.lastLoginAt = loginTime;
-    user.lastSeenAt = loginTime;
-    user.isOnline = true;
-    await user.save();
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            lastLoginAt: loginTime,
+            lastSeenAt: loginTime,
+            isOnline: true
+        }
+    });
 
     await recordAuditLog({
-        userId: user._id,
+        tenantId: user.tenantId,
+        userId: user.id,
         action: AUDIT_ACTION.LOGIN_SUCCESS,
         entity: "Session",
         metadata: { ipAddress, deviceInfo }
     });
 
     return {
-        user: await attachAccessProfile(user),
+        user: await attachAccessProfile(user.id),
         accessToken,
-        refreshToken,
+        refreshToken
     };
 }
 
-export async function refreshUserToken({ refreshToken }) {
+/** Load the user behind a refresh-token session, validating its lifecycle. */
+async function loadRefreshSessionUser({ refreshToken }) {
     if (!refreshToken) {
         throw new AppError("Refresh token is required", 401);
     }
@@ -271,12 +416,12 @@ export async function refreshUserToken({ refreshToken }) {
         throw new AppError("Invalid or expired refresh token", 401);
     }
 
-    const refreshTokenHash = hashToken(refreshToken);
-
-    const session = await Session.findOne({
-        userId: decoded.sub,
-        refreshTokenHash,
-        isRevoked: false,
+    const session = await prisma.session.findFirst({
+        where: {
+            userId: decoded.sub,
+            refreshTokenHash: hashToken(refreshToken),
+            isRevoked: false
+        }
     });
 
     if (!session) {
@@ -287,10 +432,21 @@ export async function refreshUserToken({ refreshToken }) {
         throw new AppError("Refresh token session expired", 401);
     }
 
-    const user = await User.findById(decoded.sub);
+    const user = await findUserWithRole(decoded.sub);
 
     if (!user) {
         throw new AppError("User is not authorized", 401);
+    }
+
+    if (user.tenantId) {
+        const tenant = await prisma.tenant.findUnique({
+            where: { id: user.tenantId },
+            select: { status: true }
+        });
+
+        if (tenant?.status === TENANT_STATUS.SUSPENDED) {
+            throw new AppError("This workspace has been suspended", 403);
+        }
     }
 
     if (!user.emailVerified) {
@@ -301,14 +457,24 @@ export async function refreshUserToken({ refreshToken }) {
         throw new AppError("User account is not active", 403);
     }
 
-    const newPayload = buildAuthPayload(user);
-    const newAccessToken = generateAccessToken(newPayload);
-    const newRefreshToken = generateRefreshToken(newPayload);
-    const newRefreshTokenHash = hashToken(newRefreshToken);
+    return { session, user };
+}
 
-    session.refreshTokenHash = newRefreshTokenHash;
-    session.expiresAt = new Date(Date.now() + SEVEN_DAYS_IN_MS);
-    await session.save();
+/** Rotate the refresh token and mint a fresh access token. */
+export async function refreshUserToken({ refreshToken }) {
+    const { session, user } = await loadRefreshSessionUser({ refreshToken });
+
+    const payload = buildAuthPayload(user);
+    const newAccessToken = generateAccessToken(payload);
+    const newRefreshToken = generateRefreshToken(payload);
+
+    await prisma.session.update({
+        where: { id: session.id },
+        data: {
+            refreshTokenHash: hashToken(newRefreshToken),
+            expiresAt: new Date(Date.now() + SEVEN_DAYS_IN_MS)
+        }
+    });
 
     return {
         accessToken: newAccessToken,
@@ -316,35 +482,18 @@ export async function refreshUserToken({ refreshToken }) {
     };
 }
 
+/** Revoke the session behind a refresh token and mark the user offline. */
 export async function logoutUser({ refreshToken }) {
-    if (!refreshToken) {
-        throw new AppError("Refresh token is required", 401);
-    }
+    const { session, user } = await loadRefreshSessionUser({ refreshToken });
 
-    let decoded;
-
-    try {
-        decoded = verifyRefreshToken(refreshToken);
-    } catch {
-        throw new AppError("Invalid or expired refresh token", 401);
-    }
-
-    const refreshTokenHash = hashToken(refreshToken);
-
-    const session = await Session.findOne({
-        userId: decoded.sub,
-        refreshTokenHash,
-        isRevoked: false,
+    await prisma.session.update({
+        where: { id: session.id },
+        data: { isRevoked: true }
     });
 
-    if (!session) {
-        throw new AppError("Session not found or already revoked", 404);
-    }
-
-    session.isRevoked = true;
-    await session.save();
-    await User.findByIdAndUpdate(decoded.sub, {
-        $set: {
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
             isOnline: false,
             lastSeenAt: new Date()
         }
@@ -352,16 +501,76 @@ export async function logoutUser({ refreshToken }) {
 
     return true;
 }
+/**
+ * Tenant-aware email lookup for the unauthenticated flows.
+ *
+ * The workspace row wins when `tenantId` is known, then the provider row (for
+ * `tenantId IS NULL` semantics), and finally any row so a tenant user is still
+ * found when the request carried no resolvable host.
+ */
+async function findUserByEmail(email, tenantId = null) {
+    const normalizedEmail = normalizeEmail(email);
 
+    if (tenantId) {
+        const scopedUser = await prisma.user.findFirst({
+            where: { email: normalizedEmail, tenantId }
+        });
+
+        if (scopedUser) {
+            return scopedUser;
+        }
+    }
+
+    const providerUser = await prisma.user.findFirst({
+        where: { email: normalizedEmail, tenantId: null }
+    });
+
+    if (providerUser) {
+        return providerUser;
+    }
+
+    return prisma.user.findFirst({ where: { email: normalizedEmail } });
+}
+
+/** Revoke every active session of a user (used on password change). */
+export async function revokeUserSessions(userId, client = prisma) {
+    if (!userId) {
+        return 0;
+    }
+
+    const result = await client.session.updateMany({
+        where: { userId, isRevoked: false },
+        data: { isRevoked: true }
+    });
+
+    return result?.count ?? 0;
+}
+
+/**
+ * Revoke every active session in a workspace. Called when a tenant is
+ * suspended so existing tokens stop working immediately (PRD requirement).
+ */
+export async function revokeTenantSessions(tenantId, client = prisma) {
+    if (!tenantId) {
+        return 0;
+    }
+
+    const result = await client.session.updateMany({
+        where: { tenantId, isRevoked: false },
+        data: { isRevoked: true }
+    });
+
+    return result?.count ?? 0;
+}
+
+/** Current user with its resolved role/permissions (used by `GET /auth/me`). */
 export async function getCurrentUser(userId) {
     return attachAccessProfile(userId);
 }
 
-export async function getEmailVerificationStatus({ email }) {
-    const normalizedEmail = email.toLowerCase().trim();
-    const user = await User.findOne({ email: normalizedEmail }).select(
-        "emailVerified mustChangePassword status"
-    );
+/** Poll whether an email has been verified yet (login page helper). */
+export async function getEmailVerificationStatus({ email, tenantId = null }) {
+    const user = await findUserByEmail(email, tenantId);
 
     if (!user) {
         return { verified: false };
@@ -374,19 +583,22 @@ export async function getEmailVerificationStatus({ email }) {
     };
 }
 
-export async function resendVerificationEmail({ email }) {
-    const normalizedEmail = email.toLowerCase().trim();
-    const user = await User.findOne({ email: normalizedEmail });
+/** Re-send the verification email. Never reveals whether the email exists. */
+export async function resendVerificationEmail({ email, tenantId = null }) {
+    const user = await findUserByEmail(email, tenantId);
 
     if (!user || user.emailVerified) {
         return { emailSent: true };
     }
 
     const rawVerificationToken = generateRandomToken();
-    await VerificationToken.create({
-        userId: user._id,
-        tokenHash: hashToken(rawVerificationToken),
-        expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS),
+
+    await prisma.verificationToken.create({
+        data: {
+            userId: user.id,
+            tokenHash: hashToken(rawVerificationToken),
+            expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS)
+        }
     });
 
     const emailSent = await safeSendEmail(
@@ -406,12 +618,15 @@ export async function resendVerificationEmail({ email }) {
     };
 }
 
+/**
+ * Consume an email-verification token.
+ *
+ * When the account was created by an invitation (`mustChangePassword`), a fresh
+ * password-setup token is issued so the invitee can choose their own password.
+ */
 export async function verifyEmailToken({ token }) {
-    const tokenHash = hashToken(token);
-
-    const verificationRecord = await VerificationToken.findOne({
-        tokenHash,
-        usedAt: null,
+    const verificationRecord = await prisma.verificationToken.findFirst({
+        where: { tokenHash: hashToken(token), usedAt: null }
     });
 
     if (!verificationRecord) {
@@ -422,28 +637,41 @@ export async function verifyEmailToken({ token }) {
         throw new AppError("Verification token expired", 400);
     }
 
-    const user = await User.findById(verificationRecord.userId);
+    const user = await prisma.user.findUnique({
+        where: { id: verificationRecord.userId }
+    });
 
     if (!user) {
         throw new AppError("User not found", 404);
     }
 
-    user.emailVerified = true;
-    user.emailVerifiedAt = new Date();
-    await user.save();
+    const now = new Date();
 
-    verificationRecord.usedAt = new Date();
-    await verificationRecord.save();
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            emailVerified: true,
+            emailVerifiedAt: user.emailVerifiedAt ?? now
+        }
+    });
+
+    await prisma.verificationToken.update({
+        where: { id: verificationRecord.id },
+        data: { usedAt: now }
+    });
 
     const requiresPasswordSetup = Boolean(user.mustChangePassword);
     let passwordSetupToken = null;
 
     if (requiresPasswordSetup) {
         passwordSetupToken = generateRandomToken();
-        await PasswordResetToken.create({
-            userId: user._id,
-            tokenHash: hashToken(passwordSetupToken),
-            expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS),
+
+        await prisma.passwordResetToken.create({
+            data: {
+                userId: user.id,
+                tokenHash: hashToken(passwordSetupToken),
+                expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS)
+            }
         });
     }
 
@@ -455,95 +683,108 @@ export async function verifyEmailToken({ token }) {
         email: user.email
     };
 }
-
-export async function requestPasswordReset({ email }) {
-    const normalizedEmail = email.toLowerCase().trim();
-    const user = await User.findOne({ email: normalizedEmail });
+/** Issue a password-reset token. Never reveals whether the email exists. */
+export async function requestPasswordReset({ email, tenantId = null }) {
+    const user = await findUserByEmail(email, tenantId);
 
     if (!user) {
-        return {
-            emailSent: true,
-            ...(env.NODE_ENV === "production" ? {} : { resetToken: null })
-        };
+        return { emailSent: true };
     }
 
-    const rawResetToken = generateRandomToken();
-    const tokenHash = hashToken(rawResetToken);
+    const rawToken = generateRandomToken();
 
-    await PasswordResetToken.create({
-        userId: user._id,
-        tokenHash,
-        expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS),
+    await prisma.passwordResetToken.create({
+        data: {
+            userId: user.id,
+            tokenHash: hashToken(rawToken),
+            expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS)
+        }
     });
 
     const emailSent = await safeSendEmail(
         () => sendPasswordResetEmail({
             to: user.email,
-            firstName: user.firstName || user.email,
-            token: rawResetToken
+            firstName: user.firstName,
+            token: rawToken
         }),
         "password reset email"
     );
 
     return {
         emailSent,
-        ...(env.NODE_ENV === "production"
-            ? {}
-            : {
-                resetToken: rawResetToken,
-            })
+        ...(env.NODE_ENV !== "production" ? { resetToken: rawToken } : {})
     };
 }
 
+/**
+ * Complete a password reset from an emailed token.
+ *
+ * Every session is revoked afterwards so a stolen token cannot be replayed
+ * and any pre-existing session is invalidated.
+ */
 export async function resetPassword({ token, password, confirmPassword }) {
     if (password !== confirmPassword) {
-        throw new AppError("Password confirmation does not match", 400);
+        throw new AppError("Passwords do not match", 400);
     }
 
-    const tokenHash = hashToken(token);
-
-    const resetRecord = await PasswordResetToken.findOne({
-        tokenHash,
-        usedAt: null,
+    const resetRecord = await prisma.passwordResetToken.findFirst({
+        where: { tokenHash: hashToken(token), usedAt: null }
     });
 
     if (!resetRecord) {
-        throw new AppError("Invalid password reset token", 400);
+        throw new AppError("Invalid or expired reset token", 400);
     }
 
     if (resetRecord.expiresAt < new Date()) {
-        throw new AppError("Password reset token expired", 400);
+        throw new AppError("Reset token has expired", 400);
     }
 
-    const user = await User.findById(resetRecord.userId);
+    const user = await prisma.user.findUnique({
+        where: { id: resetRecord.userId }
+    });
 
     if (!user) {
         throw new AppError("User not found", 404);
     }
 
-    user.passwordHash = await hashPassword(password);
-    user.mustChangePassword = false;
-    await user.save();
+    const passwordHash = await hashPassword(password);
+    const now = new Date();
 
-    resetRecord.usedAt = new Date();
-    await resetRecord.save();
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            passwordHash,
+            mustChangePassword: false,
+            passwordChangedAt: now,
+            emailVerified: true,
+            emailVerifiedAt: user.emailVerifiedAt ?? now
+        }
+    });
 
-    await Session.updateMany(
-        { userId: user._id, isRevoked: false },
-        { $set: { isRevoked: true } }
-    );
+    await prisma.passwordResetToken.update({
+        where: { id: resetRecord.id },
+        data: { usedAt: now }
+    });
+
+    await revokeUserSessions(user.id);
 
     await recordAuditLog({
-        userId: user._id,
-        action: AUDIT_ACTION.PASSWORD_CHANGED,
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: AUDIT_ACTION.PASSWORD_RESET,
         entity: "User",
-        entityId: user._id,
-        metadata: { source: "reset_password" }
+        entityId: user.id
     });
 
     return true;
 }
 
+/**
+ * Change the password of an authenticated user.
+ *
+ * Invited users (`mustChangePassword`) go through `resetPassword` instead, so
+ * the current password is always required here.
+ */
 export async function changePassword({
     userId,
     currentPassword,
@@ -551,10 +792,10 @@ export async function changePassword({
     confirmPassword
 }) {
     if (newPassword !== confirmPassword) {
-        throw new AppError("Password confirmation does not match", 400);
+        throw new AppError("Passwords do not match", 400);
     }
 
-    const user = await User.findById(userId).select("+passwordHash");
+    const user = await prisma.user.findUnique({ where: { id: userId } });
 
     if (!user) {
         throw new AppError("User not found", 404);
@@ -566,25 +807,42 @@ export async function changePassword({
     );
 
     if (!isCurrentPasswordValid) {
-        throw new AppError("Current password is incorrect", 400);
+        throw new AppError("Current password is incorrect", 401);
     }
 
-    user.passwordHash = await hashPassword(newPassword);
-    user.mustChangePassword = false;
-    await user.save();
+    const isSamePassword = await comparePassword(newPassword, user.passwordHash);
 
-    await Session.updateMany(
-        { userId: user._id, isRevoked: false },
-        { $set: { isRevoked: true } }
-    );
+    if (isSamePassword) {
+        throw new AppError(
+            "New password must be different from the current password",
+            400
+        );
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            passwordHash,
+            mustChangePassword: false,
+            passwordChangedAt: new Date()
+        }
+    });
+
+    await revokeUserSessions(user.id);
 
     await recordAuditLog({
-        userId,
+        tenantId: user.tenantId,
+        userId: user.id,
         action: AUDIT_ACTION.PASSWORD_CHANGED,
         entity: "User",
-        entityId: user._id,
-        metadata: { source: "change_password" }
+        entityId: user.id
     });
 
     return true;
 }
+
+
+
+

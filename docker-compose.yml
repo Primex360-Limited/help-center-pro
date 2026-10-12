@@ -1,0 +1,83 @@
+# Help Centre Pro — local full-stack stack.
+#
+# One-click: double-click Start-Help-Centre-Pro.bat
+# Or:        docker compose up --build
+#
+# Backend  : http://localhost:4008        (Swagger at /api-docs)
+# Frontend : http://localhost:5173
+name: help-center-pro
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: hcp-postgres
+    environment:
+      POSTGRES_DB: help_center_pro
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - hcp_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d help_center_pro"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7
+    container_name: hcp-redis
+    volumes:
+      - hcp_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+    container_name: hcp-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Loads Resend / JWT / EMAIL_* from the local backend .env.
+    # Keys below override only what must differ inside Docker networking.
+    env_file:
+      - ./FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/.env
+    environment:
+      PORT: "4008"
+      NODE_ENV: development
+      FRONTEND_URL: http://localhost:5173
+      DATABASE_URL_PRODUCTION: postgresql://postgres:password@postgres:5432/help_center_pro?schema=public
+      POSTGRES_REQUIRED: "true"
+      JWT_ACCESS_SECRET: help_center_pro_dev_access_secret_change_me_32chars
+      JWT_REFRESH_SECRET: help_center_pro_dev_refresh_secret_change_me_32chars
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      REDIS_URL: redis://redis:6379
+      REDIS_REQUIRED: "false"
+      MONGODB_REQUIRED: "false"
+      FLEXIBLE_USER_MANAGEMENT: ""
+      SEED_TEST_USER: "true"
+    ports:
+      - "4008:4008"
+    command: sh -c "npx prisma migrate deploy && node server.js"
+
+  frontend:
+    build:
+      context: ./help-centre-pro-frontend
+    container_name: hcp-frontend
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: http://localhost:4008
+      VITE_APP_NAME: HelpCenter Pro
+    ports:
+      - "5173:5173"
+
+volumes:
+  hcp_pg_data:
+  hcp_redis_data:

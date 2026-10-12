@@ -1,58 +1,221 @@
-import User from "../../database/model/user.model.js";
-import Role from "../../database/model/role.model.js";
+import prisma from "../../database/prisma/client.js";
 import { env } from "../../config/env.js";
-import { SYSTEM_ROLE, USER_STATUS } from "../../shared/constants/system.js";
+import { TENANT_STATUS, USER_STATUS, USER_TYPE } from "../../shared/constants/system.js";
+import { SUPER_ADMIN_ROLE_NAMES, TENANT_ROLE } from "../../shared/constants/roles.js";
 import { hashPassword } from "./auth.utils.js";
-import { seedDefaultRoles } from "../roles/seedDefaultRoles.js";
+import { provisionTenantRoles, seedSystemRoles } from "../roles/seedSystemRoles.js";
 
-const DEV_TEST_USERS = [
+const DEMO_TENANT = Object.freeze({
+    name: "Primex360",
+    slug: "primex360",
+    primaryDomain: "primex360.com",
+    plan: "scale",
+    seatLimit: 20,
+    settings: {
+        country: "Nigeria",
+        trial: false,
+        mrr: 199
+    }
+});
+
+const PROVIDER_TEST_USERS = [
+    {
+        email: "ebube.okechukwu@primex360.com",
+        password: "2020/EN/12566",
+        firstName: "Ebube",
+        lastName: "Okechukwu"
+    },
     {
         email: "test@test.com",
         password: "test",
         firstName: "Test",
         lastName: "User"
+    }
+];
+
+const TENANT_ADMIN_TEST_USERS = [
+    {
+        email: "amaka@primex360.com",
+        password: "2020/EN/12566",
+        firstName: "Amaka",
+        lastName: "Okoro"
     },
     {
         email: "jetsamjoseph@gmail.com",
         password: "2020/EN/12566",
         firstName: "Joseph",
         lastName: "Jetsam"
+    },
+    {
+        email: "admin@helpcentrepro.com",
+        password: "test",
+        firstName: "Olivia",
+        lastName: "Rhye"
     }
 ];
 
-async function upsertTestUser(superAdminRole, account) {
-    const email = account.email.toLowerCase().trim();
-    const passwordHash = await hashPassword(account.password);
-    let user = await User.findOne({ email }).select("+passwordHash");
+function normalizeEmail(email) {
+    return String(email || "").trim().toLowerCase();
+}
 
-    if (!user) {
-        user = await User.create({
-            email,
-            passwordHash,
-            firstName: account.firstName,
-            lastName: account.lastName,
-            roleId: superAdminRole._id,
-            status: USER_STATUS.ACTIVE,
-            emailVerified: true,
-            emailVerifiedAt: new Date(),
-            mustChangePassword: false,
-            deniedPermissions: []
+export async function resolveProviderSuperAdminRole(client = prisma) {
+    await seedSystemRoles(client);
+
+    const role = await client.role.findFirst({
+        where: {
+            tenantId: null,
+            name: { in: [...SUPER_ADMIN_ROLE_NAMES] }
+        },
+        orderBy: { createdAt: "asc" }
+    });
+
+    if (!role) {
+        throw new Error(
+            "Provider Super Admin role is missing after seeding system roles"
+        );
+    }
+
+    return role;
+}
+
+async function ensureDemoTenant(client = prisma) {
+    const existing = await client.tenant.findFirst({
+        where: {
+            OR: [{ slug: DEMO_TENANT.slug }, { slug: "demo" }]
+        }
+    });
+
+    if (existing) {
+        return client.tenant.update({
+            where: { id: existing.id },
+            data: {
+                name: DEMO_TENANT.name,
+                slug: DEMO_TENANT.slug,
+                primaryDomain: DEMO_TENANT.primaryDomain,
+                plan: DEMO_TENANT.plan,
+                seatLimit: DEMO_TENANT.seatLimit,
+                settings: DEMO_TENANT.settings,
+                status: TENANT_STATUS.ACTIVE
+            }
         });
-        console.log(`Dev test user ready: ${email}`);
+    }
+
+    return client.tenant.create({
+        data: {
+            name: DEMO_TENANT.name,
+            slug: DEMO_TENANT.slug,
+            primaryDomain: DEMO_TENANT.primaryDomain,
+            plan: DEMO_TENANT.plan,
+            seatLimit: DEMO_TENANT.seatLimit,
+            settings: DEMO_TENANT.settings,
+            status: TENANT_STATUS.ACTIVE
+        }
+    });
+}
+
+async function upsertProviderUser(role, account) {
+    const email = normalizeEmail(account.email);
+    const passwordHash = await hashPassword(account.password);
+
+    const existing = await prisma.user.findFirst({
+        where: { tenantId: null, email },
+        select: { id: true, emailVerifiedAt: true }
+    });
+
+    const baseData = {
+        tenantId: null,
+        userType: USER_TYPE.PROVIDER,
+        email,
+        passwordHash,
+        firstName: account.firstName,
+        lastName: account.lastName,
+        roleId: role.id,
+        status: USER_STATUS.ACTIVE,
+        emailVerified: true,
+        mustChangePassword: false,
+        deniedPermissions: []
+    };
+
+    if (existing) {
+        const user = await prisma.user.update({
+            where: { id: existing.id },
+            data: {
+                ...baseData,
+                emailVerifiedAt: existing.emailVerifiedAt ?? new Date()
+            }
+        });
+        console.log(`♻️  Dev provider user updated: ${email}`);
         return user;
     }
 
-    user.passwordHash = passwordHash;
-    user.firstName = account.firstName;
-    user.lastName = account.lastName;
-    user.roleId = superAdminRole._id;
-    user.status = USER_STATUS.ACTIVE;
-    user.emailVerified = true;
-    user.emailVerifiedAt = user.emailVerifiedAt || new Date();
-    user.mustChangePassword = false;
-    await user.save();
+    const user = await prisma.user.create({
+        data: {
+            ...baseData,
+            emailVerifiedAt: new Date()
+        }
+    });
+    console.log(`✅ Dev provider user created: ${email}`);
+    return user;
+}
 
-    console.log(`Dev test user updated: ${email}`);
+async function upsertTenantAdmin(tenantId, adminRoleId, account) {
+    const email = normalizeEmail(account.email);
+    const passwordHash = await hashPassword(account.password);
+
+    const existingInTenant = await prisma.user.findFirst({
+        where: { tenantId, email },
+        select: { id: true, emailVerifiedAt: true }
+    });
+    const existingProvider = await prisma.user.findFirst({
+        where: { tenantId: null, email },
+        select: { id: true }
+    });
+
+    const baseData = {
+        tenantId,
+        userType: USER_TYPE.TENANT,
+        email,
+        passwordHash,
+        firstName: account.firstName,
+        lastName: account.lastName,
+        roleId: adminRoleId,
+        status: USER_STATUS.ACTIVE,
+        emailVerified: true,
+        mustChangePassword: false,
+        deniedPermissions: []
+    };
+
+    if (existingInTenant) {
+        const user = await prisma.user.update({
+            where: { id: existingInTenant.id },
+            data: {
+                ...baseData,
+                emailVerifiedAt: existingInTenant.emailVerifiedAt ?? new Date()
+            }
+        });
+        console.log(`♻️  Dev tenant admin updated: ${email}`);
+        return user;
+    }
+
+    if (existingProvider) {
+        const user = await prisma.user.update({
+            where: { id: existingProvider.id },
+            data: {
+                ...baseData,
+                emailVerifiedAt: new Date()
+            }
+        });
+        console.log(`♻️  Dev account moved to tenant admin: ${email}`);
+        return user;
+    }
+
+    const user = await prisma.user.create({
+        data: {
+            ...baseData,
+            emailVerifiedAt: new Date()
+        }
+    });
+    console.log(`✅ Dev tenant admin created: ${email}`);
     return user;
 }
 
@@ -61,18 +224,28 @@ export async function seedTestUser() {
         return null;
     }
 
-    await seedDefaultRoles();
-
-    const superAdminRole = await Role.findOne({ name: SYSTEM_ROLE.SUPER_ADMIN });
-    if (!superAdminRole) {
-        throw new Error("Super Admin role missing; cannot seed test user");
-    }
-
+    const superAdminRole = await resolveProviderSuperAdminRole();
     const users = [];
-    for (const account of DEV_TEST_USERS) {
-        users.push(await upsertTestUser(superAdminRole, account));
+
+    for (const account of PROVIDER_TEST_USERS) {
+        users.push(await upsertProviderUser(superAdminRole, account));
     }
 
+    const tenant = await ensureDemoTenant();
+    const tenantRoles = await provisionTenantRoles(tenant.id);
+    const adminRole =
+        tenantRoles[TENANT_ROLE.ADMIN] ||
+        Object.values(tenantRoles).find((role) => role.name === TENANT_ROLE.ADMIN);
+
+    if (!adminRole) {
+        throw new Error("Demo Tenant Admin role missing after provisioning");
+    }
+
+    for (const account of TENANT_ADMIN_TEST_USERS) {
+        users.push(await upsertTenantAdmin(tenant.id, adminRole.id, account));
+    }
+
+    console.log(`✅ Demo workspace ready: ${tenant.slug} (${tenant.id})`);
     return users;
 }
 

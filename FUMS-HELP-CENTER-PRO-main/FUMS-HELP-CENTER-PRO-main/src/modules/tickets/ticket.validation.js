@@ -9,15 +9,17 @@ import {
     TICKET_PRIORITY,
     TICKET_STATUS
 } from "./ticket.constants.js";
+import { UUID_PATTERN } from "../../shared/utils/uuid.js";
 
 const ticketStatusValues = Object.values(TICKET_STATUS);
 const ticketPriorityValues = Object.values(TICKET_PRIORITY);
 const ticketChannelValues = Object.values(TICKET_CHANNEL);
 const senderTypeValues = Object.values(SENDER_TYPE);
 const callDirectionValues = Object.values(CALL_DIRECTION);
-const objectIdSchema = z
+/** User ids in this module are Postgres `uuid` values. */
+const uuidSchema = z
     .string()
-    .regex(/^[0-9a-fA-F]{24}$/, "Assigned user identifier must be a valid MongoDB user id");
+    .regex(UUID_PATTERN, "Invalid identifier");
 
 export const ticketIdParamSchema = z.object({
     ticketId: z.string().min(1, "Ticket identifier is required")
@@ -27,7 +29,7 @@ export const createTicketSchema = z.object({
     title: z.string().min(1, "Title is required"),
     description: z.string().min(1, "Description is required"),
     priority: z.enum(ticketPriorityValues).optional(),
-    assignedToUserId: objectIdSchema.optional(),
+    assignedToUserId: uuidSchema.optional(),
     customerName: z.string().min(1).optional(),
     customerEmail: z.string().email().optional(),
     customerPhone: z.string().min(1).optional(),
@@ -55,7 +57,7 @@ export const createTicketSchema = z.object({
 export const listTicketsQuerySchema = z.object({
     status: z.enum(ticketStatusValues).optional(),
     priority: z.enum(ticketPriorityValues).optional(),
-    assignedToUserId: z.string().min(1).optional(),
+    assignedToUserId: uuidSchema.optional(),
     page: z.coerce.number().int().min(1).default(DEFAULT_TICKET_PAGE),
     limit: z.coerce.number().int().min(1).max(MAX_TICKET_LIMIT).default(DEFAULT_TICKET_LIMIT)
 });

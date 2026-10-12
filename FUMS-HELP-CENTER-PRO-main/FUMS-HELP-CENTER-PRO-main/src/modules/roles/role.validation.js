@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { UUID_PATTERN } from "../../shared/utils/uuid.js";
 
-const objectIdSchema = z
+/** Every identity-layer primary key is a Postgres `uuid`. */
+const uuidSchema = z
     .string()
-    .regex(/^[0-9a-fA-F]{24}$/, "Invalid ObjectId format");
+    .regex(UUID_PATTERN, "Invalid identifier");
 
 export const roleIdParamSchema = z.object({
-    id: objectIdSchema
+    id: uuidSchema
 });
 
 export const createRoleSchema = z.object({

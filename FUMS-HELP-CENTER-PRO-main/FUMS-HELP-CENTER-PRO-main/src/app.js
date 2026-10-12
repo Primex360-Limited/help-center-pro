@@ -11,6 +11,7 @@ import roleRoutes from "./modules/roles/role.routes.js";
 import invitationRoutes from "./modules/invitations/invitation.routes.js";
 import supportEmailRoutes from "./modules/tickets/email/support-email.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
+import tenantRoutes from "./modules/tenants/tenant.routes.js";
 import healthRoutes from "./modules/health/health.routes.js";
 import { healthCheck } from "./modules/health/health.controller.js";
 import asyncHandler from "./middleware/async.middleware.js";
@@ -19,6 +20,7 @@ import errorHandler from "./middleware/error.middleware.js";
 import rateLimiter from "./middleware/rateLimiter.middleware.js";
 import allowedCors from "./config/corsConfig.js";
 import swaggerSpec from "./config/swagger.js";
+import { attachTenantContext } from "./modules/tenants/tenant.middleware.js";
 
 const app = express();
 
@@ -47,6 +49,14 @@ app.use(cors(corsOrigin));
 app.options(/.*/, cors(corsOrigin));
 app.use(cookieParser());
 
+/**
+ * Host-based tenant resolution for every request. `req.tenantContext` /
+ * `req.tenant` are attached here (before any auth guard) so RBAC and the
+ * tenant guards can make workspace-aware decisions; routes that need
+ * `req.tenantId` add `bindTenantToUser` right after `requireAuth`.
+ */
+app.use(attachTenantContext);
+
 app.get("/health", asyncHandler(healthCheck));
 app.use("/api/v1", healthRoutes);
 
@@ -56,6 +66,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1", userRoutes);
 app.use("/api/v1", roleRoutes);
 app.use("/api/v1", invitationRoutes);
+app.use("/api/v1", tenantRoutes);
 app.use("/api/v1", supportEmailRoutes);
 app.use("/api/v1", ticketRoutes);
 

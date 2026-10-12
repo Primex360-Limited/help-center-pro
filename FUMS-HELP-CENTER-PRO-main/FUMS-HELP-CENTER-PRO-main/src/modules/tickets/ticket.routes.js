@@ -2,6 +2,7 @@ import express from "express";
 import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { bindTenantToUser } from "../tenants/tenant.middleware.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
     createTicketHandler,
@@ -44,6 +45,7 @@ import { getDashboardOverviewHandler } from "./dashboard/dashboard.controller.js
 const ticketRoutes = express.Router();
 
 ticketRoutes.use(requireAuth);
+ticketRoutes.use(bindTenantToUser);
 
 /**
  * @openapi

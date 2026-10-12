@@ -7,7 +7,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import "../../styles/auth.css";
 
 export default function Login() {
-  const { login, isAuthenticated, loading } = useAuth();
+  const { login, isAuthenticated, loading, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState(location.state?.email || "");
@@ -17,7 +17,8 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
+    const isProvider = user?.isSuperAdmin || user?.userType === "provider";
+    return <Navigate to={isProvider ? "/admin/overview" : "/dashboard"} replace />;
   }
 
   async function handleSubmit(event) {
@@ -26,9 +27,11 @@ export default function Login() {
     setSubmitting(true);
 
     try {
-      const user = await login(email.trim(), password);
-      if (user?.mustChangePassword) {
+      const nextUser = await login(email.trim(), password);
+      if (nextUser?.mustChangePassword) {
         navigate("/change-password");
+      } else if (nextUser?.isSuperAdmin || nextUser?.userType === "provider") {
+        navigate("/admin/overview");
       } else {
         navigate("/dashboard");
       }

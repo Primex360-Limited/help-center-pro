@@ -1,16 +1,75 @@
-import Role from "../../database/model/role.model.js";
-import User from "../../database/model/user.model.js";
+import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
-import { AUDIT_ACTION, SYSTEM_ROLE } from "../../shared/constants/system.js";
+import { AUDIT_ACTION, USER_TYPE } from "../../shared/constants/system.js";
+import { PROVIDER_ROLE, isSuperAdminRoleName } from "../../shared/constants/roles.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
 import { normalizePermissionKey } from "../../shared/utils/permissionKey.js";
 
-function uniqueStrings(values = []) {
+/**
+ * Role + permission service (Postgres / Prisma, Phase-1 multi-tenancy).
+ *
+ * Differences from the legacy Mongo implementation:
+ *  - Permissions are relational (`RolePermission` join table) instead of an
+ *    embedded string array, so `role.permissions` is flattened to keys here and
+ *    every consumer only ever sees `string[]`.
+ *  - Roles and users are tenant-scoped. `tenantId === undefined` means
+ *    "unscoped" (provider/super-admin view across every workspace),
+ *    `tenantId === null` means "provider-scope rows only", and a UUID string
+ *    means "that one workspace".
+ *  - Super admin is no longer detected by role *name* but by `userType`, which
+ *    survives renaming of the provider role.
+ */
+
+export const PROVIDER_SCOPE = null;
+
+/** Prisma include used everywhere a user needs its role + permission keys. */
+export const USER_ROLE_INCLUDE = Object.freeze({
+    role: { include: { permissions: { include: { permission: true } } } }
+});
+
+export function uniqueStrings(values = []) {
     return [...new Set(values.map((value) => value?.toString()).filter(Boolean))];
 }
 
+/**
+ * Normalize a list of permission keys. Non-string entries (e.g. raw
+ * `RolePermission` rows that were not flattened first) are dropped rather than
+ * coerced into `"[object Object]"`.
+ */
 export function normalizePermissionList(permissions = []) {
-    return uniqueStrings(permissions.map((permission) => normalizePermissionKey(permission)));
+    return [
+        ...new Set(
+            permissions
+                .map((permission) =>
+                    typeof permission === "string"
+                        ? normalizePermissionKey(permission)
+                        : null
+                )
+                .filter(Boolean)
+        )
+    ];
+}
+
+/**
+ * Flatten a Prisma role (with `permissions: RolePermission[]`) or an already
+ * flattened summary into a sorted, de-duplicated list of permission keys.
+ */
+export function flattenRolePermissionKeys(role) {
+    if (!role || !Array.isArray(role.permissions)) {
+        return [];
+    }
+
+    const keys = role.permissions
+        .map((entry) => {
+            if (typeof entry === "string") {
+                return entry;
+            }
+
+            return entry?.permission?.key || null;
+        })
+        .filter(Boolean);
+
+    return normalizePermissionList(keys);
 }
 
 export function buildRoleSummary(role) {
@@ -19,21 +78,38 @@ export function buildRoleSummary(role) {
     }
 
     return {
-        id: role._id?.toString?.() || role.id,
+        id: role.id ?? null,
         name: role.name,
-        description: role.description,
-        permissions: normalizePermissionList(role.permissions || [])
+        description: role.description ?? null,
+        permissions: flattenRolePermissionKeys(role)
     };
 }
 
+/** Resolve permission keys for a user document in either Prisma or legacy shape. */
+export function getRolePermissionKeys(user) {
+    if (Array.isArray(user?.role?.permissions)) {
+        return flattenRolePermissionKeys(user.role);
+    }
+
+    return normalizePermissionList(user?.roleId?.permissions || []);
+}
+
+export function isProviderUser(user) {
+    return user?.userType === USER_TYPE.PROVIDER;
+}
+
 export function isSuperAdminUser(user) {
+    if (isProviderUser(user)) {
+        return true;
+    }
+
     const roleName = user?.role?.name || user?.roleId?.name;
 
-    return roleName?.trim().toLowerCase() === SYSTEM_ROLE.SUPER_ADMIN.toLowerCase();
+    return isSuperAdminRoleName(roleName);
 }
 
 export function getEffectivePermissionsFromUser(user) {
-    const rolePermissions = normalizePermissionList(user?.roleId?.permissions || []);
+    const rolePermissions = getRolePermissionKeys(user);
     const deniedPermissions = new Set(
         normalizePermissionList(user?.deniedPermissions || [])
     );
@@ -47,225 +123,430 @@ export function getEffectivePermissionsFromUser(user) {
     );
 }
 
-async function getUserWithRole(userId, fields = "") {
-    const query = User.findById(userId).populate(
-        "roleId",
-        "name description permissions"
-    );
-
-    if (fields) {
-        query.select(fields);
+export async function findUserWithRole(userId, client = prisma) {
+    if (!userId) {
+        return null;
     }
 
-    return query;
+    return client.user.findUnique({
+        where: { id: userId },
+        include: USER_ROLE_INCLUDE
+    });
+}
+
+/**
+ * Shape returned to the API for any user: sanitized user fields plus the
+ * resolved access profile (`role`, `isSuperAdmin`, `allowedPermissions`, ...).
+ */
+export function buildUserAccessProfile(user) {
+    if (!user) {
+        return null;
+    }
+
+    const role = buildRoleSummary(user.role);
+    const deniedPermissions = normalizePermissionList(user.deniedPermissions || []);
+
+    return {
+        role,
+        roleId: role?.id || null,
+        isProvider: isProviderUser(user),
+        isSuperAdmin: isSuperAdminUser(user),
+        allowedPermissions: getEffectivePermissionsFromUser(user),
+        deniedPermissions
+    };
+}
+
+/**
+ * Build the Prisma `where` fragment for a tenant scope.
+ *  - `undefined` -> no tenant filter at all (provider/admin view)
+ *  - `null`      -> provider-scope rows (`tenantId IS NULL`)
+ *  - UUID string -> that single workspace
+ */
+function roleScopeWhere(tenantId) {
+    return tenantId === undefined ? {} : { tenantId };
+}
+
+/** Flatten a Prisma role row into the API shape (permissions as string keys). */
+function toRoleView(role) {
+    if (!role) {
+        return null;
+    }
+
+    return {
+        ...role,
+        permissions: flattenRolePermissionKeys(role)
+    };
+}
+
+/**
+ * Resolve permission keys to `Permission.id`s, creating catalog rows on demand
+ * so custom roles may reference keys that are not in `PERMISSION_CATALOG`.
+ */
+async function resolvePermissionIds(permissionKeys, client = prisma) {
+    const keys = normalizePermissionList(permissionKeys);
+
+    if (!keys.length) {
+        return [];
+    }
+
+    const existing = await client.permission.findMany({
+        where: { key: { in: keys } }
+    });
+
+    const permissionByKey = new Map(
+        existing.map((permission) => [permission.key, permission])
+    );
+
+    const permissionIds = [];
+
+    for (const key of keys) {
+        let permission = permissionByKey.get(key);
+
+        if (!permission) {
+            permission = await client.permission.create({
+                data: { key, category: key.split(":")[0] || null }
+            });
+
+            permissionByKey.set(key, permission);
+        }
+
+        permissionIds.push(permission.id);
+    }
+
+    return permissionIds;
+}
+
+/**
+ * Reconcile a role's `RolePermission` rows to exactly `permissionIds`.
+ *
+ * `permissionId` is a `uuid`, so an empty target must be handled with a plain
+ * `{ roleId }` delete instead of a `notIn: ["__none__"]` sentinel (Postgres
+ * would reject the non-UUID literal).
+ */
+async function syncRolePermissions(client, roleId, permissionIds) {
+    await client.rolePermission.deleteMany({
+        where: permissionIds.length
+            ? { roleId, permissionId: { notIn: permissionIds } }
+            : { roleId }
+    });
+
+    if (!permissionIds.length) {
+        return;
+    }
+
+    await client.rolePermission.createMany({
+        data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
+        skipDuplicates: true
+    });
+}
+
+async function loadRoleWithPermissions(roleId, tenantId, client = prisma) {
+    const role = await client.role.findFirst({
+        where: { id: roleId, ...roleScopeWhere(tenantId) },
+        include: { permissions: { include: { permission: true } } }
+    });
+
+    if (!role) {
+        throw new AppError("Role not found", 404);
+    }
+
+    return role;
 }
 
 export async function createRole({
     name,
     description,
     permissions,
+    tenantId = PROVIDER_SCOPE,
     createdBy = null
 }) {
-    const normalizedName = name.trim();
-    const normalizedPermissions = normalizePermissionList(permissions);
+    const normalizedName = String(name || "").trim();
 
-    const existingRole = await Role.findOne({ name: normalizedName });
+    if (!normalizedName) {
+        throw new AppError("Role name is required", 400);
+    }
+
+    const scopedTenantId = tenantId ?? null;
+
+    const existingRole = await prisma.role.findFirst({
+        where: { name: normalizedName, tenantId: scopedTenantId },
+        select: { id: true }
+    });
 
     if (existingRole) {
         throw new AppError("Role already exists", 409);
     }
 
-    const role = await Role.create({
-        name: normalizedName,
-        description,
-        permissions: normalizedPermissions
+    const permissionIds = await resolvePermissionIds(permissions);
+
+    const role = await prisma.role.create({
+        data: {
+            name: normalizedName,
+            description: description ?? null,
+            tenantId: scopedTenantId,
+            isSystem: false,
+            permissions: {
+                create: permissionIds.map((permissionId) => ({ permissionId }))
+            }
+        },
+        include: { permissions: { include: { permission: true } } }
     });
 
     await recordAuditLog({
+        tenantId: role.tenantId,
         userId: createdBy,
         action: AUDIT_ACTION.ROLE_CREATED,
         entity: "Role",
-        entityId: role._id,
+        entityId: role.id,
         metadata: {
             name: role.name,
-            permissions: role.permissions
+            permissions: flattenRolePermissionKeys(role)
         }
     });
 
-    return role;
+    return toRoleView(role);
 }
 
-export async function getRoles() {
-    const roles = await Role.find().sort({ createdAt: -1 }).lean();
+export async function getRoles(tenantId) {
+    const roles = await prisma.role.findMany({
+        where: roleScopeWhere(tenantId),
+        include: { permissions: { include: { permission: true } } },
+        orderBy: { createdAt: "desc" }
+    });
 
-    return roles.map((role) => ({
-        ...role,
-        permissions: normalizePermissionList(role.permissions || [])
-    }));
+    return roles.map(toRoleView);
 }
 
-export async function getRoleById(roleId) {
-    const role = await Role.findById(roleId).lean();
+export async function getRoleById(roleId, tenantId) {
+    const role = await loadRoleWithPermissions(roleId, tenantId);
 
-    if (!role) {
-        throw new AppError("Role not found", 404);
+    return toRoleView(role);
+}
+
+/**
+ * After a role's permission set changes, drop any `deniedPermissions` entries
+ * that the role no longer grants — otherwise a stale deny would silently block
+ * the permission if it were ever re-granted.
+ */
+async function pruneDeniedPermissions(roleId, allowedPermissionKeys) {
+    const allowedPermissionSet = new Set(allowedPermissionKeys);
+
+    const users = await prisma.user.findMany({
+        where: { roleId },
+        select: { id: true, deniedPermissions: true }
+    });
+
+    for (const user of users) {
+        const currentDenied = user.deniedPermissions || [];
+        const nextDeniedPermissions = normalizePermissionList(currentDenied).filter(
+            (permission) => allowedPermissionSet.has(permission)
+        );
+
+        if (nextDeniedPermissions.length === currentDenied.length) {
+            continue;
+        }
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { deniedPermissions: nextDeniedPermissions }
+        });
+    }
+}
+
+export async function updateRole(roleId, data, actedBy = null, tenantId = undefined) {
+    const role = await loadRoleWithPermissions(roleId, tenantId);
+    const normalizedName =
+        data.name === undefined ? undefined : String(data.name).trim();
+
+    if (data.name !== undefined && !normalizedName) {
+        throw new AppError("Role name is required", 400);
     }
 
-    return {
-        ...role,
-        permissions: normalizePermissionList(role.permissions || [])
-    };
-}
+    if (normalizedName !== undefined) {
+        const duplicateRole = await prisma.role.findFirst({
+            where: {
+                name: normalizedName,
+                tenantId: role.tenantId,
+                id: { not: role.id }
+            },
+            select: { id: true }
+        });
 
-export async function updateRole(roleId, data, actedBy = null) {
-    const role = await Role.findById(roleId);
-
-    if (!role) {
-        throw new AppError("Role not found", 404);
-    }
-
-    if (data.name !== undefined) {
-        const normalizedName = data.name.trim();
-        const existingRole = await Role.findOne({
-            name: normalizedName,
-            _id: { $ne: roleId }
-        }).lean();
-
-        if (existingRole) {
+        if (duplicateRole) {
             throw new AppError("Role name already exists", 409);
         }
-        role.name = normalizedName;
     }
-    if (data.description !== undefined) {
-        role.description = data.description;
-    }
-    if (data.permissions !== undefined) {
-        role.permissions = normalizePermissionList(data.permissions);
-    }
-    await role.save();
 
-    if (data.permissions !== undefined) {
-        const allowedPermissionSet = new Set(role.permissions || []);
-        const users = await User.find({ roleId: role._id }).select("deniedPermissions")
-        for (const user of users) {
-            const nextDeniedPermissions = normalizePermissionList(
-                user.deniedPermissions || []
-            ).filter((permission) => allowedPermissionSet.has(permission));
+    const permissionIds =
+        data.permissions === undefined
+            ? null
+            : await resolvePermissionIds(data.permissions);
 
-            if(
-                nextDeniedPermissions.length !== (user.deniedPermissions || []).length
-            ){
-                user.deniedPermissions = nextDeniedPermissions;
-                await user.save();
-            }
+    await prisma.$transaction(async (tx) => {
+        const updateData = {};
 
+        if (normalizedName !== undefined) {
+            updateData.name = normalizedName;
         }
+
+        if (data.description !== undefined) {
+            updateData.description = data.description ?? null;
+        }
+
+        if (Object.keys(updateData).length) {
+            await tx.role.update({ where: { id: role.id }, data: updateData });
+        }
+
+        if (permissionIds) {
+            await syncRolePermissions(tx, role.id, permissionIds);
+        }
+    });
+
+    const updatedRole = await loadRoleWithPermissions(role.id);
+
+    if (permissionIds) {
+        await pruneDeniedPermissions(
+            role.id,
+            flattenRolePermissionKeys(updatedRole)
+        );
     }
 
     await recordAuditLog({
+        tenantId: updatedRole.tenantId,
         userId: actedBy,
         action: AUDIT_ACTION.ROLE_UPDATED,
         entity: "Role",
-        entityId: role._id,
+        entityId: updatedRole.id,
         metadata: {
             updatedFields: Object.keys(data),
-            ...(data.permissions !== undefined 
-                ? { permissions: role.permissions } 
+            ...(permissionIds
+                ? { permissions: flattenRolePermissionKeys(updatedRole) }
                 : {})
         }
     });
 
-    return role;
-
+    return toRoleView(updatedRole);
 }
 
-
-export async function assignRoleToUser({ userId, roleId, actedBy = null }) {
-    const [user, role] = await Promise.all([
-        User.findById(userId),
-        Role.findById(roleId)
-    ]);
+export async function assignRoleToUser({
+    userId,
+    roleId,
+    actedBy = null,
+    tenantId = undefined
+}) {
+    const user = await prisma.user.findFirst({
+        where: { id: userId, ...roleScopeWhere(tenantId) },
+        select: { id: true, deniedPermissions: true }
+    });
 
     if (!user) {
         throw new AppError("User not found", 404);
     }
 
-    if (!role) {
-        throw new AppError("Role not found", 404);
-    }
+    const role = await loadRoleWithPermissions(roleId, tenantId);
+    const allowedPermissionSet = new Set(flattenRolePermissionKeys(role));
 
-    user.roleId = role._id;
-    user.deniedPermissions = normalizePermissionList(user.deniedPermissions).filter(
-        (permission) => role.permissions.includes(permission)
-    );
-    await user.save();
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            roleId: role.id,
+            deniedPermissions: normalizePermissionList(
+                user.deniedPermissions
+            ).filter((permission) => allowedPermissionSet.has(permission))
+        }
+    });
 
     await recordAuditLog({
+        tenantId: role.tenantId,
         userId: actedBy,
         action: AUDIT_ACTION.ROLE_ASSIGNED,
         entity: "User",
-        entityId: user._id,
-        metadata: { targetUserId: userId, roleId: role._id }
+        entityId: user.id,
+        metadata: { targetUserId: user.id, roleId: role.id }
     });
 
-    return getUserWithRole(userId);
+    const updatedUser = await findUserWithRole(user.id);
+
+    return {
+        user: updatedUser,
+        profile: buildUserAccessProfile(updatedUser)
+    };
 }
 
-export async function clearRoleFromUser({ userId, actedBy = null }) {
-    const user = await User.findById(userId);
+export async function clearRoleFromUser(userId, actedBy = null) {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, roleId: true, tenantId: true }
+    });
 
     if (!user) {
         throw new AppError("User not found", 404);
     }
 
-    user.roleId = null;
-    user.deniedPermissions = [];
-    await user.save();
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { roleId: null }
+    });
 
     await recordAuditLog({
+        tenantId: user.tenantId,
         userId: actedBy,
         action: AUDIT_ACTION.ROLE_REMOVED,
         entity: "User",
-        entityId: user._id,
-        metadata: { targetUserId: userId }
+        entityId: user.id,
+        metadata: { targetUserId: user.id, roleId: user.roleId }
     });
 
-    return true;
+    return findUserWithRole(user.id);
 }
 
 export async function getUserRole(userId) {
-    const user = await getUserWithRole(userId, "roleId");
+    const user = await findUserWithRole(userId);
 
-    return buildRoleSummary(user?.roleId);
+    return buildRoleSummary(user?.role);
 }
 
 export async function getUserBasePermissionKeys(userId) {
-    const user = await getUserWithRole(userId, "roleId");
+    const user = await findUserWithRole(userId);
 
-    return normalizePermissionList(user?.roleId?.permissions || []);
+    return flattenRolePermissionKeys(user?.role);
 }
 
 export async function getUserDeniedPermissionKeys(userId) {
-    const user = await User.findById(userId).select("deniedPermissions").lean();
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { deniedPermissions: true }
+    });
 
     return normalizePermissionList(user?.deniedPermissions || []);
 }
 
 export async function getUserPermissions(userId) {
-    const user = await getUserWithRole(userId, "roleId deniedPermissions");
+    const user = await findUserWithRole(userId);
+
+    if (!user) {
+        return [];
+    }
 
     return getEffectivePermissionsFromUser(user);
 }
 
 export async function getUserAccessProfile(userId) {
-    const user = await getUserWithRole(userId, "roleId deniedPermissions");
-    const role = buildRoleSummary(user?.roleId);
-    const deniedPermissions = normalizePermissionList(user?.deniedPermissions || []);
+    const user = await findUserWithRole(userId);
+
+    if (!user) {
+        return null;
+    }
+
+    const profile = buildUserAccessProfile(user);
 
     return {
-        ...(role ? { role } : {}),
-        isSuperAdmin: isSuperAdminUser(user),
-        allowedPermissions: getEffectivePermissionsFromUser(user),
-        ...(deniedPermissions.length ? { deniedPermissions } : {})
+        ...(profile.role ? { role: profile.role } : {}),
+        isProvider: profile.isProvider,
+        isSuperAdmin: profile.isSuperAdmin,
+        allowedPermissions: profile.allowedPermissions,
+        ...(profile.deniedPermissions.length
+            ? { deniedPermissions: profile.deniedPermissions }
+            : {})
     };
 }

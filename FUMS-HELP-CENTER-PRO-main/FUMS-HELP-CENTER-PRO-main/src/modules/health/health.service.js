@@ -12,6 +12,13 @@ function serviceResult(name, status, details = {}) {
 }
 
 async function checkMongo() {
+    if (!env.FLEXIBLE_USER_MANAGEMENT && !env.MONGODB_REQUIRED) {
+        return serviceResult("mongodb", "skipped", {
+            required: false,
+            message: "FLEXIBLE_USER_MANAGEMENT not configured"
+        });
+    }
+
     const state = mongoose.connection.readyState;
     if (state === 1) {
         await mongoose.connection.db.admin().ping();
@@ -21,7 +28,9 @@ async function checkMongo() {
         });
     }
 
-    return serviceResult("mongodb", "down", {
+    // Postgres/Prisma is the identity store, so an unreachable legacy Mongo
+    // instance only degrades health when MONGODB_REQUIRED=true.
+    return serviceResult("mongodb", env.MONGODB_REQUIRED ? "down" : "skipped", {
         required: env.MONGODB_REQUIRED,
         readyState: state
     });

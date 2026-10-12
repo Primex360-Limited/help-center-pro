@@ -18,6 +18,11 @@ const options = {
             { name: "Users", description: "User and agent management" },
             { name: "Roles", description: "RBAC roles and permissions" },
             { name: "Invitations", description: "Team invitations" },
+            {
+                name: "Admin",
+                description:
+                    "Provider super-admin platform — overview metrics, tenant provisioning, activate/deactivate/delete, CSV export"
+            },
             { name: "Tickets", description: "Universal inbox ticketing" },
         ],
         servers: [
@@ -635,25 +640,38 @@ const options = {
 
                 CreateInvitationRequest: {
                     type: "object",
-                    required: ["email", "firstName", "lastName", "roleId"],
+                    required: ["email", "roleId"],
                     properties: {
                         email: {
                             type: "string",
-                            example: "invitee@example.com",
+                            format: "email",
+                            example: "agent@company.com",
+                            description: "Invitee email address"
+                        },
+                        roleId: {
+                            type: "string",
+                            format: "uuid",
+                            example: "3f1a2b4c-5d6e-7f80-9a1b-2c3d4e5f6a7b",
+                            description: "Workspace role id (Tenant Admin or Tenant Agent)"
                         },
                         firstName: {
                             type: "string",
                             example: "Jane",
+                            description: "Optional. Derived from the email local-part when omitted."
                         },
                         lastName: {
                             type: "string",
                             example: "Doe",
+                            description: "Optional. Defaults to User when omitted."
                         },
-                        roleId: {
+                        tenantId: {
                             type: "string",
-                            example: "680ab1234c56d7890ef67890",
-                        },
-                    },
+                            format: "uuid",
+                            description:
+                                "Workspace the agent joins. Optional for tenant admins (their own workspace is used); required for provider super admins.",
+                            example: "1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f"
+                        }
+                    }
                 },
 
                 AcceptInvitationRequest: {
