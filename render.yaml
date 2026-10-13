@@ -27,7 +27,7 @@ services:
       - key: SEED_TEST_USER
         value: "false"
       - key: SEED_PROVIDER_SUPER_ADMIN
-        value: "false"
+        value: "true"
       - key: EMAIL_ENABLED
         value: "true"
       - key: JWT_ACCESS_EXPIRES_IN

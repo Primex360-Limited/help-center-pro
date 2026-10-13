@@ -24,7 +24,8 @@ export const APP_URL = String(import.meta.env.VITE_APP_URL || "").replace(
 
 export function adminLoginPath() {
   if (isAdminPortal) return "/login";
-  if (isTenantPortal && ADMIN_URL) return `${ADMIN_URL}/login`;
+  // Never surface the Admin Portal URL from the tenant host.
+  if (isTenantPortal) return "/login";
   return "/admin/login";
 }
 
@@ -36,6 +37,6 @@ export function tenantLoginPath() {
 
 export function adminSignupPath() {
   if (isAdminPortal) return "/signup";
-  if (isTenantPortal && ADMIN_URL) return `${ADMIN_URL}/signup`;
+  if (isTenantPortal) return "/login";
   return "/signup";
 }

@@ -36,9 +36,8 @@ export const env = {
     REDIS_URL: process.env.REDIS_URL,
     REDIS_REQUIRED: bool(process.env.REDIS_REQUIRED, false),
     SEED_TEST_USER: bool(process.env.SEED_TEST_USER, true),
-    // Provider super-admin is created via /signup — do not auto-seed it unless
-    // explicitly requested (avoids blocking first-time platform bootstrap).
-    SEED_PROVIDER_SUPER_ADMIN: bool(process.env.SEED_PROVIDER_SUPER_ADMIN, false),
+    // Seeds the default platform super admin (ebube.okechukwu@gmail.com).
+    SEED_PROVIDER_SUPER_ADMIN: bool(process.env.SEED_PROVIDER_SUPER_ADMIN, true),
 };
 
 export function assertCriticalEnv() {

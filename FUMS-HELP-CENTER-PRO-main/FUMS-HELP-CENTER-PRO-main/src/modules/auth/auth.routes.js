@@ -26,6 +26,7 @@ import {
     updatePasswordSchema,
     verifyEmailSchema,
 } from "./auth.validation.js";
+import { requireAdminPortalOrigin } from "../tenants/tenant.middleware.js";
 
 const authRoutes = express.Router();
 
@@ -63,6 +64,7 @@ authRoutes.get("/platform-status", asyncHandler(platformStatus));
  */
 authRoutes.post(
     "/register-super-admin",
+    requireAdminPortalOrigin,
     validate(registerSchema),
     asyncHandler(registerInitialSuperAdmin)
 );

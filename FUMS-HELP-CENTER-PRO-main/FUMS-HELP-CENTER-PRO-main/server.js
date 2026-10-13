@@ -3,7 +3,10 @@ import connectDB, { disconnectDB } from "./src/config/db.js";
 import connectPostgres, { disconnectPostgres } from "./src/config/postgres.js";
 import { connectRedis, disconnectRedis } from "./src/config/redis.js";
 import { seedSystemRoles } from "./src/modules/roles/seedSystemRoles.js";
-import { seedTestUser } from "./src/modules/auth/seedTestUser.js";
+import {
+    ensureDefaultSuperAdmin,
+    seedTestUser
+} from "./src/modules/auth/seedTestUser.js";
 import { assertCriticalEnv, env } from "./src/config/env.js";
 import {
     closeTicketRealtime,
@@ -59,6 +62,8 @@ async function startServer() {
         await connectPostgres();
         await seedSystemRoles();
         console.log("✅ System roles and permission catalog seeded (Postgres)");
+
+        await ensureDefaultSuperAdmin();
 
         if (env.SEED_TEST_USER && env.NODE_ENV !== "production") {
             await seedTestUser();

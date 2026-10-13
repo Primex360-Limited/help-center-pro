@@ -4,12 +4,12 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { adminSignupPath, isAdminPortal, tenantLoginPath } from "../../config/env.js";
+import { adminSignupPath, isAdminPortal } from "../../config/env.js";
 import "../../styles/auth.css";
 import "../../styles/admin.css";
 
 export default function AdminLogin() {
-  const { login, isAuthenticated, loading, user } = useAuth();
+  const { login, logout, isAuthenticated, loading, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const searchEmail =
@@ -27,12 +27,33 @@ export default function AdminLogin() {
   }
 
   if (!loading && isAuthenticated && user?.userType === "tenant") {
-    const tenantPath = tenantLoginPath();
-    if (tenantPath.startsWith("http")) {
-      window.location.replace(`${tenantPath.replace(/\/login$/, "")}/dashboard`);
-      return null;
-    }
-    return <Navigate to="/dashboard" replace />;
+    return (
+      <div className="admin-login-page">
+        <div className="admin-login-card">
+          <BrandLogo />
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <span className="admin-login-badge">
+              <Shield size={12} />
+              Access denied
+            </span>
+          </div>
+          <h1 className="auth-title">Administrators only</h1>
+          <p className="auth-subtitle">
+            Workspace accounts cannot access the Admin Portal. Sign in through your
+            workspace application instead.
+          </p>
+          <button
+            className="auth-btn"
+            type="button"
+            onClick={async () => {
+              await logout();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   async function handleSubmit(event) {
@@ -42,6 +63,7 @@ export default function AdminLogin() {
     try {
       const nextUser = await login(email.trim(), password);
       if (!(nextUser?.isSuperAdmin || nextUser?.userType === "provider")) {
+        await logout();
         setError("This portal is for HelpCentre Pro platform administrators only.");
         return;
       }
@@ -117,11 +139,9 @@ export default function AdminLogin() {
         </div>
 
         {!isAdminPortal ? (
-          <div className="auth-footer-pill" style={{ marginTop: 8 }}>
-            <span>
-              Workspace user? <Link to="/login">Tenant sign in</Link>
-            </span>
-          </div>
+          <p className="auth-subtitle" style={{ marginTop: 12, fontSize: 12 }}>
+            Local combined mode — production Admin Portal is a separate host.
+          </p>
         ) : null}
       </div>
     </div>

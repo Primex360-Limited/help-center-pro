@@ -3,7 +3,7 @@ import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
-import { requireProviderScope } from "./tenant.middleware.js";
+import { requireAdminPortalOrigin, requireProviderScope } from "./tenant.middleware.js";
 import {
     activateTenantHandler,
     deleteTenantHandler,
@@ -39,6 +39,7 @@ const tenantRoutes = express.Router();
 tenantRoutes.get(
     "/admin/overview",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     asyncHandler(getPlatformOverviewHandler)
@@ -70,6 +71,7 @@ tenantRoutes.get(
 tenantRoutes.get(
     "/admin/tenants",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(listTenantsQuerySchema, "query"),
@@ -92,6 +94,7 @@ tenantRoutes.get(
 tenantRoutes.get(
     "/admin/tenants/export",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(listTenantsQuerySchema, "query"),
@@ -130,6 +133,7 @@ tenantRoutes.get(
 tenantRoutes.post(
     "/admin/tenants",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(createTenantInviteSchema),
@@ -149,6 +153,7 @@ tenantRoutes.post(
 tenantRoutes.get(
     "/admin/tenants/:id",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(tenantIdParamSchema, "params"),
@@ -168,6 +173,7 @@ tenantRoutes.get(
 tenantRoutes.post(
     "/admin/tenants/:id/deactivate",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(tenantIdParamSchema, "params"),
@@ -188,6 +194,7 @@ tenantRoutes.post(
 tenantRoutes.post(
     "/admin/tenants/:id/activate",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(tenantIdParamSchema, "params"),
@@ -207,6 +214,7 @@ tenantRoutes.post(
 tenantRoutes.delete(
     "/admin/tenants/:id",
     requireAuth,
+    requireAdminPortalOrigin,
     requireProviderScope,
     requirePermission("tenant:manage"),
     validate(tenantIdParamSchema, "params"),

@@ -5,7 +5,8 @@ import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
 import { getPlatformStatus, registerSuperAdmin } from "../../api/auth.api.js";
-import { adminLoginPath, tenantLoginPath } from "../../config/env.js";
+import { adminLoginPath, isTenantPortal } from "../../config/env.js";
+import PortalAccessDenied from "./PortalAccessDenied.jsx";
 import { isPasswordValid } from "../../utils/password.js";
 import "../../styles/auth.css";
 import "../../styles/admin.css";
@@ -24,6 +25,11 @@ export default function Signup() {
   const [bootstrapped, setBootstrapped] = useState(false);
 
   useEffect(() => {
+    if (isTenantPortal) {
+      setChecking(false);
+      return undefined;
+    }
+
     let cancelled = false;
 
     (async () => {
@@ -43,6 +49,10 @@ export default function Signup() {
       cancelled = true;
     };
   }, []);
+
+  if (isTenantPortal) {
+    return <PortalAccessDenied />;
+  }
 
   function updateField(key) {
     return (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
@@ -139,16 +149,6 @@ export default function Signup() {
           >
             Go to Admin Sign In
           </button>
-          <div className="auth-footer-pill" style={{ marginTop: 18 }}>
-            <span>
-              Workspace user?{" "}
-              {tenantLoginPath().startsWith("http") ? (
-                <a href={tenantLoginPath()}>Tenant sign in</a>
-              ) : (
-                <Link to={tenantLoginPath()}>Tenant sign in</Link>
-              )}
-            </span>
-          </div>
         </div>
       </div>
     );

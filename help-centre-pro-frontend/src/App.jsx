@@ -2,18 +2,14 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AdminShell from "./components/admin/AdminShell.jsx";
 import AppShell from "./components/layout/AppShell.jsx";
 import ProtectedRoute from "./components/layout/ProtectedRoute.jsx";
-import {
-  ADMIN_URL,
-  APP_URL,
-  isAdminPortal,
-  isTenantPortal,
-} from "./config/env.js";
+import { isAdminPortal, isTenantPortal } from "./config/env.js";
 import AcceptInvitation from "./pages/auth/AcceptInvitation.jsx";
 import ChangePassword from "./pages/auth/ChangePassword.jsx";
 import CheckEmail from "./pages/auth/CheckEmail.jsx";
 import CreatePassword from "./pages/auth/CreatePassword.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Login from "./pages/auth/Login.jsx";
+import PortalAccessDenied from "./pages/auth/PortalAccessDenied.jsx";
 import ResetPassword from "./pages/auth/ResetPassword.jsx";
 import Signup from "./pages/auth/Signup.jsx";
 import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
@@ -25,65 +21,118 @@ import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import NewTicket from "./pages/tickets/NewTicket.jsx";
 import Tickets from "./pages/tickets/Tickets.jsx";
 
-function ExternalRedirect({ to }) {
-  if (typeof window !== "undefined" && to.startsWith("http")) {
-    window.location.replace(to);
-    return null;
-  }
-  return <Navigate to={to} replace />;
-}
-
-function adminHome() {
-  return isAdminPortal ? "/login" : "/admin/login";
-}
-
-function tenantHome() {
-  return isTenantPortal || !isAdminPortal ? "/login" : APP_URL ? `${APP_URL}/login` : "/login";
-}
-
 export default function App() {
+  // Tenant host: never expose admin signup/login/shell (and never leak admin URL).
+  if (isTenantPortal) {
+    return (
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/check-email" element={<CheckEmail />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/create-password" element={<CreatePassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/accept-invitation" element={<AcceptInvitation />} />
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <ChangePassword />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          element={
+            <ProtectedRoute tenantOnly>
+              <AppShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/tickets" element={<Tickets />} />
+          <Route path="/tickets/new" element={<NewTicket />} />
+          <Route
+            path="/agents"
+            element={
+              <ProtectedRoute permission="agent:read" tenantOnly>
+                <Agents />
+              </ProtectedRoute>
+            }
+          />
+        </Route>
+
+        <Route path="/signup" element={<PortalAccessDenied />} />
+        <Route path="/admin/*" element={<PortalAccessDenied />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  // Admin host: platform operators only.
+  if (isAdminPortal) {
+    return (
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<AdminLogin />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/check-email" element={<CheckEmail />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/change-password"
+          element={
+            <ProtectedRoute>
+              <ChangePassword />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          element={
+            <ProtectedRoute providerOnly>
+              <AdminShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
+          <Route path="/admin/overview" element={<PlatformOverview />} />
+          <Route path="/admin/tenants" element={<Tenants />} />
+          <Route path="/overview" element={<Navigate to="/admin/overview" replace />} />
+          <Route path="/tenants" element={<Navigate to="/admin/tenants" replace />} />
+        </Route>
+
+        <Route
+          path="/dashboard"
+          element={
+            <PortalAccessDenied
+              title="Workspace portal only"
+              message="Workspace tools live on the tenant application. This host is reserved for platform administration."
+            />
+          }
+        />
+        <Route path="/tickets/*" element={<PortalAccessDenied title="Workspace portal only" />} />
+        <Route path="/agents" element={<PortalAccessDenied title="Workspace portal only" />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  // Combined (local development): both portals on one origin.
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <Navigate to={isAdminPortal ? "/login" : "/login"} replace />
-        }
-      />
-
-      <Route
-        path="/login"
-        element={isAdminPortal ? <AdminLogin /> : <Login />}
-      />
-      <Route
-        path="/signup"
-        element={
-          isTenantPortal && ADMIN_URL ? (
-            <ExternalRedirect to={`${ADMIN_URL}/signup`} />
-          ) : (
-            <Signup />
-          )
-        }
-      />
+      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/check-email" element={<CheckEmail />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/create-password" element={<CreatePassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/accept-invitation" element={<AcceptInvitation />} />
-
-      <Route
-        path="/admin/login"
-        element={
-          isTenantPortal && ADMIN_URL ? (
-            <ExternalRedirect to={`${ADMIN_URL}/login`} />
-          ) : isAdminPortal ? (
-            <Navigate to="/login" replace />
-          ) : (
-            <AdminLogin />
-          )
-        }
-      />
+      <Route path="/admin/login" element={<AdminLogin />} />
 
       <Route
         path="/change-password"
@@ -104,12 +153,6 @@ export default function App() {
         <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
         <Route path="/admin/overview" element={<PlatformOverview />} />
         <Route path="/admin/tenants" element={<Tenants />} />
-        {isAdminPortal ? (
-          <>
-            <Route path="/overview" element={<Navigate to="/admin/overview" replace />} />
-            <Route path="/tenants" element={<Navigate to="/admin/tenants" replace />} />
-          </>
-        ) : null}
       </Route>
 
       <Route
@@ -132,15 +175,7 @@ export default function App() {
         />
       </Route>
 
-      <Route
-        path="*"
-        element={
-          <Navigate
-            to={isAdminPortal ? adminHome() : tenantHome()}
-            replace
-          />
-        }
-      />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }

@@ -1,7 +1,30 @@
 import prisma from "../../database/prisma/client.js";
+import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { REQUEST_SCOPE, TENANT_STATUS } from "../../shared/constants/system.js";
 import { buildTenantContext } from "./tenant.resolver.js";
+
+function normalizeOrigin(value) {
+    try {
+        return new URL(String(value || "").trim()).origin;
+    } catch {
+        return "";
+    }
+}
+
+function requestOrigin(req) {
+    const origin = req.headers?.origin;
+    if (origin) {
+        return normalizeOrigin(origin);
+    }
+
+    const referer = req.headers?.referer || req.headers?.referrer;
+    if (referer) {
+        return normalizeOrigin(referer);
+    }
+
+    return "";
+}
 
 /**
  * Resolve and attach `req.tenantContext` (+ `req.tenant` when found) to the
@@ -82,20 +105,62 @@ export function requireTenantScope({ allowProvisioning = false } = {}) {
     };
 }
 
-/** Guard for the provider super-admin portal (`admin.<root-domain>`). */
+/**
+ * Guard for the provider super-admin portal.
+ *
+ * Fail closed: the authenticated identity must be a provider account with no
+ * workspace binding. Host/subdomain hints alone are never enough.
+ */
 export function requireProviderScope(req, res, next) {
-    if (req.tenantContext?.scope === REQUEST_SCOPE.PROVIDER) {
+    const isProviderUser =
+        req.user?.user_type === "provider" &&
+        (req.user?.tenant_id === null || req.user?.tenant_id === undefined);
+
+    if (!isProviderUser) {
+        return next(
+            new AppError(
+                "This endpoint is only available to HelpCentre Pro platform administrators",
+                403
+            )
+        );
+    }
+
+    return next();
+}
+
+/**
+ * In production, browser calls to admin bootstrap APIs must come from the
+ * Admin Portal origin when ADMIN_FRONTEND_URL is configured and differs from
+ * the tenant app. Non-browser clients (no Origin/Referer) are allowed for
+ * ops tooling; tenant browser origins are rejected.
+ */
+export function requireAdminPortalOrigin(req, res, next) {
+    if (env.NODE_ENV !== "production") {
         return next();
     }
 
-    // A provider operator may still reach these routes from an API client
-    // that does not send the admin subdomain, as long as their token proves
-    // they are a provider user and carries `tenant:manage`.
-    if (req.user?.user_type === "provider" || req.user?.tenant_id === null) {
+    const adminOrigin = normalizeOrigin(env.ADMIN_FRONTEND_URL);
+    const appOrigin = normalizeOrigin(env.FRONTEND_URL);
+
+    if (!adminOrigin || adminOrigin === appOrigin) {
         return next();
     }
 
-    return next(new AppError("This endpoint is only available to the Help Centre Pro team", 403));
+    const incoming = requestOrigin(req);
+    if (!incoming) {
+        return next();
+    }
+
+    if (incoming === adminOrigin) {
+        return next();
+    }
+
+    return next(
+        new AppError(
+            "Admin actions must be performed from the Admin Portal",
+            403
+        )
+    );
 }
 
 /**

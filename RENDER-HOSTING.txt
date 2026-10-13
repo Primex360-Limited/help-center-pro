@@ -69,9 +69,17 @@ Tenant login:   https://helpcentre-pro-web.onrender.com/login
 Admin signup:   https://helpcentre-pro-admin.onrender.com/signup
 Admin login:    https://helpcentre-pro-admin.onrender.com/login
 
-First-time setup: open the Admin signup URL, create the platform admin,
-then sign in on the Admin login URL. You will get a welcome email (no
-verification link). There is no seeded production admin.
+Security: the tenant host never links to or redirects into Admin.
+  /signup and /admin/* on the tenant app show a restricted-access screen
+  and do not reveal the Admin Portal URL. Admin APIs reject tenant tokens
+  and (in production) browser calls that do not originate from the Admin host.
+
+Default platform super admin (seeded on API start):
+  Email:    ebube.okechukwu@gmail.com
+  Password: 2020/EN/12566
+
+Sign in at the Admin login URL above. /signup is only needed if you disable
+SEED_PROVIDER_SUPER_ADMIN.
 
 
 EVERYDAY WORKFLOW

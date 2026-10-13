@@ -18,13 +18,16 @@ const DEMO_TENANT = Object.freeze({
     }
 });
 
+/** Default platform super admin (seeded when SEED_PROVIDER_SUPER_ADMIN=true). */
+export const DEFAULT_SUPER_ADMIN = Object.freeze({
+    email: "ebube.okechukwu@gmail.com",
+    password: "2020/EN/12566",
+    firstName: "Ebube",
+    lastName: "Okechukwu"
+});
+
 const PROVIDER_TEST_USERS = [
-    {
-        email: "ebube.okechukwu@primex360.com",
-        password: "2020/EN/12566",
-        firstName: "Ebube",
-        lastName: "Okechukwu"
-    },
+    DEFAULT_SUPER_ADMIN,
     {
         email: "test@test.com",
         password: "test",
@@ -144,7 +147,7 @@ async function upsertProviderUser(role, account) {
                 emailVerifiedAt: existing.emailVerifiedAt ?? new Date()
             }
         });
-        console.log(`♻️  Dev provider user updated: ${email}`);
+        console.log(`♻️  Provider super admin updated: ${email}`);
         return user;
     }
 
@@ -154,8 +157,21 @@ async function upsertProviderUser(role, account) {
             emailVerifiedAt: new Date()
         }
     });
-    console.log(`✅ Dev provider user created: ${email}`);
+    console.log(`✅ Provider super admin created: ${email}`);
     return user;
+}
+
+/**
+ * Ensure the default platform super admin exists (local + production).
+ * Controlled by SEED_PROVIDER_SUPER_ADMIN.
+ */
+export async function ensureDefaultSuperAdmin() {
+    if (!env.SEED_PROVIDER_SUPER_ADMIN) {
+        return null;
+    }
+
+    const role = await resolveProviderSuperAdminRole();
+    return upsertProviderUser(role, DEFAULT_SUPER_ADMIN);
 }
 
 async function upsertTenantAdmin(tenantId, adminRoleId, account) {
@@ -226,32 +242,10 @@ export async function seedTestUser() {
 
     const users = [];
 
-    // Never auto-create the platform super admin unless explicitly enabled —
-    // otherwise /signup fails with "A super admin already exists".
+    const superAdminRole = await resolveProviderSuperAdminRole();
     if (env.SEED_PROVIDER_SUPER_ADMIN) {
-        const superAdminRole = await resolveProviderSuperAdminRole();
         for (const account of PROVIDER_TEST_USERS) {
             users.push(await upsertProviderUser(superAdminRole, account));
-        }
-    } else {
-        const seedEmails = PROVIDER_TEST_USERS.map((account) =>
-            normalizeEmail(account.email)
-        );
-        const cleared = await prisma.user.deleteMany({
-            where: {
-                tenantId: null,
-                userType: USER_TYPE.PROVIDER,
-                email: { in: seedEmails }
-            }
-        });
-        if (cleared.count > 0) {
-            console.log(
-                `🧹 Removed ${cleared.count} auto-seeded provider admin(s) so /signup can bootstrap`
-            );
-        } else {
-            console.log(
-                "ℹ️  Skipping provider super-admin seed (use /signup or set SEED_PROVIDER_SUPER_ADMIN=true)"
-            );
         }
     }
 
