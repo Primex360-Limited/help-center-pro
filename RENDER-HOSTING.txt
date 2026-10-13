@@ -66,20 +66,21 @@ API health:     https://helpcentre-pro-api.onrender.com/health
 Swagger:        https://helpcentre-pro-api.onrender.com/api-docs
 
 Tenant login:   https://helpcentre-pro-web.onrender.com/login
-Admin signup:   https://helpcentre-pro-admin.onrender.com/signup
 Admin login:    https://helpcentre-pro-admin.onrender.com/login
 
 Security: the tenant host never links to or redirects into Admin.
-  /signup and /admin/* on the tenant app show a restricted-access screen
-  and do not reveal the Admin Portal URL. Admin APIs reject tenant tokens
-  and (in production) browser calls that do not originate from the Admin host.
+  /admin/* on the tenant app shows a restricted-access screen and does not
+  reveal the Admin Portal URL. Public admin account creation is disabled —
+  admins are seeded / managed inside the platform. Admin APIs reject tenant
+  tokens and (in production) browser calls that do not originate from the
+  Admin host.
 
 Default platform super admin (seeded on API start):
-  Email:    ebube.okechukwu@gmail.com
+  Email:    ebube.okechukwu@primex360.com
   Password: 2020/EN/12566
 
-Sign in at the Admin login URL above. /signup is only needed if you disable
-SEED_PROVIDER_SUPER_ADMIN.
+After sign-in, change password from the Admin sidebar lock icon. Changed
+credentials are preserved across restarts.
 
 
 EVERYDAY WORKFLOW
@@ -98,5 +99,4 @@ NOTES
 - Free Render services sleep after idle time; first request may take ~30–60s.
 - Vite env vars are baked at build time — set them before the first build,
   or Manual Deploy after changing VITE_* values.
-- Locally (combined portal): tenant login is /login, admin login is /admin/login,
-  admin signup is /signup.
+- Locally (combined portal): tenant login is /login, admin login is /admin/login.

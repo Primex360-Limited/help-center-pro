@@ -36,7 +36,7 @@ export const env = {
     REDIS_URL: process.env.REDIS_URL,
     REDIS_REQUIRED: bool(process.env.REDIS_REQUIRED, false),
     SEED_TEST_USER: bool(process.env.SEED_TEST_USER, true),
-    // Seeds the default platform super admin (ebube.okechukwu@gmail.com).
+    // Seeds the default platform super admin (ebube.okechukwu@primex360.com).
     SEED_PROVIDER_SUPER_ADMIN: bool(process.env.SEED_PROVIDER_SUPER_ADMIN, true),
 };
 

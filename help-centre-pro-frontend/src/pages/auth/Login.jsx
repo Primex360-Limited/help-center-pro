@@ -133,7 +133,7 @@ export default function Login() {
 
         <div className="auth-footer-pill">
           <span>
-            Need access? Contact your workspace administrator.
+            Don&apos;t have an account? <Link to="/signup">Sign up</Link>
           </span>
         </div>
       </div>

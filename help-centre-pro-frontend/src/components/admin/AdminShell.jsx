@@ -15,6 +15,7 @@ import {
   BarChart3,
   ScrollText,
   KeyRound,
+  Lock,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -127,6 +128,15 @@ export default function AdminShell() {
               <div className="admin-user__role">Administrator</div>
             </div>
           </div>
+          <button
+            type="button"
+            className="admin-logout"
+            onClick={() => navigate("/change-password")}
+            aria-label="Change password"
+            title="Change password"
+          >
+            <Lock size={18} />
+          </button>
           <button type="button" className="admin-logout" onClick={handleLogout} aria-label="Log out">
             <LogOut size={18} />
           </button>

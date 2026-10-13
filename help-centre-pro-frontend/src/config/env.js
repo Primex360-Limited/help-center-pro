@@ -36,7 +36,6 @@ export function tenantLoginPath() {
 }
 
 export function adminSignupPath() {
-  if (isAdminPortal) return "/signup";
-  if (isTenantPortal) return "/login";
-  return "/signup";
+  // Public admin creation is disabled — always send to admin sign-in.
+  return adminLoginPath();
 }

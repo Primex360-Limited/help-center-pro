@@ -11,8 +11,8 @@ import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Login from "./pages/auth/Login.jsx";
 import PortalAccessDenied from "./pages/auth/PortalAccessDenied.jsx";
 import ResetPassword from "./pages/auth/ResetPassword.jsx";
-import Signup from "./pages/auth/Signup.jsx";
 import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
+import WorkspaceSignup from "./pages/auth/WorkspaceSignup.jsx";
 import Agents from "./pages/agents/Agents.jsx";
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
 import PlatformOverview from "./pages/admin/PlatformOverview.jsx";
@@ -63,7 +63,7 @@ export default function App() {
           />
         </Route>
 
-        <Route path="/signup" element={<PortalAccessDenied />} />
+        <Route path="/signup" element={<WorkspaceSignup />} />
         <Route path="/admin/*" element={<PortalAccessDenied />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -76,8 +76,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<AdminLogin />} />
-        <Route path="/signup" element={<Signup />} />
+        <Route path="/signup" element={<Navigate to="/login" replace />} />
         <Route path="/admin/login" element={<Navigate to="/login" replace />} />
+        <Route path="/admin/signup" element={<Navigate to="/login" replace />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/check-email" element={<CheckEmail />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -125,7 +126,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
+      <Route path="/signup" element={<WorkspaceSignup />} />
+      <Route path="/admin/signup" element={<Navigate to="/admin/login" replace />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/check-email" element={<CheckEmail />} />
       <Route path="/verify-email" element={<VerifyEmail />} />

@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { ChevronRight, Shield } from "lucide-react";
+import { ChevronRight, Lock, Shield } from "lucide-react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { adminSignupPath, isAdminPortal } from "../../config/env.js";
 import "../../styles/auth.css";
 import "../../styles/admin.css";
 
@@ -31,7 +30,7 @@ export default function AdminLogin() {
       <div className="admin-login-page">
         <div className="admin-login-card">
           <BrandLogo />
-          <div style={{ display: "flex", justifyContent: "center" }}>
+          <div className="admin-login-badge-row">
             <span className="admin-login-badge">
               <Shield size={12} />
               Access denied
@@ -67,6 +66,10 @@ export default function AdminLogin() {
         setError("This portal is for HelpCentre Pro platform administrators only.");
         return;
       }
+      if (nextUser?.mustChangePassword) {
+        navigate("/change-password");
+        return;
+      }
       navigate("/admin/overview");
     } catch (err) {
       setError(err.message || "Unable to sign in");
@@ -75,13 +78,11 @@ export default function AdminLogin() {
     }
   }
 
-  const signupHref = adminSignupPath();
-
   return (
     <div className="admin-login-page">
       <div className="admin-login-card">
         <BrandLogo />
-        <div style={{ display: "flex", justifyContent: "center" }}>
+        <div className="admin-login-badge-row">
           <span className="admin-login-badge">
             <Shield size={12} />
             Platform Admin
@@ -89,7 +90,7 @@ export default function AdminLogin() {
         </div>
         <h1 className="auth-title">Admin Sign In</h1>
         <p className="auth-subtitle">
-          Access the HelpCentre Pro platform control centre.
+          Secure access to the HelpCentre Pro platform control centre.
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -121,28 +122,25 @@ export default function AdminLogin() {
             autoComplete="current-password"
           />
 
+          <div className="auth-forgot">
+            <Link className="auth-link" to="/forgot-password">
+              Forgot password?
+            </Link>
+          </div>
+
           <button className="auth-btn" type="submit" disabled={submitting}>
             {submitting ? "Signing in..." : "Sign In"}
             {!submitting ? <ChevronRight size={18} /> : null}
           </button>
         </form>
 
-        <div className="auth-footer-pill" style={{ marginTop: 18 }}>
+        <div className="admin-login-secure-note">
+          <Lock size={14} />
           <span>
-            First time setup?{" "}
-            {signupHref.startsWith("http") ? (
-              <a href={signupHref}>Create admin account</a>
-            ) : (
-              <Link to={signupHref}>Create admin account</Link>
-            )}
+            Administrators are provisioned inside the platform. Credentials can be
+            updated after sign-in from account security.
           </span>
         </div>
-
-        {!isAdminPortal ? (
-          <p className="auth-subtitle" style={{ marginTop: 12, fontSize: 12 }}>
-            Local combined mode — production Admin Portal is a separate host.
-          </p>
-        ) : null}
       </div>
     </div>
   );

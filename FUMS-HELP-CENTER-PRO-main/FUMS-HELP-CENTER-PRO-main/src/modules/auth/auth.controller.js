@@ -1,4 +1,5 @@
 import successResponse from "../../shared/utils/apiResponse.js";
+import { AppError } from "../../shared/errors/AppError.js";
 import {
     changePassword,
     getCurrentUser,
@@ -7,7 +8,6 @@ import {
     loginUser,
     logoutUser,
     refreshUserToken,
-    registerSuperAdmin,
     requestPasswordReset,
     resendVerificationEmail,
     resetPassword,
@@ -31,17 +31,11 @@ export async function platformStatus(req, res) {
     return successResponse(res, "Platform status", result);
 }
 
-export async function registerInitialSuperAdmin(req, res) {
-    const result = await registerSuperAdmin(req.validatedBody);
-
-    return successResponse(
-        res,
-        "Account created successfully. Please sign in to the Admin Portal.",
-        {
-            user: result.user,
-            emailSent: Boolean(result.emailSent)
-        },
-        201
+export async function registerInitialSuperAdmin() {
+    // Public bootstrap is disabled — admins are seeded / provisioned in-dashboard only.
+    throw new AppError(
+        "Admin accounts cannot be created from the sign-in page. Use the Admin Portal after signing in.",
+        403
     );
 }
 

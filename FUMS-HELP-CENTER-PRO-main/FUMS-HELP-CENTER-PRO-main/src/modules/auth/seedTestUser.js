@@ -20,11 +20,15 @@ const DEMO_TENANT = Object.freeze({
 
 /** Default platform super admin (seeded when SEED_PROVIDER_SUPER_ADMIN=true). */
 export const DEFAULT_SUPER_ADMIN = Object.freeze({
-    email: "ebube.okechukwu@gmail.com",
+    email: "ebube.okechukwu@primex360.com",
     password: "2020/EN/12566",
     firstName: "Ebube",
     lastName: "Okechukwu"
 });
+
+const LEGACY_SUPER_ADMIN_EMAILS = Object.freeze([
+    "ebube.okechukwu@gmail.com"
+]);
 
 const PROVIDER_TEST_USERS = [
     DEFAULT_SUPER_ADMIN,
@@ -164,6 +168,7 @@ async function upsertProviderUser(role, account) {
 /**
  * Ensure the default platform super admin exists (local + production).
  * Controlled by SEED_PROVIDER_SUPER_ADMIN.
+ * Password is only set on create — later credential changes by the admin are kept.
  */
 export async function ensureDefaultSuperAdmin() {
     if (!env.SEED_PROVIDER_SUPER_ADMIN) {
@@ -171,6 +176,60 @@ export async function ensureDefaultSuperAdmin() {
     }
 
     const role = await resolveProviderSuperAdminRole();
+    const email = normalizeEmail(DEFAULT_SUPER_ADMIN.email);
+
+    const existing = await prisma.user.findFirst({
+        where: { tenantId: null, email },
+        select: { id: true, emailVerifiedAt: true }
+    });
+
+    if (existing) {
+        // Keep password/email the admin may have changed — only refresh profile role.
+        const user = await prisma.user.update({
+            where: { id: existing.id },
+            data: {
+                userType: USER_TYPE.PROVIDER,
+                firstName: DEFAULT_SUPER_ADMIN.firstName,
+                lastName: DEFAULT_SUPER_ADMIN.lastName,
+                roleId: role.id,
+                status: USER_STATUS.ACTIVE,
+                emailVerified: true,
+                emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+                mustChangePassword: false
+            }
+        });
+        console.log(`♻️  Default super admin ready: ${email}`);
+        return user;
+    }
+
+    const legacy = await prisma.user.findFirst({
+        where: {
+            tenantId: null,
+            userType: USER_TYPE.PROVIDER,
+            email: { in: [...LEGACY_SUPER_ADMIN_EMAILS] }
+        },
+        select: { id: true, emailVerifiedAt: true }
+    });
+
+    if (legacy) {
+        const user = await prisma.user.update({
+            where: { id: legacy.id },
+            data: {
+                email,
+                userType: USER_TYPE.PROVIDER,
+                firstName: DEFAULT_SUPER_ADMIN.firstName,
+                lastName: DEFAULT_SUPER_ADMIN.lastName,
+                roleId: role.id,
+                status: USER_STATUS.ACTIVE,
+                emailVerified: true,
+                emailVerifiedAt: legacy.emailVerifiedAt ?? new Date(),
+                mustChangePassword: false
+            }
+        });
+        console.log(`♻️  Migrated default super admin email → ${email}`);
+        return user;
+    }
+
     return upsertProviderUser(role, DEFAULT_SUPER_ADMIN);
 }
 
@@ -242,9 +301,15 @@ export async function seedTestUser() {
 
     const users = [];
 
-    const superAdminRole = await resolveProviderSuperAdminRole();
+    // Default super admin is handled by ensureDefaultSuperAdmin() (keeps changed passwords).
+    // Extra local-only provider test users may still be upserted here.
     if (env.SEED_PROVIDER_SUPER_ADMIN) {
+        const superAdminRole = await resolveProviderSuperAdminRole();
+        const defaultEmail = normalizeEmail(DEFAULT_SUPER_ADMIN.email);
         for (const account of PROVIDER_TEST_USERS) {
+            if (normalizeEmail(account.email) === defaultEmail) {
+                continue;
+            }
             users.push(await upsertProviderUser(superAdminRole, account));
         }
     }
