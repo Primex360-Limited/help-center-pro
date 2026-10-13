@@ -1,9 +1,18 @@
 import { z } from "zod";
 import { UUID_PATTERN } from "../../shared/utils/uuid.js";
+import {
+    isStrongPassword,
+    strongPasswordSchemaMessage
+} from "../../shared/utils/passwordPolicy.js";
 
 const uuidSchema = z
     .string()
     .regex(UUID_PATTERN, "Invalid identifier")
+
+const strongPassword = z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .refine(isStrongPassword, strongPasswordSchemaMessage);
 
 export const createInvitationSchema = z
     .object({
@@ -36,9 +45,16 @@ export const createInvitationSchema = z
         };
     });
 
-export const acceptInvitationSchema = z.object({
-    token: z.string().min(1),
-});
+export const acceptInvitationSchema = z
+    .object({
+        token: z.string().min(1),
+        password: strongPassword,
+        confirmPassword: z.string().min(8)
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+        message: "Password confirmation does not match",
+        path: ["confirmPassword"]
+    });
 
 export const previewInvitationSchema = z.object({
     token: z.string().min(1)

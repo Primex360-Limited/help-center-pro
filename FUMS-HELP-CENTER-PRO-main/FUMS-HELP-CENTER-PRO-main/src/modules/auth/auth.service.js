@@ -642,13 +642,13 @@ export async function loginUser({
         throw new AppError("This workspace has been suspended", 403);
     }
 
-    // Incomplete accounts should finish via signup (sets password + verifies).
+    // Invited / unverified tenant accounts must finish activation first.
     if (
         user.userType === USER_TYPE.TENANT &&
         (user.status === USER_STATUS.INVITED || !user.emailVerified)
     ) {
         throw new AppError(
-            "Finish creating your account on the Sign up page, then sign in.",
+            "Open your invitation email link, create your password, then sign in.",
             403
         );
     }

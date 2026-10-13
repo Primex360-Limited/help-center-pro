@@ -76,10 +76,6 @@ export default function Login() {
       }
     } catch (err) {
       const message = err.message || "Unable to sign in";
-      if (/finish creating your account|sign up page/i.test(message)) {
-        setError(message);
-        return;
-      }
       setError(message);
     } finally {
       setSubmitting(false);
@@ -136,19 +132,19 @@ export default function Login() {
           </button>
         </form>
 
-        {/finish creating|sign up page/i.test(error) ? (
-          <div className="auth-footer-pill">
-            <span>
-              Need to finish setup? <Link to="/signup">Complete sign up</Link>
-            </span>
-          </div>
-        ) : (
-          <div className="auth-footer-pill">
-            <span>
-              Don&apos;t have an account? <Link to="/signup">Sign up</Link>
-            </span>
-          </div>
-        )}
+        <div className="auth-footer-pill">
+          <span>
+            {/invitation email|create your password/i.test(error) ? (
+              <>
+                Have an invite? Check your email for the activation link.
+              </>
+            ) : (
+              <>
+                Don&apos;t have an account? <Link to="/signup">Sign up</Link>
+              </>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   );

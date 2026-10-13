@@ -51,7 +51,7 @@ export async function acceptInvitationHandler(req, res) {
 
   return successResponse(
     res,
-    "Invitation accepted successfully. You can now log in with your temporary password.",
+    "Invitation accepted successfully. Sign in with the password you just created.",
     invitation
   );
 }

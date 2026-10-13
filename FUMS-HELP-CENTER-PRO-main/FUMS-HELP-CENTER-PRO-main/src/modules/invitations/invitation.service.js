@@ -263,37 +263,73 @@ export async function previewInvitation(token) {
 }
 
 /**
- * Accept an invitation: the invite row becomes `accepted` and the invited user
- * is verified + activated in the same transaction.
+ * Accept an invitation: activate the user, verify email, and set their chosen
+ * password in one step so they can sign in immediately (no temp-password trap).
+ *
+ * Already-accepted invites may still set a password once before first login
+ * (recovery when the temporary password email was lost).
  */
-export async function acceptInvitation({ token }) {
+export async function acceptInvitation({ token, password }) {
     const invitation = await findInvitationByToken(token);
 
     if (!invitation.userId) {
-        throw new AppError("Invited user record no longer exist", 404);
+        throw new AppError("Invited user record no longer exists", 404);
     }
 
-    if (invitation.status === INVITATION_STATUS.PENDING) {
-        const acceptedAt = new Date();
+    if (!password) {
+        throw new AppError("Password is required to activate your account", 400);
+    }
 
-        await prisma.$transaction([
-            prisma.agentInvitation.update({
-                where: { id: invitation.id },
-                data: {
-                    status: INVITATION_STATUS.ACCEPTED,
-                    acceptedAt
-                }
-            }),
-            prisma.user.update({
-                where: { id: invitation.userId },
-                data: {
-                    emailVerified: true,
-                    emailVerifiedAt: acceptedAt,
-                    status: USER_STATUS.ACTIVE
-                }
-            })
-        ]);
+    const invitedUser = await prisma.user.findUnique({
+        where: { id: invitation.userId },
+        select: {
+            id: true,
+            email: true,
+            lastLoginAt: true,
+            status: true,
+            emailVerified: true,
+            emailVerifiedAt: true,
+            mustChangePassword: true
+        }
+    });
 
+    if (!invitedUser) {
+        throw new AppError("Invited user record no longer exists", 404);
+    }
+
+    const alreadyAccepted = invitation.status === INVITATION_STATUS.ACCEPTED;
+
+    if (alreadyAccepted && invitedUser.lastLoginAt) {
+        throw new AppError(
+            "This invitation was already activated. Please sign in with your password.",
+            409
+        );
+    }
+
+    const acceptedAt = new Date();
+    const passwordHash = await hashPassword(password);
+
+    await prisma.$transaction([
+        prisma.agentInvitation.update({
+            where: { id: invitation.id },
+            data: {
+                status: INVITATION_STATUS.ACCEPTED,
+                acceptedAt: invitation.acceptedAt ?? acceptedAt
+            }
+        }),
+        prisma.user.update({
+            where: { id: invitation.userId },
+            data: {
+                passwordHash,
+                emailVerified: true,
+                emailVerifiedAt: invitedUser.emailVerifiedAt ?? acceptedAt,
+                status: USER_STATUS.ACTIVE,
+                mustChangePassword: false
+            }
+        })
+    ]);
+
+    if (!alreadyAccepted) {
         await recordAuditLog({
             tenantId: invitation.tenantId,
             userId: invitation.userId,
@@ -302,20 +338,20 @@ export async function acceptInvitation({ token }) {
             entityId: invitation.id,
             metadata: { roleId: invitation.roleId }
         });
+    }
 
-        if (invitation.tenantId) {
-            await prisma.tenant.updateMany({
-                where: {
-                    id: invitation.tenantId,
-                    status: { not: TENANT_STATUS.ACTIVE }
-                },
-                data: {
-                    status: TENANT_STATUS.ACTIVE,
-                    suspendedAt: null,
-                    suspendedReason: null
-                }
-            });
-        }
+    if (invitation.tenantId) {
+        await prisma.tenant.updateMany({
+            where: {
+                id: invitation.tenantId,
+                status: { not: TENANT_STATUS.ACTIVE }
+            },
+            data: {
+                status: TENANT_STATUS.ACTIVE,
+                suspendedAt: null,
+                suspendedReason: null
+            }
+        });
     }
 
     const accepted = await prisma.agentInvitation.findFirst({

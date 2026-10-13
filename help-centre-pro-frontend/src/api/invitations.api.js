@@ -12,9 +12,9 @@ export async function previewInvitation(token) {
   return apiRequest(`/invitations/preview?token=${encodeURIComponent(token)}`);
 }
 
-export async function acceptInvitation(token) {
+export async function acceptInvitation(token, password, confirmPassword) {
   return apiRequest("/invitations/accept", {
     method: "POST",
-    body: { token },
+    body: { token, password, confirmPassword },
   });
 }
