@@ -53,10 +53,10 @@ services:
       - key: SUPPORT_EMAIL_FROM
         sync: false
 
+  # Static sites have no compute plan — do NOT set `plan` here.
   - type: web
     name: helpcentre-pro-web
     runtime: static
-    plan: free
     rootDir: help-centre-pro-frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
