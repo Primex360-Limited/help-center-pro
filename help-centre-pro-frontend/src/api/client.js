@@ -1,4 +1,4 @@
-import { API_BASE } from "../config/env.js";
+import { API_BASE, API_URL } from "../config/env.js";
 
 const TOKEN_KEY = "hcp_access_token";
 
@@ -29,12 +29,19 @@ export async function apiRequest(path, options = {}) {
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: finalHeaders,
-    credentials: "include",
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: finalHeaders,
+      credentials: "include",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error(
+      `Unable to reach the API (${API_URL}). Confirm the backend is live and CORS allows this site.`
+    );
+  }
 
   let payload = null;
   const text = await response.text();

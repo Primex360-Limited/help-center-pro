@@ -168,7 +168,9 @@ async function upsertProviderUser(role, account) {
 /**
  * Ensure the default platform super admin exists (local + production).
  * Controlled by SEED_PROVIDER_SUPER_ADMIN.
- * Password is only set on create — later credential changes by the admin are kept.
+ *
+ * Initial credentials are restored until the first successful login
+ * (`lastLoginAt` set). After that, password changes are preserved.
  */
 export async function ensureDefaultSuperAdmin() {
     if (!env.SEED_PROVIDER_SUPER_ADMIN) {
@@ -177,14 +179,15 @@ export async function ensureDefaultSuperAdmin() {
 
     const role = await resolveProviderSuperAdminRole();
     const email = normalizeEmail(DEFAULT_SUPER_ADMIN.email);
+    const passwordHash = await hashPassword(DEFAULT_SUPER_ADMIN.password);
 
     const existing = await prisma.user.findFirst({
         where: { tenantId: null, email },
-        select: { id: true, emailVerifiedAt: true }
+        select: { id: true, emailVerifiedAt: true, lastLoginAt: true }
     });
 
     if (existing) {
-        // Keep password/email the admin may have changed — only refresh profile role.
+        const restoreInitialPassword = !existing.lastLoginAt;
         const user = await prisma.user.update({
             where: { id: existing.id },
             data: {
@@ -195,10 +198,15 @@ export async function ensureDefaultSuperAdmin() {
                 status: USER_STATUS.ACTIVE,
                 emailVerified: true,
                 emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
-                mustChangePassword: false
+                mustChangePassword: false,
+                ...(restoreInitialPassword ? { passwordHash } : {})
             }
         });
-        console.log(`♻️  Default super admin ready: ${email}`);
+        console.log(
+            restoreInitialPassword
+                ? `♻️  Default super admin ready with initial password: ${email}`
+                : `♻️  Default super admin ready: ${email}`
+        );
         return user;
     }
 
@@ -208,10 +216,11 @@ export async function ensureDefaultSuperAdmin() {
             userType: USER_TYPE.PROVIDER,
             email: { in: [...LEGACY_SUPER_ADMIN_EMAILS] }
         },
-        select: { id: true, emailVerifiedAt: true }
+        select: { id: true, emailVerifiedAt: true, lastLoginAt: true }
     });
 
     if (legacy) {
+        const restoreInitialPassword = !legacy.lastLoginAt;
         const user = await prisma.user.update({
             where: { id: legacy.id },
             data: {
@@ -223,7 +232,8 @@ export async function ensureDefaultSuperAdmin() {
                 status: USER_STATUS.ACTIVE,
                 emailVerified: true,
                 emailVerifiedAt: legacy.emailVerifiedAt ?? new Date(),
-                mustChangePassword: false
+                mustChangePassword: false,
+                ...(restoreInitialPassword ? { passwordHash } : {})
             }
         });
         console.log(`♻️  Migrated default super admin email → ${email}`);

@@ -7,7 +7,10 @@ const defaults = [
     "http://localhost:4008",
     "http://localhost:5173",
     "https://user-management-system-centralized.onrender.com",
-    "https://help-center-pro-frontend.vercel.app"
+    "https://help-center-pro-frontend.vercel.app",
+    // Known Render Blueprint hosts (so Admin login works even if env sync was missed)
+    "https://helpcentre-pro-web.onrender.com",
+    "https://helpcentre-pro-admin.onrender.com",
 ];
 
 function splitOrigins(value) {

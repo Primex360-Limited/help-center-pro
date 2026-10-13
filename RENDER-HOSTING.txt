@@ -38,24 +38,17 @@ STEP 3 — Deploy on Render (once, ~5 minutes)
      - helpcentre-pro-api   (Backend)
      - helpcentre-pro-web   (Tenant / workspace app)
      - helpcentre-pro-admin (Platform Admin Portal — separate URL)
-6. Before Apply, set these Blueprint env values (copy-paste):
+6. Blueprint already sets API URL + CORS for the known onrender hosts.
+   Still set email secrets on helpcentre-pro-api before Apply:
 
-   On helpcentre-pro-api:
-     FRONTEND_URL = https://helpcentre-pro-web.onrender.com
-     ADMIN_FRONTEND_URL = https://helpcentre-pro-admin.onrender.com
-     CORS_ORIGINS = https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
      RESEND_API_KEY = (same re_... value as local backend .env)
      RESEND_WEBHOOK_SECRET = (same whsec_... value as local backend .env)
      EMAIL_FROM = HelpCentre Pro <noreply@helpcentrepro.com>
      SUPPORT_EMAIL_FROM = HelpCentre Pro Support <support@helpcentrepro.com>
 
-   On helpcentre-pro-web (tenant app):
-     VITE_API_URL = https://helpcentre-pro-api.onrender.com
-     VITE_ADMIN_URL = https://helpcentre-pro-admin.onrender.com
-
-   On helpcentre-pro-admin (admin portal):
-     VITE_API_URL = https://helpcentre-pro-api.onrender.com
-     VITE_APP_URL = https://helpcentre-pro-web.onrender.com
+   If your service URLs differ from helpcentre-pro-*.onrender.com, update
+   FRONTEND_URL, ADMIN_FRONTEND_URL, CORS_ORIGINS, and VITE_* to match,
+   then Manual Deploy the static sites (Vite bakes VITE_* at build time).
 
 7. Click Apply
 

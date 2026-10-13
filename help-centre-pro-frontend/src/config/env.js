@@ -1,4 +1,27 @@
-export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4008";
+function trimSlash(value) {
+  return String(value || "").replace(/\/$/, "");
+}
+
+/**
+ * Resolve API base URL.
+ * On Render static hosts, fall back to the known API service when VITE_API_URL
+ * was not baked in at build time (common Blueprint miss → "Failed to fetch").
+ */
+function resolveApiUrl() {
+  const fromEnv = trimSlash(import.meta.env.VITE_API_URL);
+  if (fromEnv) return fromEnv;
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname || "";
+    if (host.endsWith(".onrender.com")) {
+      return "https://helpcentre-pro-api.onrender.com";
+    }
+  }
+
+  return "http://localhost:4008";
+}
+
+export const API_URL = resolveApiUrl();
 export const APP_NAME = import.meta.env.VITE_APP_NAME || "HelpCentre Pro";
 export const API_BASE = `${API_URL}/api/v1`;
 
@@ -11,16 +34,10 @@ export const isAdminPortal = PORTAL_MODE === "admin";
 export const isTenantPortal = PORTAL_MODE === "tenant";
 
 /** Absolute URL of the dedicated admin site when portals are split. */
-export const ADMIN_URL = String(import.meta.env.VITE_ADMIN_URL || "").replace(
-  /\/$/,
-  ""
-);
+export const ADMIN_URL = trimSlash(import.meta.env.VITE_ADMIN_URL || "");
 
 /** Absolute URL of the tenant app when portals are split. */
-export const APP_URL = String(import.meta.env.VITE_APP_URL || "").replace(
-  /\/$/,
-  ""
-);
+export const APP_URL = trimSlash(import.meta.env.VITE_APP_URL || "");
 
 export function adminLoginPath() {
   if (isAdminPortal) return "/login";

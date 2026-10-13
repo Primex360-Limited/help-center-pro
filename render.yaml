@@ -43,11 +43,11 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        sync: false
+        value: https://helpcentre-pro-web.onrender.com
       - key: ADMIN_FRONTEND_URL
-        sync: false
+        value: https://helpcentre-pro-admin.onrender.com
       - key: CORS_ORIGINS
-        sync: false
+        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_WEBHOOK_SECRET
@@ -74,9 +74,9 @@ services:
       - key: VITE_PORTAL_MODE
         value: tenant
       - key: VITE_API_URL
-        sync: false
+        value: https://helpcentre-pro-api.onrender.com
       - key: VITE_ADMIN_URL
-        sync: false
+        value: https://helpcentre-pro-admin.onrender.com
 
   # Dedicated Admin Portal (different URL from the tenant app)
   - type: web
@@ -95,9 +95,9 @@ services:
       - key: VITE_PORTAL_MODE
         value: admin
       - key: VITE_API_URL
-        sync: false
+        value: https://helpcentre-pro-api.onrender.com
       - key: VITE_APP_URL
-        sync: false
+        value: https://helpcentre-pro-web.onrender.com
 
 databases:
   - name: helpcentre-pro-db
