@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight, Plus, Search, Upload, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -14,6 +15,9 @@ import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx
 import { isPasswordValid } from "../../utils/password.js";
 import "../../styles/admin.css";
 import "../../styles/auth.css";
+
+const MENU_WIDTH = 176;
+const MENU_ESTIMATED_HEIGHT = 148;
 
 function workspaceInitial(name = "") {
   return (name.trim()[0] || "W").toUpperCase();
@@ -58,8 +62,10 @@ export default function Tenants() {
   const [submitting, setSubmitting] = useState(false);
   const [selected, setSelected] = useState(null);
   const [menuFor, setMenuFor] = useState(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUp: false });
   const [actionBusy, setActionBusy] = useState("");
   const menuRef = useRef(null);
+  const triggerRefs = useRef({});
 
   const loadTenants = useCallback(async () => {
     setLoading(true);
@@ -78,15 +84,61 @@ export default function Tenants() {
     loadTenants();
   }, [loadTenants]);
 
-  useEffect(() => {
-    function onDocClick(event) {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuFor(null);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+  const closeMenu = useCallback(() => setMenuFor(null), []);
+
+  const positionMenu = useCallback((tenantId) => {
+    const trigger = triggerRefs.current[tenantId];
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < MENU_ESTIMATED_HEIGHT + 12;
+    const left = Math.min(
+      Math.max(8, rect.right - MENU_WIDTH),
+      window.innerWidth - MENU_WIDTH - 8
+    );
+    const top = openUp
+      ? Math.max(8, rect.top - MENU_ESTIMATED_HEIGHT - 6)
+      : rect.bottom + 6;
+    setMenuPos({ top, left, openUp });
   }, []);
+
+  function openActions(tenantId) {
+    if (menuFor === tenantId) {
+      closeMenu();
+      return;
+    }
+    positionMenu(tenantId);
+    setMenuFor(tenantId);
+  }
+
+  useEffect(() => {
+    if (!menuFor) return undefined;
+
+    function onDocClick(event) {
+      const menu = menuRef.current;
+      const trigger = triggerRefs.current[menuFor];
+      if (menu?.contains(event.target) || trigger?.contains(event.target)) return;
+      closeMenu();
+    }
+
+    function onReposition() {
+      positionMenu(menuFor);
+    }
+
+    document.addEventListener("mousedown", onDocClick);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [menuFor, closeMenu, positionMenu]);
+
+  const activeMenuTenant = useMemo(
+    () => tenants.find((tenant) => tenant.id === menuFor) || null,
+    [tenants, menuFor]
+  );
 
   const filteredHint = useMemo(
     () => `${tenants.length} workspace${tenants.length === 1 ? "" : "s"}`,
@@ -138,7 +190,7 @@ export default function Tenants() {
 
   async function runAction(tenant, action) {
     setActionBusy(`${action}-${tenant.id}`);
-    setMenuFor(null);
+    closeMenu();
     try {
       if (action === "activate") await activateTenant(tenant.id);
       if (action === "deactivate") await deactivateTenant(tenant.id);
@@ -271,45 +323,20 @@ export default function Tenants() {
                   <td>{Number(tenant.ticketsLast30d || 0).toLocaleString()}</td>
                   <td>{formatLastActive(tenant.lastActiveAt)}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <div className="admin-row-actions" ref={menuFor === tenant.id ? menuRef : null}>
+                    <div className="admin-row-actions">
                       <button
                         type="button"
                         className="admin-row-actions__btn"
                         aria-label="Tenant actions"
-                        onClick={() =>
-                          setMenuFor((current) => (current === tenant.id ? null : tenant.id))
-                        }
+                        aria-expanded={menuFor === tenant.id}
+                        ref={(node) => {
+                          if (node) triggerRefs.current[tenant.id] = node;
+                          else delete triggerRefs.current[tenant.id];
+                        }}
+                        onClick={() => openActions(tenant.id)}
                       >
                         <ChevronRight size={18} />
                       </button>
-                      {menuFor === tenant.id ? (
-                        <div className="admin-menu">
-                          <button
-                            type="button"
-                            className="activate"
-                            disabled={actionBusy.startsWith("activate")}
-                            onClick={() => runAction(tenant, "activate")}
-                          >
-                            Activate
-                          </button>
-                          <button
-                            type="button"
-                            className="deactivate"
-                            disabled={actionBusy.startsWith("deactivate")}
-                            onClick={() => runAction(tenant, "deactivate")}
-                          >
-                            Deactivate
-                          </button>
-                          <button
-                            type="button"
-                            className="delete"
-                            disabled={actionBusy.startsWith("delete")}
-                            onClick={() => runAction(tenant, "delete")}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -324,6 +351,46 @@ export default function Tenants() {
           </tbody>
         </table>
       </div>
+
+      {activeMenuTenant
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className={`admin-menu admin-menu--portal${menuPos.openUp ? " is-up" : ""}`}
+              style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
+              role="menu"
+            >
+              <button
+                type="button"
+                className="activate"
+                role="menuitem"
+                disabled={actionBusy.startsWith("activate")}
+                onClick={() => runAction(activeMenuTenant, "activate")}
+              >
+                Activate
+              </button>
+              <button
+                type="button"
+                className="deactivate"
+                role="menuitem"
+                disabled={actionBusy.startsWith("deactivate")}
+                onClick={() => runAction(activeMenuTenant, "deactivate")}
+              >
+                Deactivate
+              </button>
+              <button
+                type="button"
+                className="delete"
+                role="menuitem"
+                disabled={actionBusy.startsWith("delete")}
+                onClick={() => runAction(activeMenuTenant, "delete")}
+              >
+                Delete
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
 
       {showInvite ? (
         <div className="admin-modal-overlay" role="dialog" aria-modal="true">

@@ -5,13 +5,17 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const BRAND_DIR = path.resolve(__dirname, "../../../assets/brand");
+const LOGO_EMAIL_PATH = path.join(BRAND_DIR, "logo-email.png");
 const LOGO_LIGHT_PATH = path.join(BRAND_DIR, "logo-light.png");
 const LOGO_PATH = path.join(BRAND_DIR, "logo.png");
 const LOGO_CONTENT_ID = "helpcentrepro-logo";
 
 export function getBrandLogoAttachment() {
-    const filePath = fs.existsSync(LOGO_LIGHT_PATH) ? LOGO_LIGHT_PATH : LOGO_PATH;
-    if (!fs.existsSync(filePath)) {
+    const filePath = [LOGO_EMAIL_PATH, LOGO_LIGHT_PATH, LOGO_PATH].find((candidate) =>
+        fs.existsSync(candidate)
+    );
+
+    if (!filePath) {
         return null;
     }
 
@@ -42,23 +46,23 @@ export function renderPremiumEmail({
   <meta name="color-scheme" content="light" />
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background:#030712;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F172A;">
+<body style="margin:0;padding:0;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0F172A;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">${preheader}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#030712;padding:44px 14px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F1F5F9;padding:40px 14px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;border-radius:28px;overflow:hidden;border:1px solid rgba(148,163,184,0.14);box-shadow:0 34px 100px rgba(0,0,0,0.6);">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;border-radius:24px;overflow:hidden;border:1px solid #E2E8F0;box-shadow:0 24px 60px rgba(15,23,42,0.08);background:#FFFFFF;">
           <tr>
-            <td align="center" style="background:radial-gradient(circle at 20% 0%,rgba(56,189,248,0.28),transparent 42%),radial-gradient(circle at 86% 8%,rgba(168,85,247,0.30),transparent 40%),linear-gradient(180deg,#070D1C 0%,#0B1220 48%,#070D1C 100%);padding:42px 30px 34px;">
-              <img src="cid:${LOGO_CONTENT_ID}" alt="HelpCentre Pro — Unified Support. Happier Customers." width="360" style="display:block;margin:0 auto;width:360px;max-width:92%;height:auto;border:0;outline:none;text-decoration:none;background:transparent;" />
+            <td align="center" style="background:#FFFFFF;padding:36px 28px 8px;border-bottom:1px solid #F1F5F9;">
+              <img src="cid:${LOGO_CONTENT_ID}" alt="HelpCentre Pro — Unified Support. Happier Customers." width="320" style="display:block;margin:0 auto;width:320px;max-width:88%;height:auto;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
           <tr>
-            <td style="background:#FFFFFF;padding:40px 36px 32px;">
+            <td style="background:#FFFFFF;padding:28px 36px 32px;">
               <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:linear-gradient(135deg,#EFF6FF,#F5F3FF);color:#1D4ED8;font-size:11px;font-weight:750;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">
                 HelpCentre Pro · Secure
               </div>
-              <h1 style="margin:0 0 14px;font-size:30px;line-height:1.18;letter-spacing:-0.04em;color:#0B1220;font-weight:800;">
+              <h1 style="margin:0 0 14px;font-size:28px;line-height:1.2;letter-spacing:-0.03em;color:#0B1220;font-weight:800;">
                 ${title}
               </h1>
               <p style="margin:0 0 14px;font-size:16px;line-height:1.65;color:#334155;">
@@ -69,7 +73,7 @@ export function renderPremiumEmail({
               </div>
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:32px 0 10px;">
                 <tr>
-                  <td style="border-radius:14px;background:linear-gradient(135deg,#2563EB 0%,#7C3AED 100%);box-shadow:0 14px 34px rgba(37,99,235,0.34);">
+                  <td style="border-radius:14px;background:linear-gradient(135deg,#2563EB 0%,#7C3AED 100%);box-shadow:0 14px 34px rgba(37,99,235,0.28);">
                     <a href="${ctaHref}" style="display:inline-block;padding:16px 32px;font-size:15px;font-weight:750;color:#FFFFFF;text-decoration:none;border-radius:14px;letter-spacing:-0.01em;">
                       ${ctaLabel}
                     </a>
@@ -84,7 +88,7 @@ export function renderPremiumEmail({
             </td>
           </tr>
           <tr>
-            <td style="background:#070D1C;padding:22px 32px;text-align:center;">
+            <td style="background:#0B1220;padding:22px 32px;text-align:center;">
               <p style="margin:0;font-size:14px;font-weight:750;letter-spacing:-0.02em;color:#F8FAFC;">HelpCentre Pro</p>
               <p style="margin:6px 0 0;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#94A3B8;">
                 Unified Support. Happier Customers.
