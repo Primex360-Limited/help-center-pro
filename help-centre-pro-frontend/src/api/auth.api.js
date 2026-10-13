@@ -13,6 +13,13 @@ export async function registerSuperAdmin(payload) {
   });
 }
 
+export async function registerWorkspace(payload) {
+  return apiRequest("/auth/register", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export async function login(payload) {
   const result = await apiRequest("/auth/login", {
     method: "POST",

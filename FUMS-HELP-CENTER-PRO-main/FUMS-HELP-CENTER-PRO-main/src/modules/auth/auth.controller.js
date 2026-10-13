@@ -8,6 +8,7 @@ import {
     loginUser,
     logoutUser,
     refreshUserToken,
+    registerWorkspaceAccount,
     requestPasswordReset,
     resendVerificationEmail,
     resetPassword,
@@ -36,6 +37,21 @@ export async function registerInitialSuperAdmin() {
     throw new AppError(
         "Admin accounts cannot be created from the sign-in page. Use the Admin Portal after signing in.",
         403
+    );
+}
+
+export async function registerWorkspace(req, res) {
+    const result = await registerWorkspaceAccount(req.validatedBody);
+
+    return successResponse(
+        res,
+        "Account created successfully. Please sign in to continue.",
+        {
+            emailSent: Boolean(result.emailSent),
+            workspace: result.workspace,
+            user: result.user
+        },
+        201
     );
 }
 

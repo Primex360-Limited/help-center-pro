@@ -11,6 +11,7 @@ import {
     platformStatus,
     refresh,
     registerInitialSuperAdmin,
+    registerWorkspace,
     resendVerification,
     resetUserPassword,
     updateUserPassword,
@@ -25,6 +26,7 @@ import {
     resetPasswordSchema,
     updatePasswordSchema,
     verifyEmailSchema,
+    workspaceSignupSchema,
 } from "./auth.validation.js";
 import { requireAdminPortalOrigin } from "../tenants/tenant.middleware.js";
 
@@ -67,6 +69,23 @@ authRoutes.post(
     requireAdminPortalOrigin,
     validate(registerSchema),
     asyncHandler(registerInitialSuperAdmin)
+);
+
+/**
+ * @openapi
+ * /auth/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Self-serve workspace account signup
+ *     responses:
+ *       201:
+ *         description: Workspace and admin account created
+ */
+authRoutes.post(
+    "/register",
+    authRateLimiter,
+    validate(workspaceSignupSchema),
+    asyncHandler(registerWorkspace)
 );
 
 /**

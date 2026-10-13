@@ -1,103 +1,140 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Mail, Sparkles } from "lucide-react";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
-import AuthBackLink from "../../components/auth/AuthBackLink.jsx";
+import PasswordField from "../../components/auth/PasswordField.jsx";
+import { registerWorkspace } from "../../api/auth.api.js";
 import "../../styles/auth.css";
-
-function extractInviteToken(raw) {
-  const value = String(raw || "").trim();
-  if (!value) return "";
-
-  try {
-    const url = new URL(value);
-    return url.searchParams.get("token") || "";
-  } catch {
-    return value;
-  }
-}
 
 export default function WorkspaceSignup() {
   const navigate = useNavigate();
-  const [inviteInput, setInviteInput] = useState("");
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const previewToken = useMemo(
-    () => extractInviteToken(inviteInput),
-    [inviteInput]
-  );
+  function updateField(key) {
+    return (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  }
 
-  function handleContinue(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
-    const token = extractInviteToken(inviteInput);
-    if (!token) {
-      setError("Paste the invitation link or token from your email to continue.");
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
 
-    navigate(`/accept-invitation?token=${encodeURIComponent(token)}`);
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await registerWorkspace({
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+      });
+
+      const emailSent = result?.data?.emailSent !== false;
+
+      navigate("/login", {
+        replace: true,
+        state: {
+          email: form.email.trim(),
+          notice: emailSent
+            ? "Account created. A welcome email is on its way — you can sign in now."
+            : "Account created successfully. You can sign in now.",
+        },
+      });
+    } catch (err) {
+      setError(err.message || "Unable to create account");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <div className="auth-page-dark">
-      <div className="auth-card auth-card--wide">
-        <AuthBackLink to="/login" />
-        <BrandLogo />
-        <div className="auth-eyebrow">
-          <Sparkles size={12} />
-          Workspace access
-        </div>
+      <div className="auth-card auth-card--signup">
+        <BrandLogo compact />
         <h1 className="auth-title auth-title--center">Create your account</h1>
         <p className="auth-subtitle auth-subtitle--center">
-          HelpCentre Pro workspaces are invitation-only. Use the secure link from
-          your admin to activate your account in moments.
+          Start your HelpCentre Pro account.
         </p>
 
-        <form className="auth-form" onSubmit={handleContinue}>
+        <form className="auth-form" onSubmit={handleSubmit}>
           {error ? <p className="auth-error">{error}</p> : null}
 
           <div>
-            <label className="auth-label" htmlFor="invite-input">
-              Invitation link or token
+            <label className="auth-label" htmlFor="signup-fullname">
+              Full name
             </label>
             <input
-              id="invite-input"
+              id="signup-fullname"
               className="auth-input"
-              value={inviteInput}
-              onChange={(event) => setInviteInput(event.target.value)}
-              placeholder="Paste invitation URL or token"
-              autoComplete="off"
+              value={form.fullName}
+              onChange={updateField("fullName")}
+              placeholder="Name"
+              autoComplete="name"
               required
             />
-            {previewToken && inviteInput.includes("http") ? (
-              <p className="auth-hint">Invitation token detected and ready.</p>
-            ) : null}
           </div>
 
-          <button className="auth-btn" type="submit">
-            Continue to activation
-            <ArrowRight size={18} />
+          <div>
+            <label className="auth-label" htmlFor="signup-email">
+              Work email
+            </label>
+            <input
+              id="signup-email"
+              className="auth-input"
+              type="email"
+              value={form.email}
+              onChange={updateField("email")}
+              placeholder="Email"
+              autoComplete="email"
+              required
+            />
+          </div>
+
+          <div>
+            <PasswordField
+              id="signup-password"
+              label="Password"
+              placeholder="Password"
+              value={form.password}
+              onChange={updateField("password")}
+              autoComplete="new-password"
+            />
+            <p className="auth-password-hint">At least 8 characters</p>
+          </div>
+
+          <PasswordField
+            id="signup-confirm"
+            label="Confirm Password"
+            placeholder="Password"
+            value={form.confirmPassword}
+            onChange={updateField("confirmPassword")}
+            autoComplete="new-password"
+          />
+
+          <button className="auth-btn" type="submit" disabled={submitting}>
+            {submitting ? "Creating account..." : "Create account"}
+            {!submitting ? <ChevronRight size={18} /> : null}
           </button>
         </form>
 
-        <div className="auth-signup-panel">
-          <div className="auth-signup-panel__icon">
-            <Mail size={18} />
-          </div>
-          <div>
-            <p className="auth-signup-panel__title">No invitation yet?</p>
-            <p className="auth-signup-panel__copy">
-              Ask your workspace administrator to invite you. Once the email
-              arrives, return here or open the link directly.
-            </p>
-          </div>
-        </div>
-
         <div className="auth-footer-pill">
           <span>
-            Already activated? <Link to="/login">Sign in</Link>
+            Already have an account? <Link to="/login">Sign in</Link>
           </span>
         </div>
       </div>

@@ -7,7 +7,8 @@ import {
     USER_STATUS,
     USER_TYPE
 } from "../../shared/constants/system.js";
-import { PROVIDER_ROLE, SUPER_ADMIN_ROLE_NAMES } from "../../shared/constants/roles.js";
+import { PROVIDER_ROLE, SUPER_ADMIN_ROLE_NAMES, TENANT_ROLE } from "../../shared/constants/roles.js";
+import { resolvePlan } from "../../shared/constants/plans.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
 import sendVerificationEmail, {
     sendPasswordResetEmail,
@@ -28,7 +29,7 @@ import {
     getEffectivePermissionsFromUser,
     isSuperAdminUser
 } from "../roles/role.service.js";
-import { seedSystemRoles } from "../roles/seedSystemRoles.js";
+import { provisionTenantRoles, seedSystemRoles } from "../roles/seedSystemRoles.js";
 
 /**
  * Authentication service (Postgres / Prisma, Phase-1 multi-tenancy).
@@ -153,6 +154,177 @@ export async function getPlatformStatus() {
     return {
         bootstrapped: Boolean(existingSuperAdmin),
         adminSignInPath: "/admin/login"
+    };
+}
+
+function slugifyWorkspace(value) {
+    return String(value || "")
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40);
+}
+
+function splitFullName(fullName) {
+    const parts = String(fullName || "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (!parts.length) {
+        return { firstName: "User", lastName: "Account" };
+    }
+
+    if (parts.length === 1) {
+        return { firstName: parts[0], lastName: parts[0] };
+    }
+
+    return {
+        firstName: parts[0],
+        lastName: parts.slice(1).join(" ")
+    };
+}
+
+async function allocateUniqueSlug(baseSlug) {
+    const root = slugifyWorkspace(baseSlug) || "workspace";
+    let candidate = root;
+    let attempt = 0;
+
+    while (attempt < 25) {
+        const existing = await prisma.tenant.findFirst({
+            where: { slug: candidate },
+            select: { id: true }
+        });
+        if (!existing) {
+            return candidate;
+        }
+        attempt += 1;
+        candidate = `${root}-${attempt + 1}`;
+    }
+
+    return `${root}-${Date.now().toString(36)}`;
+}
+
+/**
+ * Public self-serve signup: creates an active workspace + tenant admin.
+ * No invitation link — user can sign in immediately after welcome email.
+ */
+export async function registerWorkspaceAccount({
+    fullName,
+    email,
+    password
+}) {
+    const normalizedEmail = normalizeEmail(email);
+    const { firstName, lastName } = splitFullName(fullName);
+
+    const existingUser = await prisma.user.findFirst({
+        where: { email: normalizedEmail },
+        select: { id: true, tenantId: true }
+    });
+
+    if (existingUser) {
+        throw new AppError("An account with this email already exists", 409);
+    }
+
+    const domainPart = normalizedEmail.split("@")[1] || "workspace";
+    const localPart = normalizedEmail.split("@")[0] || firstName;
+    const companyHint = domainPart.split(".")[0];
+    const workspaceName =
+        companyHint && !["gmail", "yahoo", "outlook", "hotmail", "icloud", "protonmail"].includes(
+            companyHint.toLowerCase()
+        )
+            ? companyHint.charAt(0).toUpperCase() + companyHint.slice(1)
+            : `${firstName}'s Workspace`;
+
+    const slug = await allocateUniqueSlug(companyHint || localPart || firstName);
+    const plan = resolvePlan("trial");
+    const passwordHash = await hashPassword(password);
+    const verifiedAt = new Date();
+
+    const tenant = await prisma.tenant.create({
+        data: {
+            name: workspaceName,
+            slug,
+            primaryDomain: `${slug}.helpcentrepro.com`,
+            status: TENANT_STATUS.ACTIVE,
+            plan: plan.key,
+            seatLimit: plan.seatLimit,
+            settings: {
+                trial: true,
+                mrr: plan.mrr,
+                selfServe: true,
+                ownerEmail: normalizedEmail
+            }
+        }
+    });
+
+    const roles = await provisionTenantRoles(tenant.id);
+    const adminRole = roles[TENANT_ROLE.ADMIN];
+
+    if (!adminRole) {
+        throw new AppError("Failed to provision workspace admin role", 500);
+    }
+
+    const user = await prisma.user.create({
+        data: {
+            tenantId: tenant.id,
+            userType: USER_TYPE.TENANT,
+            email: normalizedEmail,
+            passwordHash,
+            firstName,
+            lastName,
+            roleId: adminRole.id,
+            status: USER_STATUS.ACTIVE,
+            emailVerified: true,
+            emailVerifiedAt: verifiedAt,
+            mustChangePassword: false,
+            deniedPermissions: []
+        }
+    });
+
+    const appBase = String(env.FRONTEND_URL || "").replace(/\/$/, "");
+    const emailSent = await safeSendEmail(
+        () =>
+            sendWelcomeEmail({
+                to: user.email,
+                firstName: user.firstName,
+                signInLink: `${appBase}/login`
+            }),
+        "welcome email"
+    );
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: user.id,
+        action: AUDIT_ACTION.USER_REGISTERED,
+        entity: "User",
+        entityId: user.id,
+        metadata: {
+            email: user.email,
+            registrationType: "workspace_self_serve",
+            workspaceName
+        }
+    });
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: user.id,
+        action: AUDIT_ACTION.TENANT_PROVISIONED,
+        entity: "Tenant",
+        entityId: tenant.id,
+        metadata: { plan: plan.key, selfServe: true }
+    });
+
+    return {
+        emailSent,
+        workspace: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+        user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName
+        }
     };
 }
 

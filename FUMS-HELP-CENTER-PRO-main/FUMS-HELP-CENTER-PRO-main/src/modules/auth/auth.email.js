@@ -80,9 +80,11 @@ function resolveAdminSignInUrl() {
     return `${appBase}/admin/login`;
 }
 
-export async function sendWelcomeEmail({ to, firstName }) {
-    const signInLink = resolveAdminSignInUrl();
-    const template = welcomeEmailTemplate({ firstName, signInLink });
+export async function sendWelcomeEmail({ to, firstName, signInLink }) {
+    const link =
+        signInLink ||
+        resolveAdminSignInUrl();
+    const template = welcomeEmailTemplate({ firstName, signInLink: link });
 
     return dispatchEmail({
         to,
