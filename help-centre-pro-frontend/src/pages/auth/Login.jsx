@@ -75,7 +75,12 @@ export default function Login() {
         navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.message || "Unable to sign in");
+      const message = err.message || "Unable to sign in";
+      if (/finish creating your account|sign up page/i.test(message)) {
+        setError(message);
+        return;
+      }
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -131,11 +136,19 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="auth-footer-pill">
-          <span>
-            Don&apos;t have an account? <Link to="/signup">Sign up</Link>
-          </span>
-        </div>
+        {/finish creating|sign up page/i.test(error) ? (
+          <div className="auth-footer-pill">
+            <span>
+              Need to finish setup? <Link to="/signup">Complete sign up</Link>
+            </span>
+          </div>
+        ) : (
+          <div className="auth-footer-pill">
+            <span>
+              Don&apos;t have an account? <Link to="/signup">Sign up</Link>
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

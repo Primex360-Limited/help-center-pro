@@ -187,7 +187,9 @@ async function loadAuthService(nodeEnv = "development") {
     }));
 
     jest.unstable_mockModule("../../src/modules/roles/seedSystemRoles.js", () => ({
-        seedSystemRoles: seedSystemRolesMock
+        seedSystemRoles: seedSystemRolesMock,
+        provisionTenantRoles: jest.fn().mockResolvedValue({}),
+        default: seedSystemRolesMock
     }));
 
     return import("../../src/modules/auth/auth.service.js");

@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import {
     AUDIT_ACTION,
+    INVITATION_STATUS,
     TENANT_STATUS,
     USER_STATUS,
     USER_TYPE
@@ -206,9 +207,105 @@ async function allocateUniqueSlug(baseSlug) {
     return `${root}-${Date.now().toString(36)}`;
 }
 
+function workspaceSignInLink() {
+    return `${String(env.FRONTEND_URL || "").replace(/\/$/, "")}/login`;
+}
+
+async function sendWorkspaceWelcome({ to, firstName }) {
+    return safeSendEmail(
+        () =>
+            sendWelcomeEmail({
+                to,
+                firstName,
+                signInLink: workspaceSignInLink()
+            }),
+        "welcome email"
+    );
+}
+
+/**
+ * Finish signup for an incomplete account (invited / unverified / never signed in).
+ * Self-serve users are marked verified immediately — no email verification step.
+ */
+async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName, password }) {
+    const passwordHash = await hashPassword(password);
+    const verifiedAt = new Date();
+
+    if (existingUser.tenantId) {
+        await prisma.tenant.updateMany({
+            where: {
+                id: existingUser.tenantId,
+                status: TENANT_STATUS.PROVISIONING
+            },
+            data: { status: TENANT_STATUS.ACTIVE }
+        });
+    }
+
+    const user = await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+            firstName,
+            lastName,
+            passwordHash,
+            status: USER_STATUS.ACTIVE,
+            emailVerified: true,
+            emailVerifiedAt: existingUser.emailVerifiedAt ?? verifiedAt,
+            mustChangePassword: false,
+            userType: existingUser.tenantId ? USER_TYPE.TENANT : existingUser.userType
+        }
+    });
+
+    // Clear pending invitations so the user is not stuck on invite activation.
+    if (existingUser.tenantId) {
+        await prisma.agentInvitation.updateMany({
+            where: {
+                userId: user.id,
+                status: INVITATION_STATUS.PENDING
+            },
+            data: { status: INVITATION_STATUS.ACCEPTED }
+        });
+    }
+
+    const tenant = user.tenantId
+        ? await prisma.tenant.findUnique({
+              where: { id: user.tenantId },
+              select: { id: true, name: true, slug: true }
+          })
+        : null;
+
+    const emailSent = await sendWorkspaceWelcome({
+        to: user.email,
+        firstName: user.firstName
+    });
+
+    await recordAuditLog({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: AUDIT_ACTION.USER_REGISTERED,
+        entity: "User",
+        entityId: user.id,
+        metadata: {
+            email: user.email,
+            registrationType: "workspace_self_serve_claim"
+        }
+    });
+
+    return {
+        emailSent,
+        claimed: true,
+        workspace: tenant,
+        user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName
+        }
+    };
+}
+
 /**
  * Public self-serve signup: creates an active workspace + tenant admin.
- * No invitation link — user can sign in immediately after welcome email.
+ * No invitation / verification link — user can sign in immediately.
  */
 export async function registerWorkspaceAccount({
     fullName,
@@ -220,11 +317,44 @@ export async function registerWorkspaceAccount({
 
     const existingUser = await prisma.user.findFirst({
         where: { email: normalizedEmail },
-        select: { id: true, tenantId: true }
+        select: {
+            id: true,
+            tenantId: true,
+            userType: true,
+            status: true,
+            emailVerified: true,
+            emailVerifiedAt: true,
+            lastLoginAt: true,
+            mustChangePassword: true
+        }
     });
 
     if (existingUser) {
-        throw new AppError("An account with this email already exists", 409);
+        if (existingUser.userType === USER_TYPE.PROVIDER || existingUser.tenantId === null) {
+            throw new AppError(
+                "This email is reserved for the Admin Portal. Use a different work email.",
+                409
+            );
+        }
+
+        const isIncomplete =
+            existingUser.status === USER_STATUS.INVITED ||
+            !existingUser.emailVerified ||
+            existingUser.mustChangePassword ||
+            !existingUser.lastLoginAt;
+
+        if (isIncomplete) {
+            return claimExistingWorkspaceAccount(existingUser, {
+                firstName,
+                lastName,
+                password
+            });
+        }
+
+        throw new AppError(
+            "An account with this email already exists. Please sign in.",
+            409
+        );
     }
 
     const domainPart = normalizedEmail.split("@")[1] || "workspace";
@@ -283,16 +413,10 @@ export async function registerWorkspaceAccount({
         }
     });
 
-    const appBase = String(env.FRONTEND_URL || "").replace(/\/$/, "");
-    const emailSent = await safeSendEmail(
-        () =>
-            sendWelcomeEmail({
-                to: user.email,
-                firstName: user.firstName,
-                signInLink: `${appBase}/login`
-            }),
-        "welcome email"
-    );
+    const emailSent = await sendWorkspaceWelcome({
+        to: user.email,
+        firstName: user.firstName
+    });
 
     await recordAuditLog({
         tenantId: tenant.id,
@@ -318,6 +442,7 @@ export async function registerWorkspaceAccount({
 
     return {
         emailSent,
+        claimed: false,
         workspace: { id: tenant.id, name: tenant.name, slug: tenant.slug },
         user: {
             id: user.id,
@@ -517,6 +642,24 @@ export async function loginUser({
         throw new AppError("This workspace has been suspended", 403);
     }
 
+    // Incomplete accounts should finish via signup (sets password + verifies).
+    if (
+        user.userType === USER_TYPE.TENANT &&
+        (user.status === USER_STATUS.INVITED || !user.emailVerified)
+    ) {
+        throw new AppError(
+            "Finish creating your account on the Sign up page, then sign in.",
+            403
+        );
+    }
+
+    if (!user.passwordHash) {
+        throw new AppError(
+            "Finish creating your account on the Sign up page, then sign in.",
+            403
+        );
+    }
+
     const isPasswordValid = await comparePassword(password, user.passwordHash);
 
     if (!isPasswordValid) {
@@ -524,13 +667,6 @@ export async function loginUser({
     }
 
     if (!user.emailVerified) {
-        if (user.status === USER_STATUS.INVITED) {
-            throw new AppError(
-                "Activate your invitation from the email link before logging in",
-                403
-            );
-        }
-
         throw new AppError("Please verify your email before logging in", 403);
     }
 

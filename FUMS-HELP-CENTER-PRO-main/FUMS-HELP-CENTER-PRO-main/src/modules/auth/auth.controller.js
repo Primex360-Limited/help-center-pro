@@ -45,9 +45,12 @@ export async function registerWorkspace(req, res) {
 
     return successResponse(
         res,
-        "Account created successfully. Please sign in to continue.",
+        result.claimed
+            ? "Account ready. Please sign in to continue."
+            : "Account created successfully. Please sign in to continue.",
         {
             emailSent: Boolean(result.emailSent),
+            claimed: Boolean(result.claimed),
             workspace: result.workspace,
             user: result.user
         },

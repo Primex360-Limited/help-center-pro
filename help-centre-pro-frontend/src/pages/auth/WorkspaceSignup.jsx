@@ -21,6 +21,16 @@ export default function WorkspaceSignup() {
     return (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   }
 
+  function goToSignIn(notice) {
+    navigate("/login", {
+      replace: true,
+      state: {
+        email: form.email.trim(),
+        notice,
+      },
+    });
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -45,18 +55,24 @@ export default function WorkspaceSignup() {
       });
 
       const emailSent = result?.data?.emailSent !== false;
+      const claimed = Boolean(result?.data?.claimed);
 
-      navigate("/login", {
-        replace: true,
-        state: {
-          email: form.email.trim(),
-          notice: emailSent
+      goToSignIn(
+        claimed
+          ? emailSent
+            ? "Your account is ready. A welcome email is on its way — sign in now."
+            : "Your account is ready. Sign in with your new password."
+          : emailSent
             ? "Account created. A welcome email is on its way — you can sign in now."
-            : "Account created successfully. You can sign in now.",
-        },
-      });
+            : "Account created successfully. You can sign in now."
+      );
     } catch (err) {
-      setError(err.message || "Unable to create account");
+      const message = err.message || "Unable to create account";
+      if (/already exists|please sign in/i.test(message)) {
+        goToSignIn("This email is already registered. Sign in to continue.");
+        return;
+      }
+      setError(message);
     } finally {
       setSubmitting(false);
     }
