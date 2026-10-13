@@ -645,6 +645,14 @@
   cursor: pointer;
 }
 
+.admin-menu button.edit {
+  color: #2563eb;
+}
+
+.admin-menu button.edit:hover {
+  background: #eff6ff;
+}
+
 .admin-menu button.activate {
   color: #027a48;
 }

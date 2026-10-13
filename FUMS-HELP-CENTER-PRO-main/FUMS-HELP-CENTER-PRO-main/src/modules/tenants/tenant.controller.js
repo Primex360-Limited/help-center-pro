@@ -7,7 +7,8 @@ import {
     inviteTenantWorkspace,
     listTenants,
     suspendTenant,
-    tenantsToCsv
+    tenantsToCsv,
+    updateTenant
 } from "./tenant.service.js";
 
 export async function getPlatformOverviewHandler(req, res) {
@@ -58,4 +59,9 @@ export async function exportTenantsCsvHandler(req, res) {
         `attachment; filename="helpcentre-pro-tenants-${new Date().toISOString().slice(0, 10)}.csv"`
     );
     return res.status(200).send(csv);
+}
+
+export async function updateTenantHandler(req, res) {
+    const tenant = await updateTenant(req.params.id, req.validatedBody, req.user.sub);
+    return successResponse(res, "Tenant updated successfully", { tenant });
 }

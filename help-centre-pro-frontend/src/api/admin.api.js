@@ -24,6 +24,14 @@ export async function getTenant(id) {
   return apiRequest(`/admin/tenants/${id}`, { auth: true });
 }
 
+export async function updateTenant(id, payload) {
+  return apiRequest(`/admin/tenants/${id}`, {
+    method: "PUT",
+    auth: true,
+    body: payload,
+  });
+}
+
 export async function inviteTenant(payload) {
   return apiRequest("/admin/tenants", {
     method: "POST",

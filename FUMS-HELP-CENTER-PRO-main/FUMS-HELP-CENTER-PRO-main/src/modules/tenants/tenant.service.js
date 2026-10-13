@@ -505,6 +505,62 @@ export async function deleteTenant(tenantId, actorId) {
     return { id: tenantId, deleted: true };
 }
 
+export async function updateTenant(tenantId, payload, actorId) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new AppError("Tenant not found", 404);
+
+    const { name, primaryDomain, plan, seatLimit, country } = payload;
+
+    // Check if primaryDomain is being changed and if it conflicts with another tenant
+    if (primaryDomain && primaryDomain !== tenant.primaryDomain) {
+        const existingDomain = await prisma.tenant.findFirst({
+            where: { primaryDomain, id: { not: tenantId } },
+            select: { id: true }
+        });
+        if (existingDomain) {
+            throw new AppError("A workspace with this domain already exists", 409);
+        }
+    }
+
+    const planInfo = plan ? resolvePlan(plan) : null;
+
+    const updatedSettings = {
+        ...asSettings(tenant.settings),
+        ...(country !== undefined && { country }),
+        ...(planInfo && { mrr: planInfo.mrr })
+    };
+
+    const updatedTenant = await prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+            ...(name !== undefined && { name }),
+            ...(primaryDomain !== undefined && { primaryDomain }),
+            ...(plan !== undefined && { plan }),
+            ...(seatLimit !== undefined && { seatLimit }),
+            settings: updatedSettings
+        }
+    });
+
+    await recordAuditLog({
+        tenantId,
+        userId: actorId,
+        action: AUDIT_ACTION.TENANT_UPDATED,
+        entity: "Tenant",
+        entityId: tenantId,
+        metadata: {
+            changes: {
+                ...(name !== undefined && { name }),
+                ...(primaryDomain !== undefined && { primaryDomain }),
+                ...(plan !== undefined && { plan }),
+                ...(seatLimit !== undefined && { seatLimit }),
+                ...(country !== undefined && { country })
+            }
+        }
+    });
+
+    return getTenantById(tenantId);
+}
+
 export function tenantsToCsv(tenants) {
     const headers = [
         "Workspace",

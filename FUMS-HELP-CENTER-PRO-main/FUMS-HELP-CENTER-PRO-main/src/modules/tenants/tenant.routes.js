@@ -12,12 +12,14 @@ import {
     getTenantHandler,
     inviteTenantHandler,
     listTenantsHandler,
-    suspendTenantHandler
+    suspendTenantHandler,
+    updateTenantHandler
 } from "./tenant.controller.js";
 import {
     createTenantInviteSchema,
     listTenantsQuerySchema,
     tenantIdParamSchema,
+    updateTenantSchema,
     updateTenantStatusSchema
 } from "./tenant.validation.js";
 
@@ -158,6 +160,42 @@ tenantRoutes.get(
     requirePermission("tenant:manage"),
     validate(tenantIdParamSchema, "params"),
     asyncHandler(getTenantHandler)
+);
+
+/**
+ * @openapi
+ * /admin/tenants/{id}:
+ *   put:
+ *     tags: [Admin]
+ *     summary: Update tenant information
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string, example: Primex360 }
+ *               primaryDomain: { type: string, example: primex360.com }
+ *               plan: { type: string, enum: [trial, starter, growth, scale, enterprise] }
+ *               seatLimit: { type: integer, example: 50 }
+ *               country: { type: string, example: Nigeria }
+ *     responses:
+ *       200:
+ *         description: Tenant updated
+ */
+tenantRoutes.put(
+    "/admin/tenants/:id",
+    requireAuth,
+    requireAdminPortalOrigin,
+    requireProviderScope,
+    requirePermission("tenant:manage"),
+    validate(tenantIdParamSchema, "params"),
+    validate(updateTenantSchema),
+    asyncHandler(updateTenantHandler)
 );
 
 /**

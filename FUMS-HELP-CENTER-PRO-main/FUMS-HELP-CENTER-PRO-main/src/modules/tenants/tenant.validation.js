@@ -60,3 +60,25 @@ export const createTenantInviteSchema = z
 export const updateTenantStatusSchema = z.object({
     reason: z.string().max(500).optional()
 });
+
+export const updateTenantSchema = z
+    .object({
+        name: z.string().min(2).max(120).optional(),
+        primaryDomain: z.string().min(3).max(180).optional(),
+        plan: z.enum(planKeys).optional(),
+        seatLimit: z.number().int().positive().optional(),
+        country: z.string().min(2).max(80).optional()
+    })
+    .transform((data) => {
+        const transformed = { ...data };
+        if (data.primaryDomain !== undefined) {
+            transformed.primaryDomain = data.primaryDomain.trim().toLowerCase() || null;
+        }
+        if (data.name !== undefined) {
+            transformed.name = data.name.trim();
+        }
+        if (data.country !== undefined) {
+            transformed.country = data.country.trim() || null;
+        }
+        return transformed;
+    });

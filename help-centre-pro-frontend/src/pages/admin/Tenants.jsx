@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, Plus, Search, Upload, X } from "lucide-react";
+import { ChevronRight, Edit, Plus, Search, Upload, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
   activateTenant,
@@ -9,6 +9,7 @@ import {
   exportTenantsCsv,
   inviteTenant,
   listTenants,
+  updateTenant,
 } from "../../api/admin.api.js";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
@@ -17,7 +18,7 @@ import "../../styles/admin.css";
 import "../../styles/auth.css";
 
 const MENU_WIDTH = 176;
-const MENU_ESTIMATED_HEIGHT = 148;
+const MENU_ESTIMATED_HEIGHT = 196;
 
 function workspaceInitial(name = "") {
   return (name.trim()[0] || "W").toUpperCase();
@@ -61,6 +62,11 @@ export default function Tenants() {
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editTenant, setEditTenant] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editFormError, setEditFormError] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [menuFor, setMenuFor] = useState(null);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, openUp: false });
   const [actionBusy, setActionBusy] = useState("");
@@ -202,11 +208,47 @@ export default function Tenants() {
         await deleteTenant(tenant.id);
         if (selected?.id === tenant.id) setSelected(null);
       }
+      if (action === "edit") {
+        setEditTenant(tenant);
+        setEditForm({
+          name: tenant.name,
+          primaryDomain: tenant.primaryDomain || "",
+          plan: tenant.plan,
+          seatLimit: tenant.seatLimit,
+          country: tenant.country || "",
+        });
+        setEditFormError("");
+        setShowEdit(true);
+        return;
+      }
       await loadTenants();
     } catch (err) {
       setError(err.message || "Action failed");
     } finally {
       setActionBusy("");
+    }
+  }
+
+  async function handleEdit(event) {
+    event.preventDefault();
+    setEditFormError("");
+    setEditSubmitting(true);
+    try {
+      await updateTenant(editTenant.id, {
+        name: editForm.name.trim(),
+        primaryDomain: editForm.primaryDomain.trim() || undefined,
+        plan: editForm.plan,
+        seatLimit: editForm.seatLimit ? parseInt(editForm.seatLimit, 10) : undefined,
+        country: editForm.country.trim() || undefined,
+      });
+      setShowEdit(false);
+      setEditForm({});
+      setEditTenant(null);
+      await loadTenants();
+    } catch (err) {
+      setEditFormError(err.message || "Unable to update tenant");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -362,6 +404,16 @@ export default function Tenants() {
             >
               <button
                 type="button"
+                className="edit"
+                role="menuitem"
+                disabled={actionBusy.startsWith("edit")}
+                onClick={() => runAction(activeMenuTenant, "edit")}
+              >
+                <Edit size={14} style={{ marginRight: 8 }} />
+                Edit
+              </button>
+              <button
+                type="button"
                 className="activate"
                 role="menuitem"
                 disabled={actionBusy.startsWith("activate")}
@@ -509,6 +561,107 @@ export default function Tenants() {
                 </button>
                 <button type="submit" className="admin-btn admin-btn--primary" disabled={submitting}>
                   {submitting ? "Sending Invite..." : "Invite Link"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showEdit ? (
+        <div className="admin-modal-overlay" role="dialog" aria-modal="true">
+          <div className="admin-modal admin-modal--wide">
+            <button
+              type="button"
+              className="admin-modal__close"
+              onClick={() => setShowEdit(false)}
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+            <h2>Edit Tenant</h2>
+            <p className="admin-modal__sub">
+              Update workspace information and settings
+            </p>
+
+            <form className="admin-form" onSubmit={handleEdit}>
+              {editFormError ? <p className="auth-error">{editFormError}</p> : null}
+
+              <div className="admin-form__row">
+                <div>
+                  <label htmlFor="edit-name">Workspace Name</label>
+                  <input
+                    id="edit-name"
+                    value={editForm.name || ""}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    placeholder="Primex360"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="edit-domain">Primary Domain</label>
+                  <input
+                    id="edit-domain"
+                    value={editForm.primaryDomain || ""}
+                    onChange={(e) => setEditForm({ ...editForm, primaryDomain: e.target.value })}
+                    placeholder="primex360.com"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form__row">
+                <div>
+                  <label htmlFor="edit-plan">Plan</label>
+                  <select
+                    id="edit-plan"
+                    value={editForm.plan || "growth"}
+                    onChange={(e) => setEditForm({ ...editForm, plan: e.target.value })}
+                  >
+                    <option value="trial">Trial</option>
+                    <option value="starter">Starter</option>
+                    <option value="growth">Growth</option>
+                    <option value="scale">Scale</option>
+                    <option value="enterprise">Enterprise</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="edit-seatLimit">Seat Limit</label>
+                  <input
+                    id="edit-seatLimit"
+                    type="number"
+                    min="1"
+                    value={editForm.seatLimit || ""}
+                    onChange={(e) => setEditForm({ ...editForm, seatLimit: e.target.value })}
+                    placeholder="50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="edit-country">Country</label>
+                <input
+                  id="edit-country"
+                  value={editForm.country || ""}
+                  onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
+                  placeholder="Nigeria"
+                />
+              </div>
+
+              <div className="admin-form__actions">
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--ghost"
+                  onClick={() => setShowEdit(false)}
+                  disabled={editSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="admin-btn admin-btn--primary"
+                  disabled={editSubmitting}
+                >
+                  {editSubmitting ? "Updating..." : "Save Changes"}
                 </button>
               </div>
             </form>
