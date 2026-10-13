@@ -11,6 +11,10 @@ export const env = {
     PORT: Number(process.env.PORT) || 4008,
     NODE_ENV: process.env.NODE_ENV || "development",
     FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:5173",
+    ADMIN_FRONTEND_URL:
+        process.env.ADMIN_FRONTEND_URL ||
+        process.env.FRONTEND_URL ||
+        "http://localhost:5173",
     ROOT_DOMAIN: process.env.ROOT_DOMAIN || "helpcentrepro.com",
     PROVIDER_SUBDOMAIN: process.env.PROVIDER_SUBDOMAIN || "admin",
     TENANT_HEADER: process.env.TENANT_HEADER || "x-tenant-slug",
@@ -32,6 +36,9 @@ export const env = {
     REDIS_URL: process.env.REDIS_URL,
     REDIS_REQUIRED: bool(process.env.REDIS_REQUIRED, false),
     SEED_TEST_USER: bool(process.env.SEED_TEST_USER, true),
+    // Provider super-admin is created via /signup — do not auto-seed it unless
+    // explicitly requested (avoids blocking first-time platform bootstrap).
+    SEED_PROVIDER_SUPER_ADMIN: bool(process.env.SEED_PROVIDER_SUPER_ADMIN, false),
 };
 
 export function assertCriticalEnv() {

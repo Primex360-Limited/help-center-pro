@@ -65,8 +65,23 @@ export async function sendVerificationEmail({ to, firstName, token }) {
     });
 }
 
+function resolveAdminSignInUrl() {
+    const appBase = String(env.FRONTEND_URL || "").replace(/\/$/, "");
+    const adminBase = String(env.ADMIN_FRONTEND_URL || env.FRONTEND_URL || "").replace(
+        /\/$/,
+        ""
+    );
+
+    // Dedicated admin host (e.g. helpcentre-pro-admin.onrender.com) uses /login
+    if (adminBase && adminBase !== appBase) {
+        return `${adminBase}/login`;
+    }
+
+    return `${appBase}/admin/login`;
+}
+
 export async function sendWelcomeEmail({ to, firstName }) {
-    const signInLink = `${env.FRONTEND_URL}/login`;
+    const signInLink = resolveAdminSignInUrl();
     const template = welcomeEmailTemplate({ firstName, signInLink });
 
     return dispatchEmail({

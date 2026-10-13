@@ -2,7 +2,7 @@
 # Docs: https://render.com/docs/blueprint-spec
 #
 # After connecting GitHub (ebubeprimex), click "New +" → "Blueprint"
-# and select this repo. Render creates Postgres + API + Frontend.
+# and select this repo. Render creates Postgres + API + Tenant app + Admin app.
 
 services:
   - type: web
@@ -25,7 +25,9 @@ services:
       - key: REDIS_REQUIRED
         value: "false"
       - key: SEED_TEST_USER
-        value: "true"
+        value: "false"
+      - key: SEED_PROVIDER_SUPER_ADMIN
+        value: "false"
       - key: EMAIL_ENABLED
         value: "true"
       - key: JWT_ACCESS_EXPIRES_IN
@@ -42,6 +44,8 @@ services:
         generateValue: true
       - key: FRONTEND_URL
         sync: false
+      - key: ADMIN_FRONTEND_URL
+        sync: false
       - key: CORS_ORIGINS
         sync: false
       - key: RESEND_API_KEY
@@ -53,7 +57,7 @@ services:
       - key: SUPPORT_EMAIL_FROM
         sync: false
 
-  # Static sites have no compute plan — do NOT set `plan` here.
+  # Tenant / workspace app
   - type: web
     name: helpcentre-pro-web
     runtime: static
@@ -67,7 +71,32 @@ services:
     envVars:
       - key: VITE_APP_NAME
         value: HelpCentre Pro
+      - key: VITE_PORTAL_MODE
+        value: tenant
       - key: VITE_API_URL
+        sync: false
+      - key: VITE_ADMIN_URL
+        sync: false
+
+  # Dedicated Admin Portal (different URL from the tenant app)
+  - type: web
+    name: helpcentre-pro-admin
+    runtime: static
+    rootDir: help-centre-pro-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_APP_NAME
+        value: HelpCentre Pro Admin
+      - key: VITE_PORTAL_MODE
+        value: admin
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_APP_URL
         sync: false
 
 databases:

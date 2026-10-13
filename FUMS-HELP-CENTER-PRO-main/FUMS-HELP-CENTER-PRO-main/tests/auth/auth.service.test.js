@@ -471,6 +471,32 @@ describe("registerSuperAdmin", () => {
 
         expect(userCreateMock).not.toHaveBeenCalled();
     });
+
+    it("rejects bootstrap when a platform admin already exists", async () => {
+        const { registerSuperAdmin } = await loadAuthService();
+
+        roleFindFirstMock.mockResolvedValue({
+            id: roleId,
+            name: "Provider Super Admin"
+        });
+        userFindFirstMock
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: USER_ID });
+
+        await expect(
+            registerSuperAdmin({
+                email: "new@helpcentrepro.com",
+                password: "Secret123!",
+                firstName: "New",
+                lastName: "Admin"
+            })
+        ).rejects.toMatchObject({
+            statusCode: 409,
+            message: expect.stringMatching(/Admin Portal/i)
+        });
+
+        expect(userCreateMock).not.toHaveBeenCalled();
+    });
 });
 describe("requestPasswordReset", () => {
     beforeEach(() => {

@@ -142,6 +142,20 @@ async function ensureSuperAdminRole() {
         }
     });
 }
+/** Whether the platform already has a provider super admin (bootstrap gate). */
+export async function getPlatformStatus() {
+    const superAdminRole = await ensureSuperAdminRole();
+    const existingSuperAdmin = await prisma.user.findFirst({
+        where: { roleId: superAdminRole.id, userType: USER_TYPE.PROVIDER },
+        select: { id: true, email: true, firstName: true }
+    });
+
+    return {
+        bootstrapped: Boolean(existingSuperAdmin),
+        adminSignInPath: "/admin/login"
+    };
+}
+
 /**
  * Register the initial provider super admin.
  *
@@ -173,7 +187,7 @@ export async function registerSuperAdmin({
 
     if (existingSuperAdmin) {
         throw new AppError(
-            "A super admin already exists. Create additional admins through role assignment.",
+            "This platform already has an administrator. Sign in to the Admin Portal instead.",
             409
         );
     }

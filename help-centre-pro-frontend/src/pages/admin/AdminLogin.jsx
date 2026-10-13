@@ -1,18 +1,25 @@
 import { useState } from "react";
 import { ChevronRight, Shield } from "lucide-react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { adminSignupPath, isAdminPortal, tenantLoginPath } from "../../config/env.js";
 import "../../styles/auth.css";
 import "../../styles/admin.css";
 
 export default function AdminLogin() {
   const { login, isAuthenticated, loading, user } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const location = useLocation();
+  const searchEmail =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("email")
+      : "";
+  const [email, setEmail] = useState(location.state?.email || searchEmail || "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice] = useState(location.state?.notice || "");
   const [submitting, setSubmitting] = useState(false);
 
   if (!loading && isAuthenticated && (user?.isSuperAdmin || user?.userType === "provider")) {
@@ -20,6 +27,11 @@ export default function AdminLogin() {
   }
 
   if (!loading && isAuthenticated && user?.userType === "tenant") {
+    const tenantPath = tenantLoginPath();
+    if (tenantPath.startsWith("http")) {
+      window.location.replace(`${tenantPath.replace(/\/login$/, "")}/dashboard`);
+      return null;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -41,6 +53,8 @@ export default function AdminLogin() {
     }
   }
 
+  const signupHref = adminSignupPath();
+
   return (
     <div className="admin-login-page">
       <div className="admin-login-card">
@@ -57,6 +71,7 @@ export default function AdminLogin() {
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
+          {notice ? <p className="auth-success">{notice}</p> : null}
           {error ? <p className="auth-error">{error}</p> : null}
 
           <div>
@@ -89,6 +104,25 @@ export default function AdminLogin() {
             {!submitting ? <ChevronRight size={18} /> : null}
           </button>
         </form>
+
+        <div className="auth-footer-pill" style={{ marginTop: 18 }}>
+          <span>
+            First time setup?{" "}
+            {signupHref.startsWith("http") ? (
+              <a href={signupHref}>Create admin account</a>
+            ) : (
+              <Link to={signupHref}>Create admin account</Link>
+            )}
+          </span>
+        </div>
+
+        {!isAdminPortal ? (
+          <div className="auth-footer-pill" style={{ marginTop: 8 }}>
+            <span>
+              Workspace user? <Link to="/login">Tenant sign in</Link>
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );

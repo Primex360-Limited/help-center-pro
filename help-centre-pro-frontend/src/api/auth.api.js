@@ -1,5 +1,11 @@
 import { apiRequest, setStoredToken } from "./client.js";
 
+export async function getPlatformStatus() {
+  return apiRequest("/auth/platform-status", {
+    method: "GET",
+  });
+}
+
 export async function registerSuperAdmin(payload) {
   return apiRequest("/auth/register-super-admin", {
     method: "POST",

@@ -3,6 +3,7 @@ import {
     changePassword,
     getCurrentUser,
     getEmailVerificationStatus,
+    getPlatformStatus,
     loginUser,
     logoutUser,
     refreshUserToken,
@@ -25,12 +26,17 @@ function requestTenantId(req) {
 }
 
 
+export async function platformStatus(req, res) {
+    const result = await getPlatformStatus();
+    return successResponse(res, "Platform status", result);
+}
+
 export async function registerInitialSuperAdmin(req, res) {
     const result = await registerSuperAdmin(req.validatedBody);
 
     return successResponse(
         res,
-        "Account created successfully. Please sign in to continue.",
+        "Account created successfully. Please sign in to the Admin Portal.",
         {
             user: result.user,
             emailSent: Boolean(result.emailSent)

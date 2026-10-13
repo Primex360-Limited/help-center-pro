@@ -224,11 +224,35 @@ export async function seedTestUser() {
         return null;
     }
 
-    const superAdminRole = await resolveProviderSuperAdminRole();
     const users = [];
 
-    for (const account of PROVIDER_TEST_USERS) {
-        users.push(await upsertProviderUser(superAdminRole, account));
+    // Never auto-create the platform super admin unless explicitly enabled —
+    // otherwise /signup fails with "A super admin already exists".
+    if (env.SEED_PROVIDER_SUPER_ADMIN) {
+        const superAdminRole = await resolveProviderSuperAdminRole();
+        for (const account of PROVIDER_TEST_USERS) {
+            users.push(await upsertProviderUser(superAdminRole, account));
+        }
+    } else {
+        const seedEmails = PROVIDER_TEST_USERS.map((account) =>
+            normalizeEmail(account.email)
+        );
+        const cleared = await prisma.user.deleteMany({
+            where: {
+                tenantId: null,
+                userType: USER_TYPE.PROVIDER,
+                email: { in: seedEmails }
+            }
+        });
+        if (cleared.count > 0) {
+            console.log(
+                `🧹 Removed ${cleared.count} auto-seeded provider admin(s) so /signup can bootstrap`
+            );
+        } else {
+            console.log(
+                "ℹ️  Skipping provider super-admin seed (use /signup or set SEED_PROVIDER_SUPER_ADMIN=true)"
+            );
+        }
     }
 
     const tenant = await ensureDemoTenant();

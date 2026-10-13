@@ -8,6 +8,7 @@ import {
     login,
     logout,
     me,
+    platformStatus,
     refresh,
     registerInitialSuperAdmin,
     resendVerification,
@@ -27,6 +28,18 @@ import {
 } from "./auth.validation.js";
 
 const authRoutes = express.Router();
+
+/**
+ * @openapi
+ * /auth/platform-status:
+ *   get:
+ *     tags: [Auth]
+ *     summary: Whether the platform admin has already been bootstrapped
+ *     responses:
+ *       200:
+ *         description: Platform bootstrap status
+ */
+authRoutes.get("/platform-status", asyncHandler(platformStatus));
 
 /**
  * @openapi

@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { adminLoginPath, tenantLoginPath } from "../../config/env.js";
 
 function isProviderUser(user) {
   return Boolean(user?.isSuperAdmin || user?.userType === "provider");
@@ -23,7 +24,11 @@ export default function ProtectedRoute({
   }
 
   if (!isAuthenticated) {
-    const loginPath = providerOnly ? "/admin/login" : "/login";
+    const loginPath = providerOnly ? adminLoginPath() : tenantLoginPath();
+    if (loginPath.startsWith("http")) {
+      window.location.replace(loginPath);
+      return null;
+    }
     return <Navigate to={loginPath} replace state={{ from: location }} />;
   }
 

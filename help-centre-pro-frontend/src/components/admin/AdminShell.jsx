@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { adminLoginPath } from "../../config/env.js";
 import SidebarBrand from "../layout/SidebarBrand.jsx";
 import "../../styles/admin.css";
 
@@ -79,7 +80,12 @@ export default function AdminShell() {
 
   async function handleLogout() {
     await logout();
-    navigate("/admin/login");
+    const path = adminLoginPath();
+    if (path.startsWith("http")) {
+      window.location.assign(path);
+      return;
+    }
+    navigate(path);
   }
 
   function handleSearch(event) {

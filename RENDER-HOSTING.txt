@@ -5,7 +5,8 @@ GOAL
 ----
 - Code lives on GitHub account: ebubeprimex
 - Every git push to GitHub auto-deploys on Render
-- Frontend + Backend + Postgres created from one Blueprint
+- API + Tenant app + Admin app + Postgres from one Blueprint
+- Admin and tenant use DIFFERENT public URLs
 
 
 STEP 1 — Create the GitHub repo (once)
@@ -25,12 +26,6 @@ Open PowerShell in this folder and run:
 
 If GitHub asks you to sign in, use the ebubeprimex account.
 
-Optional — push to BOTH accounts with one command forever:
-
-  git remote set-url --add --push origin https://github.com/Okechukwu2002/Help_Center_Pro_webapp.git
-  git remote set-url --add --push origin https://github.com/ebubeprimex/Help_Center_Pro_webapp.git
-  git push origin master
-
 
 STEP 3 — Deploy on Render (once, ~5 minutes)
 --------------------------------------------
@@ -39,25 +34,28 @@ STEP 3 — Deploy on Render (once, ~5 minutes)
 3. Click: New +  →  Blueprint
 4. Select repo: ebubeprimex/Help_Center_Pro_webapp
 5. Render reads render.yaml and creates:
-     - helpcentre-pro-db   (Postgres)
-     - helpcentre-pro-api  (Backend)
-     - helpcentre-pro-web  (Frontend)
+     - helpcentre-pro-db    (Postgres)
+     - helpcentre-pro-api   (Backend)
+     - helpcentre-pro-web   (Tenant / workspace app)
+     - helpcentre-pro-admin (Platform Admin Portal — separate URL)
 6. Before Apply, set these Blueprint env values (copy-paste):
 
    On helpcentre-pro-api:
      FRONTEND_URL = https://helpcentre-pro-web.onrender.com
-     CORS_ORIGINS = https://helpcentre-pro-web.onrender.com
+     ADMIN_FRONTEND_URL = https://helpcentre-pro-admin.onrender.com
+     CORS_ORIGINS = https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
      RESEND_API_KEY = (same re_... value as local backend .env)
      RESEND_WEBHOOK_SECRET = (same whsec_... value as local backend .env)
      EMAIL_FROM = HelpCentre Pro <noreply@helpcentrepro.com>
      SUPPORT_EMAIL_FROM = HelpCentre Pro Support <support@helpcentrepro.com>
 
-   On helpcentre-pro-web:
+   On helpcentre-pro-web (tenant app):
      VITE_API_URL = https://helpcentre-pro-api.onrender.com
+     VITE_ADMIN_URL = https://helpcentre-pro-admin.onrender.com
 
-   If Render assigns different public URLs after create, update those three
-   URL fields in the dashboard and Manual Deploy the web service
-   (VITE_API_URL is baked in at build time).
+   On helpcentre-pro-admin (admin portal):
+     VITE_API_URL = https://helpcentre-pro-api.onrender.com
+     VITE_APP_URL = https://helpcentre-pro-web.onrender.com
 
 7. Click Apply
 
@@ -66,12 +64,14 @@ STEP 4 — After first deploy
 ---------------------------
 API health:     https://helpcentre-pro-api.onrender.com/health
 Swagger:        https://helpcentre-pro-api.onrender.com/api-docs
-Tenant login:   https://helpcentre-pro-web.onrender.com/login
-Admin login:    https://helpcentre-pro-web.onrender.com/admin/login
 
-Default platform admin (seeded in non-locked envs):
-  ebube.okechukwu@primex360.com
-  2020/EN/12566
+Tenant login:   https://helpcentre-pro-web.onrender.com/login
+Admin signup:   https://helpcentre-pro-admin.onrender.com/signup
+Admin login:    https://helpcentre-pro-admin.onrender.com/login
+
+First-time setup: open the Admin signup URL, create the platform admin,
+then sign in on the Admin login URL. You will get a welcome email (no
+verification link). There is no seeded production admin.
 
 
 EVERYDAY WORKFLOW
@@ -88,6 +88,7 @@ Render auto-deploys from the GitHub push. No manual upload.
 NOTES
 -----
 - Free Render services sleep after idle time; first request may take ~30–60s.
-- Frontend must be rebuilt when VITE_API_URL changes (set it before first build).
-- After URLs are final, you can update FRONTEND_URL / CORS_ORIGINS / VITE_API_URL
-  in the Render dashboard and trigger a Manual Deploy.
+- Vite env vars are baked at build time — set them before the first build,
+  or Manual Deploy after changing VITE_* values.
+- Locally (combined portal): tenant login is /login, admin login is /admin/login,
+  admin signup is /signup.

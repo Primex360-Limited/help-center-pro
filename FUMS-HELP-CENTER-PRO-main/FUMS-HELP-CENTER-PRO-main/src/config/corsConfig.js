@@ -21,6 +21,7 @@ const allowedCors = [
     ...new Set([
         ...defaults,
         env.FRONTEND_URL,
+        env.ADMIN_FRONTEND_URL,
         ...splitOrigins(process.env.CORS_ORIGINS)
     ].filter(Boolean))
 ];

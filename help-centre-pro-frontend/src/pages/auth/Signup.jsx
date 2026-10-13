@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Shield, Sparkles } from "lucide-react";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
-import { registerSuperAdmin } from "../../api/auth.api.js";
+import { getPlatformStatus, registerSuperAdmin } from "../../api/auth.api.js";
+import { adminLoginPath, tenantLoginPath } from "../../config/env.js";
 import { isPasswordValid } from "../../utils/password.js";
 import "../../styles/auth.css";
+import "../../styles/admin.css";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -17,9 +20,51 @@ export default function Signup() {
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [bootstrapped, setBootstrapped] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const result = await getPlatformStatus();
+        if (!cancelled) {
+          setBootstrapped(Boolean(result?.data?.bootstrapped));
+        }
+      } catch {
+        if (!cancelled) setBootstrapped(false);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function updateField(key) {
     return (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  }
+
+  function goToAdminSignIn(notice, email) {
+    const path = adminLoginPath();
+    if (path.startsWith("http")) {
+      const url = new URL(path);
+      if (email) url.searchParams.set("email", email);
+      window.location.assign(url.toString());
+      return;
+    }
+    navigate(path, {
+      replace: true,
+      state: {
+        email: email || form.email.trim(),
+        notice:
+          notice ||
+          "Account created. A welcome email is on its way — sign in to the Admin Portal.",
+      },
+    });
   }
 
   async function handleSubmit(event) {
@@ -41,30 +86,88 @@ export default function Signup() {
       });
 
       const emailSent = result?.data?.emailSent !== false;
-
-      navigate("/login", {
-        replace: true,
-        state: {
-          email: form.email.trim(),
-          notice: emailSent
-            ? "Account created. A welcome email is on its way — you can sign in now."
-            : "Account created successfully. You can sign in now.",
-        },
-      });
+      goToAdminSignIn(
+        emailSent
+          ? "Account created. A welcome email is on its way — sign in to continue."
+          : "Account created successfully. Sign in to continue.",
+        form.email.trim()
+      );
     } catch (err) {
-      setError(err.message || "Unable to create account");
+      const message = err.message || "Unable to create account";
+      if (/already has an administrator|super admin already exists/i.test(message)) {
+        setBootstrapped(true);
+        setError("");
+      } else {
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
+  if (checking) {
+    return (
+      <div className="admin-login-page">
+        <div className="admin-login-card">
+          <BrandLogo />
+          <p className="auth-subtitle auth-subtitle--center">Preparing secure signup…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (bootstrapped) {
+    return (
+      <div className="admin-login-page">
+        <div className="admin-login-card">
+          <BrandLogo />
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <span className="admin-login-badge">
+              <Shield size={12} />
+              Platform ready
+            </span>
+          </div>
+          <h1 className="auth-title">Admin already set up</h1>
+          <p className="auth-subtitle">
+            This HelpCentre Pro platform already has an administrator. Sign in to
+            the Admin Portal to manage tenants and access.
+          </p>
+          <button
+            className="auth-btn"
+            type="button"
+            onClick={() => goToAdminSignIn("Welcome back — sign in to continue.")}
+          >
+            Go to Admin Sign In
+          </button>
+          <div className="auth-footer-pill" style={{ marginTop: 18 }}>
+            <span>
+              Workspace user?{" "}
+              {tenantLoginPath().startsWith("http") ? (
+                <a href={tenantLoginPath()}>Tenant sign in</a>
+              ) : (
+                <Link to={tenantLoginPath()}>Tenant sign in</Link>
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="auth-page-dark">
-      <div className="auth-card auth-card--wide">
+    <div className="admin-login-page">
+      <div className="admin-login-card admin-login-card--wide">
         <BrandLogo />
-        <h1 className="auth-title auth-title--center">Create your account</h1>
-        <p className="auth-subtitle auth-subtitle--center">
-          Set up the first HelpCentre Pro Super Admin.
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <span className="admin-login-badge">
+            <Sparkles size={12} />
+            Platform setup
+          </span>
+        </div>
+        <h1 className="auth-title">Create your Admin account</h1>
+        <p className="auth-subtitle">
+          Set up the first HelpCentre Pro platform administrator. You’ll receive a
+          welcome email and can sign in immediately.
         </p>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -125,13 +228,24 @@ export default function Signup() {
           <PasswordRequirements password={form.password} />
 
           <button className="auth-btn" type="submit" disabled={submitting}>
-            {submitting ? "Creating account..." : "Create Account"}
+            {submitting ? "Creating account..." : "Create Admin Account"}
           </button>
         </form>
 
         <div className="auth-footer-pill">
           <span>
-            Already have an account? <Link to="/login">Sign in</Link>
+            Already have an admin account?{" "}
+            <Link
+              to={adminLoginPath().startsWith("http") ? "#" : adminLoginPath()}
+              onClick={(event) => {
+                if (adminLoginPath().startsWith("http")) {
+                  event.preventDefault();
+                  window.location.assign(adminLoginPath());
+                }
+              }}
+            >
+              Sign in
+            </Link>
           </span>
         </div>
       </div>
