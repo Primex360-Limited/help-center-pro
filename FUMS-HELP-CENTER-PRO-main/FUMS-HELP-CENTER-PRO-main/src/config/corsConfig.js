@@ -1,4 +1,6 @@
-const allowedCors = [
+import { env } from "./env.js";
+
+const defaults = [
     "http://localhost:3000",
     "http://localhost:3005",
     "http://localhost:3006",
@@ -6,6 +8,21 @@ const allowedCors = [
     "http://localhost:5173",
     "https://user-management-system-centralized.onrender.com",
     "https://help-center-pro-frontend.vercel.app"
+];
+
+function splitOrigins(value) {
+    return String(value || "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+}
+
+const allowedCors = [
+    ...new Set([
+        ...defaults,
+        env.FRONTEND_URL,
+        ...splitOrigins(process.env.CORS_ORIGINS)
+    ].filter(Boolean))
 ];
 
 export default allowedCors;

@@ -1,0 +1,89 @@
+HelpCentre Pro — easy Render hosting (ebubeprimex)
+==================================================
+
+GOAL
+----
+- Code lives on GitHub account: ebubeprimex
+- Every git push to GitHub auto-deploys on Render
+- Frontend + Backend + Postgres created from one Blueprint
+
+
+STEP 1 — Create the GitHub repo (once)
+--------------------------------------
+1. Sign in as: ebubeprimex
+2. Create a new repository named: Help_Center_Pro_webapp
+   (private is fine)
+3. Leave it EMPTY (no README / .gitignore / license)
+
+
+STEP 2 — Push this project to ebubeprimex (once)
+------------------------------------------------
+Open PowerShell in this folder and run:
+
+  git remote add ebubeprimex https://github.com/ebubeprimex/Help_Center_Pro_webapp.git
+  git push -u ebubeprimex master
+
+If GitHub asks you to sign in, use the ebubeprimex account.
+
+Optional — push to BOTH accounts with one command forever:
+
+  git remote set-url --add --push origin https://github.com/Okechukwu2002/Help_Center_Pro_webapp.git
+  git remote set-url --add --push origin https://github.com/ebubeprimex/Help_Center_Pro_webapp.git
+  git push origin master
+
+
+STEP 3 — Deploy on Render (once, ~5 minutes)
+--------------------------------------------
+1. Go to: https://dashboard.render.com
+2. Sign in with GitHub → authorize ebubeprimex
+3. Click: New +  →  Blueprint
+4. Select repo: ebubeprimex/Help_Center_Pro_webapp
+5. Render reads render.yaml and creates:
+     - helpcentre-pro-db   (Postgres)
+     - helpcentre-pro-api  (Backend)
+     - helpcentre-pro-web  (Frontend)
+6. Before Apply, set these Blueprint env values:
+
+   On helpcentre-pro-web:
+     VITE_API_URL = https://helpcentre-pro-api.onrender.com
+     (use the real API URL Render shows after create if different)
+
+   On helpcentre-pro-api:
+     FRONTEND_URL = https://helpcentre-pro-web.onrender.com
+     CORS_ORIGINS = https://helpcentre-pro-web.onrender.com
+     RESEND_API_KEY = (your Resend key)
+     EMAIL_FROM = HelpCentre Pro <noreply@helpcentrepro.com>
+     SUPPORT_EMAIL_FROM = HelpCentre Pro Support <support@helpcentrepro.com>
+
+7. Click Apply
+
+
+STEP 4 — After first deploy
+---------------------------
+API health:     https://<api-service>.onrender.com/health
+Swagger:        https://<api-service>.onrender.com/api-docs
+Tenant login:   https://<web-service>.onrender.com/login
+Admin login:    https://<web-service>.onrender.com/admin/login
+
+Default platform admin (seeded in non-locked envs):
+  ebube.okechukwu@primex360.com
+  2020/EN/12566
+
+
+EVERYDAY WORKFLOW
+-----------------
+1. Change code locally
+2. git add .
+3. git commit -m "your message"
+4. git push ebubeprimex master
+   (or git push origin master if dual-push is configured)
+
+Render auto-deploys from the GitHub push. No manual upload.
+
+
+NOTES
+-----
+- Free Render services sleep after idle time; first request may take ~30–60s.
+- Frontend must be rebuilt when VITE_API_URL changes (set it before first build).
+- After URLs are final, you can update FRONTEND_URL / CORS_ORIGINS / VITE_API_URL
+  in the Render dashboard and trigger a Manual Deploy.
