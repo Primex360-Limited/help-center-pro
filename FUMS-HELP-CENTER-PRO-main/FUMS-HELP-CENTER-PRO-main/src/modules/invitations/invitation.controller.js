@@ -1,6 +1,7 @@
 import prisma from "../../database/prisma/client.js";
 import successResponse from "../../shared/utils/apiResponse.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { setAuthCookies } from "../auth/auth.cookie.js";
 import { acceptInvitation, createInvitation, previewInvitation } from "./invitation.service.js";
 
 async function resolveInviteTenantId(req) {
@@ -47,11 +48,25 @@ export async function previewInvitationHandler(req, res) {
 }
 
 export async function acceptInvitationHandler(req, res) {
-  const invitation = await acceptInvitation(req.validatedBody);
+  const result = await acceptInvitation({
+    ...req.validatedBody,
+    deviceInfo: req.headers["user-agent"] || "unknown",
+    ipAddress: req.ip
+  });
+
+  setAuthCookies(res, {
+    accessToken: result.accessToken,
+    refreshToken: result.refreshToken
+  });
 
   return successResponse(
     res,
-    "Invitation accepted successfully. Sign in with the password you just created.",
-    invitation
+    "Invitation accepted. Welcome to HelpCentre Pro.",
+    {
+      invitation: result.invitation,
+      user: result.user,
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken
+    }
   );
 }

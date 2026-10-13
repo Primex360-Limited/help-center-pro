@@ -5,12 +5,15 @@ import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
 import { acceptInvitation, previewInvitation } from "../../api/invitations.api.js";
+import { setStoredToken } from "../../api/client.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { isPasswordValid } from "../../utils/password.js";
 import "../../styles/auth.css";
 
 export default function AcceptInvitation() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { refreshUser } = useAuth();
   const token = params.get("token") || "";
   const [preview, setPreview] = useState(null);
   const [password, setPassword] = useState("");
@@ -60,15 +63,16 @@ export default function AcceptInvitation() {
 
     setSubmitting(true);
     try {
-      await acceptInvitation(token, password, confirmPassword);
-      navigate("/login", {
-        replace: true,
-        state: {
-          email: preview?.email || "",
-          notice:
-            "Workspace activated. Sign in with the password you just created.",
-        },
-      });
+      const result = await acceptInvitation(token, password, confirmPassword);
+      const accessToken = result?.data?.accessToken;
+
+      if (!accessToken) {
+        throw new Error("Activation succeeded but sign-in session was not created. Please sign in.");
+      }
+
+      setStoredToken(accessToken);
+      await refreshUser();
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.message || "Unable to accept invitation");
     } finally {
@@ -86,8 +90,8 @@ export default function AcceptInvitation() {
         </div>
         <h1 className="auth-title auth-title--center">Activate your account</h1>
         <p className="auth-subtitle auth-subtitle--center">
-          Create your password to finish joining HelpCentre Pro. No temporary
-          password needed — you&apos;ll sign in with what you set here.
+          Create your password to join your workspace. You&apos;ll be signed in
+          automatically — no temporary password needed.
         </p>
 
         <form className="auth-form" onSubmit={handleAccept}>
@@ -137,7 +141,7 @@ export default function AcceptInvitation() {
             type="submit"
             disabled={!token || loading || submitting || !preview}
           >
-            {submitting ? "Activating..." : "Activate & Continue"}
+            {submitting ? "Activating..." : "Activate & Enter Workspace"}
             {!submitting ? <ChevronRight size={18} /> : null}
           </button>
         </form>

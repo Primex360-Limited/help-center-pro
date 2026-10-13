@@ -16,7 +16,7 @@ import {
     hashToken
 } from "../auth/auth.utils.js";
 import { sendInvitationEmail } from "../auth/auth.email.js";
-import { safeSendEmail } from "../auth/auth.service.js";
+import { loginUser, safeSendEmail } from "../auth/auth.service.js";
 import { buildRoleSummary } from "../roles/role.service.js";
 
 /**
@@ -269,7 +269,12 @@ export async function previewInvitation(token) {
  * Already-accepted invites may still set a password once before first login
  * (recovery when the temporary password email was lost).
  */
-export async function acceptInvitation({ token, password }) {
+export async function acceptInvitation({
+    token,
+    password,
+    deviceInfo = "unknown",
+    ipAddress = null
+}) {
     const invitation = await findInvitationByToken(token);
 
     if (!invitation.userId) {
@@ -359,7 +364,22 @@ export async function acceptInvitation({ token, password }) {
         include: INVITATION_INCLUDE
     });
 
-    return buildInvitationPayload(accepted ?? invitation);
+    // Sign them in immediately with the password they just chose (no second login step).
+    const auth = await loginUser({
+        email: invitedUser.email,
+        password,
+        userId: invitation.userId,
+        preferScope: "tenant",
+        deviceInfo,
+        ipAddress
+    });
+
+    return {
+        invitation: buildInvitationPayload(accepted ?? invitation),
+        user: auth.user,
+        accessToken: auth.accessToken,
+        refreshToken: auth.refreshToken
+    };
 }
 
 export default createInvitation;

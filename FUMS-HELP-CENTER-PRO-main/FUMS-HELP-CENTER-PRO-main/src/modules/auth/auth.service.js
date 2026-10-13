@@ -566,10 +566,17 @@ async function resolveLoginTenant({ tenantId, tenantSlug }) {
 /**
  * Find the user behind a login attempt.
  *
- * Provider-scope rows win when no workspace is known; an email that exists in
- * several workspaces without a resolvable host is ambiguous and rejected.
+ * `preferScope`:
+ *  - `provider` → Admin Portal (provider rows win)
+ *  - `tenant`   → workspace app (tenant rows win; avoids admin email shadowing)
+ *  - unset      → legacy: provider wins when present, else single tenant row
  */
-async function resolveLoginUser({ email, tenantId, tenantSlug }) {
+async function resolveLoginUser({
+    email,
+    tenantId,
+    tenantSlug,
+    preferScope = null
+}) {
     const normalizedEmail = normalizeEmail(email);
     const tenant = await resolveLoginTenant({ tenantId, tenantSlug });
 
@@ -592,26 +599,50 @@ async function resolveLoginUser({ email, tenantId, tenantSlug }) {
     }
 
     const providerUser = candidates.find((candidate) => candidate.tenantId === null);
+    const tenantUsers = candidates.filter((candidate) => candidate.tenantId !== null);
 
-    if (providerUser) {
+    if (preferScope === "provider") {
+        if (providerUser) {
+            return { user: providerUser, tenant: null };
+        }
+    }
+
+    if (preferScope === "tenant") {
+        if (tenantUsers.length === 1) {
+            const [user] = tenantUsers;
+            return {
+                user,
+                tenant: await prisma.tenant.findUnique({ where: { id: user.tenantId } })
+            };
+        }
+        if (tenantUsers.length > 1) {
+            throw new AppError(
+                "This email belongs to several workspaces. Sign in from your workspace URL.",
+                409
+            );
+        }
+    }
+
+    if (providerUser && preferScope !== "tenant") {
         return { user: providerUser, tenant: null };
     }
 
-    if (candidates.length > 1) {
+    if (tenantUsers.length > 1) {
         throw new AppError(
             "This email belongs to several workspaces. Sign in from your workspace URL.",
             409
         );
     }
 
-    const [user] = candidates;
+    if (tenantUsers.length === 1) {
+        const [user] = tenantUsers;
+        return {
+            user,
+            tenant: await prisma.tenant.findUnique({ where: { id: user.tenantId } })
+        };
+    }
 
-    return {
-        user,
-        tenant: user.tenantId
-            ? await prisma.tenant.findUnique({ where: { id: user.tenantId } })
-            : null
-    };
+    return { user: providerUser || null, tenant: null };
 }
 /**
  * Authenticate a user inside a workspace (or the provider portal).
@@ -630,9 +661,29 @@ export async function loginUser({
     deviceInfo,
     ipAddress,
     tenantId = null,
-    tenantSlug = null
+    tenantSlug = null,
+    preferScope = null,
+    userId = null
 }) {
-    const { user, tenant } = await resolveLoginUser({ email, tenantId, tenantSlug });
+    let user;
+    let tenant;
+
+    if (userId) {
+        user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { role: { include: { permissions: { include: { permission: true } } } } }
+        });
+        tenant = user?.tenantId
+            ? await prisma.tenant.findUnique({ where: { id: user.tenantId } })
+            : null;
+    } else {
+        ({ user, tenant } = await resolveLoginUser({
+            email,
+            tenantId,
+            tenantSlug,
+            preferScope
+        }));
+    }
 
     if (!user) {
         throw new AppError("Invalid email or password", 401);

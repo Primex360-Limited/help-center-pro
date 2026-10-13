@@ -1,4 +1,4 @@
-import { API_BASE, API_URL } from "../config/env.js";
+import { API_BASE, API_URL, PORTAL_MODE } from "../config/env.js";
 
 const TOKEN_KEY = "hcp_access_token";
 
@@ -19,8 +19,12 @@ export async function apiRequest(path, options = {}) {
     headers = {},
   } = options;
 
+  const portalHeader =
+    PORTAL_MODE === "admin" ? "admin" : PORTAL_MODE === "tenant" ? "tenant" : "combined";
+
   const finalHeaders = {
     ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    "X-Portal": portalHeader,
     ...headers,
   };
 

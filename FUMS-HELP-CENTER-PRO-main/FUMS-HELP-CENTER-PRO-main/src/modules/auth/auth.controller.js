@@ -58,12 +58,38 @@ export async function registerWorkspace(req, res) {
     );
 }
 
+function resolvePreferScope(req) {
+    const portal = String(req.headers["x-portal"] || "").toLowerCase();
+    if (portal === "admin" || portal === "provider") return "provider";
+    if (portal === "tenant" || portal === "app") return "tenant";
+
+    const origin = String(req.headers.origin || "")
+        .trim()
+        .replace(/\/$/, "")
+        .toLowerCase();
+    const adminOrigin = String(process.env.ADMIN_FRONTEND_URL || "")
+        .trim()
+        .replace(/\/$/, "")
+        .toLowerCase();
+    const appOrigin = String(process.env.FRONTEND_URL || "")
+        .trim()
+        .replace(/\/$/, "")
+        .toLowerCase();
+
+    if (adminOrigin && origin === adminOrigin) return "provider";
+    if (appOrigin && origin === appOrigin) return "tenant";
+    if (origin.includes("admin")) return "provider";
+    if (origin) return "tenant";
+    return null;
+}
+
 export async function login(req, res) {
     const result = await loginUser({
         ...req.validatedBody,
         tenantId: requestTenantId(req),
         deviceInfo: req.headers["user-agent"] || "unknown",
         ipAddress: req.ip,
+        preferScope: resolvePreferScope(req)
     });
 
     setAuthCookies(res, {
