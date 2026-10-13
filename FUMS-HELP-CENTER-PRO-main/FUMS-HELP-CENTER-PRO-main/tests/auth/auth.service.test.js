@@ -26,6 +26,7 @@ const passwordResetTokenFindFirstMock = jest.fn();
 const passwordResetTokenUpdateMock = jest.fn();
 
 const sendVerificationEmailMock = jest.fn();
+const sendWelcomeEmailMock = jest.fn();
 const sendPasswordResetEmailMock = jest.fn();
 const generateRandomTokenMock = jest.fn();
 const hashTokenMock = jest.fn();
@@ -104,7 +105,7 @@ const ALL_MOCKS = [
     verificationTokenFindFirstMock, verificationTokenUpdateMock,
     passwordResetTokenCreateMock, passwordResetTokenFindFirstMock,
     passwordResetTokenUpdateMock, sendVerificationEmailMock,
-    sendPasswordResetEmailMock, generateRandomTokenMock, hashTokenMock,
+    sendWelcomeEmailMock, sendPasswordResetEmailMock, generateRandomTokenMock, hashTokenMock,
     comparePasswordMock, generateAccessTokenMock, generateRefreshTokenMock,
     hashPasswordMock, verifyRefreshTokenMock, buildUserAccessProfileMock,
     findUserWithRoleMock, getEffectivePermissionsFromUserMock,
@@ -121,6 +122,7 @@ function resetMockState() {
     sessionCreateMock.mockResolvedValue({ id: "session-id" });
     sessionUpdateManyMock.mockResolvedValue({ count: 0 });
     sendVerificationEmailMock.mockResolvedValue({});
+    sendWelcomeEmailMock.mockResolvedValue({});
     sendPasswordResetEmailMock.mockResolvedValue({});
     generateRandomTokenMock.mockReturnValue("raw-token");
     hashTokenMock.mockReturnValue("hashed-token");
@@ -163,6 +165,7 @@ async function loadAuthService(nodeEnv = "development") {
 
     jest.unstable_mockModule("../../src/modules/auth/auth.email.js", () => ({
         default: sendVerificationEmailMock,
+        sendWelcomeEmail: sendWelcomeEmailMock,
         sendPasswordResetEmail: sendPasswordResetEmailMock
     }));
 
@@ -402,25 +405,21 @@ describe("registerSuperAdmin", () => {
                     email: "ops@helpcentrepro.com",
                     passwordHash: "hashed-password",
                     roleId,
-                    mustChangePassword: true,
+                    emailVerified: true,
+                    emailVerifiedAt: expect.any(Date),
+                    mustChangePassword: false,
                     deniedPermissions: []
                 })
             })
         );
-        expect(verificationTokenCreateMock).toHaveBeenCalledWith({
-            data: {
-                userId: USER_ID,
-                tokenHash: "hashed-token",
-                expiresAt: expect.any(Date)
-            }
-        });
-        expect(sendVerificationEmailMock).toHaveBeenCalledWith({
+        expect(verificationTokenCreateMock).not.toHaveBeenCalled();
+        expect(sendVerificationEmailMock).not.toHaveBeenCalled();
+        expect(sendWelcomeEmailMock).toHaveBeenCalledWith({
             to: "ops@helpcentrepro.com",
-            firstName: "Ops",
-            token: "raw-token"
+            firstName: "Ops"
         });
         expect(result.emailSent).toBe(true);
-        expect(result.verificationToken).toBe("raw-token");
+        expect(result.verificationToken).toBeUndefined();
         expect(recordAuditLogMock).toHaveBeenCalledWith(
             expect.objectContaining({ action: "USER_REGISTERED" })
         );
@@ -439,7 +438,7 @@ describe("registerSuperAdmin", () => {
         userFindFirstMock.mockResolvedValue(null);
         userCreateMock.mockResolvedValue(providerUser);
         findUserWithRoleMock.mockResolvedValue(providerUser);
-        sendVerificationEmailMock.mockRejectedValue(new Error("resend is down"));
+        sendWelcomeEmailMock.mockRejectedValue(new Error("resend is down"));
 
         const result = await registerSuperAdmin({
             email: "ops@helpcentrepro.com",

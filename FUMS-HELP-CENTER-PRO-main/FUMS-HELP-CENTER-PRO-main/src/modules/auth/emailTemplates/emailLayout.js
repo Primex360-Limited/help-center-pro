@@ -33,9 +33,33 @@ export function renderPremiumEmail({
     bodyHtml,
     ctaLabel,
     ctaHref,
-    footerNote
+    footerNote,
+    eyebrow = "HelpCentre Pro · Secure",
+    showLinkFallback = true
 }) {
     const year = new Date().getFullYear();
+    const hasCta = Boolean(ctaLabel && ctaHref);
+
+    const ctaBlock = hasCta
+        ? `
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:32px 0 10px;">
+                <tr>
+                  <td style="border-radius:14px;background:linear-gradient(135deg,#1D4ED8 0%,#2563EB 55%,#1E40AF 100%);box-shadow:0 14px 34px rgba(37,99,235,0.28);">
+                    <a href="${ctaHref}" style="display:inline-block;padding:16px 32px;font-size:15px;font-weight:750;color:#FFFFFF;text-decoration:none;border-radius:14px;letter-spacing:-0.01em;">
+                      ${ctaLabel}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              ${
+                  showLinkFallback
+                      ? `<p style="margin:22px 0 0;font-size:12px;line-height:1.7;color:#94A3B8;word-break:break-all;">
+                Or paste this link into your browser:<br />
+                <a href="${ctaHref}" style="color:#2563EB;text-decoration:none;font-weight:600;">${ctaHref}</a>
+              </p>`
+                      : ""
+              }`
+        : "";
 
     return `
 <!DOCTYPE html>
@@ -59,8 +83,8 @@ export function renderPremiumEmail({
           </tr>
           <tr>
             <td style="background:#FFFFFF;padding:28px 36px 32px;">
-              <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:linear-gradient(135deg,#EFF6FF,#F5F3FF);color:#1D4ED8;font-size:11px;font-weight:750;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">
-                HelpCentre Pro · Secure
+              <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:linear-gradient(135deg,#EFF6FF,#F8FAFC);color:#1D4ED8;font-size:11px;font-weight:750;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">
+                ${eyebrow}
               </div>
               <h1 style="margin:0 0 14px;font-size:28px;line-height:1.2;letter-spacing:-0.03em;color:#0B1220;font-weight:800;">
                 ${title}
@@ -71,19 +95,7 @@ export function renderPremiumEmail({
               <div style="font-size:15px;line-height:1.7;color:#475569;">
                 ${bodyHtml}
               </div>
-              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:32px 0 10px;">
-                <tr>
-                  <td style="border-radius:14px;background:linear-gradient(135deg,#2563EB 0%,#7C3AED 100%);box-shadow:0 14px 34px rgba(37,99,235,0.28);">
-                    <a href="${ctaHref}" style="display:inline-block;padding:16px 32px;font-size:15px;font-weight:750;color:#FFFFFF;text-decoration:none;border-radius:14px;letter-spacing:-0.01em;">
-                      ${ctaLabel}
-                    </a>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:22px 0 0;font-size:12px;line-height:1.7;color:#94A3B8;word-break:break-all;">
-                Or paste this link into your browser:<br />
-                <a href="${ctaHref}" style="color:#2563EB;text-decoration:none;font-weight:600;">${ctaHref}</a>
-              </p>
+              ${ctaBlock}
               ${footerNote ? `<p style="margin:18px 0 0;font-size:12px;line-height:1.65;color:#94A3B8;">${footerNote}</p>` : ""}
             </td>
           </tr>

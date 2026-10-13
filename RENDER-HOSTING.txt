@@ -42,28 +42,32 @@ STEP 3 — Deploy on Render (once, ~5 minutes)
      - helpcentre-pro-db   (Postgres)
      - helpcentre-pro-api  (Backend)
      - helpcentre-pro-web  (Frontend)
-6. Before Apply, set these Blueprint env values:
-
-   On helpcentre-pro-web:
-     VITE_API_URL = https://helpcentre-pro-api.onrender.com
-     (use the real API URL Render shows after create if different)
+6. Before Apply, set these Blueprint env values (copy-paste):
 
    On helpcentre-pro-api:
      FRONTEND_URL = https://helpcentre-pro-web.onrender.com
      CORS_ORIGINS = https://helpcentre-pro-web.onrender.com
-     RESEND_API_KEY = (your Resend key)
+     RESEND_API_KEY = (same re_... value as local backend .env)
+     RESEND_WEBHOOK_SECRET = (same whsec_... value as local backend .env)
      EMAIL_FROM = HelpCentre Pro <noreply@helpcentrepro.com>
      SUPPORT_EMAIL_FROM = HelpCentre Pro Support <support@helpcentrepro.com>
+
+   On helpcentre-pro-web:
+     VITE_API_URL = https://helpcentre-pro-api.onrender.com
+
+   If Render assigns different public URLs after create, update those three
+   URL fields in the dashboard and Manual Deploy the web service
+   (VITE_API_URL is baked in at build time).
 
 7. Click Apply
 
 
 STEP 4 — After first deploy
 ---------------------------
-API health:     https://<api-service>.onrender.com/health
-Swagger:        https://<api-service>.onrender.com/api-docs
-Tenant login:   https://<web-service>.onrender.com/login
-Admin login:    https://<web-service>.onrender.com/admin/login
+API health:     https://helpcentre-pro-api.onrender.com/health
+Swagger:        https://helpcentre-pro-api.onrender.com/api-docs
+Tenant login:   https://helpcentre-pro-web.onrender.com/login
+Admin login:    https://helpcentre-pro-web.onrender.com/admin/login
 
 Default platform admin (seeded in non-locked envs):
   ebube.okechukwu@primex360.com

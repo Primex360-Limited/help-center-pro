@@ -30,13 +30,10 @@ export async function registerInitialSuperAdmin(req, res) {
 
     return successResponse(
         res,
-        "Super admin registered successfully. Please check your email to verify your account",
+        "Account created successfully. Please sign in to continue.",
         {
             user: result.user,
-            emailSent: Boolean(result.emailSent),
-            ...(result.verificationToken
-                ? { verificationToken: result.verificationToken }
-                : {})
+            emailSent: Boolean(result.emailSent)
         },
         201
     );

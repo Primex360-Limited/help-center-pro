@@ -9,7 +9,10 @@ import {
 } from "../../shared/constants/system.js";
 import { PROVIDER_ROLE, SUPER_ADMIN_ROLE_NAMES } from "../../shared/constants/roles.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
-import sendVerificationEmail, { sendPasswordResetEmail } from "./auth.email.js";
+import sendVerificationEmail, {
+    sendPasswordResetEmail,
+    sendWelcomeEmail
+} from "./auth.email.js";
 import {
     comparePassword,
     generateAccessToken,
@@ -176,6 +179,7 @@ export async function registerSuperAdmin({
     }
 
     const passwordHash = await hashPassword(password);
+    const verifiedAt = new Date();
 
     const user = await prisma.user.create({
         data: {
@@ -187,30 +191,21 @@ export async function registerSuperAdmin({
             lastName,
             roleId: superAdminRole.id,
             status: USER_STATUS.ACTIVE,
-            emailVerified: false,
-            mustChangePassword: true,
+            emailVerified: true,
+            emailVerifiedAt: verifiedAt,
+            mustChangePassword: false,
             deniedPermissions: []
         },
         include: { role: { include: { permissions: { include: { permission: true } } } } }
     });
 
-    const rawVerificationToken = generateRandomToken();
-
-    await prisma.verificationToken.create({
-        data: {
-            userId: user.id,
-            tokenHash: hashToken(rawVerificationToken),
-            expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS)
-        }
-    });
-
     const emailSent = await safeSendEmail(
-        () => sendVerificationEmail({
-            to: user.email,
-            firstName: user.firstName,
-            token: rawVerificationToken
-        }),
-        "verification email"
+        () =>
+            sendWelcomeEmail({
+                to: user.email,
+                firstName: user.firstName
+            }),
+        "welcome email"
     );
 
     await recordAuditLog({
@@ -236,10 +231,7 @@ export async function registerSuperAdmin({
 
     return {
         user: await attachAccessProfile(user),
-        emailSent,
-        ...(env.NODE_ENV !== "production"
-            ? { verificationToken: rawVerificationToken }
-            : {})
+        emailSent
     };
 }
 

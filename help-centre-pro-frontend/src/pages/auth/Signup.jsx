@@ -40,11 +40,15 @@ export default function Signup() {
         password: form.password,
       });
 
-      navigate("/check-email", {
+      const emailSent = result?.data?.emailSent !== false;
+
+      navigate("/login", {
+        replace: true,
         state: {
           email: form.email.trim(),
-          purpose: "verify",
-          emailSent: result?.data?.emailSent !== false,
+          notice: emailSent
+            ? "Account created. A welcome email is on its way — you can sign in now."
+            : "Account created successfully. You can sign in now.",
         },
       });
     } catch (err) {

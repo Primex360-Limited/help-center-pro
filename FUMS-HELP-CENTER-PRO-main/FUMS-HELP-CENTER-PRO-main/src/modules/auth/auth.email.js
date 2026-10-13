@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import verifyEmailTemplate from "./emailTemplates/verifyEmail.template.js";
+import welcomeEmailTemplate from "./emailTemplates/welcomeEmail.template.js";
 import { inviteUserTemplate } from "./emailTemplates/inviteUser.template.js";
 import { inviteTenantTemplate } from "./emailTemplates/inviteTenant.template.js";
 import passwordResetTemplate from "./emailTemplates/passwordReset.template.js";
@@ -56,6 +57,17 @@ async function dispatchEmail({ to, subject, html }) {
 export async function sendVerificationEmail({ to, firstName, token }) {
     const verificationLink = `${env.FRONTEND_URL}/verify-email?token=${encodeURIComponent(token)}`;
     const template = verifyEmailTemplate({ firstName, verificationLink });
+
+    return dispatchEmail({
+        to,
+        subject: template.subject,
+        html: template.html
+    });
+}
+
+export async function sendWelcomeEmail({ to, firstName }) {
+    const signInLink = `${env.FRONTEND_URL}/login`;
+    const template = welcomeEmailTemplate({ firstName, signInLink });
 
     return dispatchEmail({
         to,

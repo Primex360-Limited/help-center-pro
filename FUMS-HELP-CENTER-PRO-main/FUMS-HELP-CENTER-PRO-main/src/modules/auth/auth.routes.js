@@ -42,7 +42,7 @@ const authRoutes = express.Router();
  *             $ref: '#/components/schemas/RegisterRequest'
  *     responses:
  *       201:
- *         description: Super admin registered successfully
+ *         description: Super admin registered successfully; welcome email sent
  *         content:
  *           application/json:
  *             schema:
