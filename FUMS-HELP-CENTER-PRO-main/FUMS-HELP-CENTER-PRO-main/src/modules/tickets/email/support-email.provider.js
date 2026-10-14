@@ -2,7 +2,23 @@ import { Resend } from "resend";
 import { env } from "../../../config/env.js";
 import { AppError } from "../../../shared/errors/AppError.js";
 
-const resend = new Resend(env.RESEND_API_KEY);
+let resendClient = null;
+
+function getResendClient() {
+    if (resendClient) {
+        return resendClient;
+    }
+
+    if (!env.RESEND_API_KEY || env.RESEND_API_KEY.includes("placeholder")) {
+        throw new AppError(
+            "Email is not configured. Set RESEND_API_KEY on this service (or on helpcentre-pro-notify).",
+            503
+        );
+    }
+
+    resendClient = new Resend(env.RESEND_API_KEY);
+    return resendClient;
+}
 
 export function verifyResendWebhook(req) {
     if (!env.RESEND_WEBHOOK_SECRET) {
@@ -10,7 +26,7 @@ export function verifyResendWebhook(req) {
     }
 
     try {
-        return resend.webhooks.verify({
+        return getResendClient().webhooks.verify({
             payload: JSON.stringify(req.body),
             headers: {
                 id: req.headers["svix-id"],
@@ -19,7 +35,10 @@ export function verifyResendWebhook(req) {
             },
             webhookSecret: env.RESEND_WEBHOOK_SECRET
         });
-    } catch {
+    } catch (error) {
+        if (error instanceof AppError) {
+            throw error;
+        }
         throw new AppError("Invalid Resend webhook signature", 401);
     }
 }
@@ -29,7 +48,7 @@ export async function getReceivedEmail(emailId) {
         return null;
     }
 
-    const result = await resend.emails.receiving.get(emailId);
+    const result = await getResendClient().emails.receiving.get(emailId);
 
     if (result.error) {
         throw new AppError(result.error.message || "Unable to fetch received email from Resend", 502);
@@ -45,8 +64,12 @@ export async function sendSupportEmail({
     html,
     headers
 }) {
-    const result = await resend.emails.send({
-        from: env.SUPPORT_EMAIL_FROM,
+    if (!env.SUPPORT_EMAIL_FROM && !env.EMAIL_FROM) {
+        throw new AppError("SUPPORT_EMAIL_FROM / EMAIL_FROM is not configured", 503);
+    }
+
+    const result = await getResendClient().emails.send({
+        from: env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM,
         to,
         subject,
         ...(html ? { html } : {}),

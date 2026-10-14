@@ -1,12 +1,10 @@
 # HelpCentre Pro — microservice Blueprint
-# Docs: https://render.com/docs/blueprint-spec
-#
-# Public API stays https://helpcentre-pro-api.onrender.com (gateway).
-# Domain services are separate Render web services the gateway proxies to.
-# After pushing this file: Blueprint → Manual sync → apply new services.
+# Inter-service URLs are explicit (no fromService cycles).
+# JWT / INTERNAL_SERVICE_KEY are generated on auth and shared via fromService.
+# Set RESEND_API_KEY + EMAIL_FROM once on helpcentre-pro-notify; others inherit.
 
 services:
-  # ── Gateway (public /api/v1 — keep this name so frontends keep working)
+  # ── Gateway (public /api/v1)
   - type: web
     name: helpcentre-pro-api
     runtime: node
@@ -29,36 +27,20 @@ services:
       - key: CORS_ORIGINS
         value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
       - key: AUTH_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-auth
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://helpcentre-pro-auth.onrender.com
       - key: TENANT_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-tenant
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://helpcentre-pro-tenant.onrender.com
       - key: IDENTITY_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-identity
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://helpcentre-pro-identity.onrender.com
       - key: TICKETS_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-tickets
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://helpcentre-pro-tickets.onrender.com
       - key: NOTIFICATION_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-notify
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        value: https://helpcentre-pro-notify.onrender.com
       - key: INTERNAL_SERVICE_KEY
         fromService:
           name: helpcentre-pro-auth
           type: web
           envVarKey: INTERNAL_SERVICE_KEY
-      # Gateway does not open DB sockets, but shared JWT vars keep probes consistent
       - key: JWT_ACCESS_SECRET
         fromService:
           name: helpcentre-pro-auth
@@ -74,7 +56,7 @@ services:
           name: helpcentre-pro-db
           property: connectionString
 
-  # ── Auth (signup / login / session / role seed / migrations)
+  # ── Auth (owns JWT secrets + migrations)
   - type: web
     name: helpcentre-pro-auth
     runtime: node
@@ -114,6 +96,8 @@ services:
         value: https://helpcentre-pro-admin.onrender.com
       - key: CORS_ORIGINS
         value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: NOTIFICATION_SERVICE_URL
+        value: https://helpcentre-pro-notify.onrender.com
       - key: DATABASE_URL_PRODUCTION
         fromDatabase:
           name: helpcentre-pro-db
@@ -124,19 +108,6 @@ services:
         generateValue: true
       - key: INTERNAL_SERVICE_KEY
         generateValue: true
-      - key: NOTIFICATION_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-notify
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: RESEND_API_KEY
-        sync: false
-      - key: RESEND_WEBHOOK_SECRET
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
-      - key: SUPPORT_EMAIL_FROM
-        sync: false
 
   # ── Tenant / platform admin API
   - type: web
@@ -218,6 +189,8 @@ services:
         value: https://helpcentre-pro-admin.onrender.com
       - key: CORS_ORIGINS
         value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: NOTIFICATION_SERVICE_URL
+        value: https://helpcentre-pro-notify.onrender.com
       - key: DATABASE_URL_PRODUCTION
         fromDatabase:
           name: helpcentre-pro-db
@@ -237,15 +210,6 @@ services:
           name: helpcentre-pro-auth
           type: web
           envVarKey: INTERNAL_SERVICE_KEY
-      - key: NOTIFICATION_SERVICE_URL
-        fromService:
-          name: helpcentre-pro-notify
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
 
   # ── Tickets + Socket.IO
   - type: web
@@ -269,6 +233,8 @@ services:
         value: "false"
       - key: REDIS_REQUIRED
         value: "false"
+      - key: EMAIL_ENABLED
+        value: "true"
       - key: FRONTEND_URL
         value: https://helpcentre-pro-web.onrender.com
       - key: ADMIN_FRONTEND_URL
@@ -295,15 +261,27 @@ services:
           type: web
           envVarKey: INTERNAL_SERVICE_KEY
       - key: RESEND_API_KEY
-        sync: false
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: RESEND_API_KEY
       - key: RESEND_WEBHOOK_SECRET
-        sync: false
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: RESEND_WEBHOOK_SECRET
       - key: EMAIL_FROM
-        sync: false
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: EMAIL_FROM
       - key: SUPPORT_EMAIL_FROM
-        sync: false
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: EMAIL_FROM
 
-  # ── Notification (internal email)
+  # ── Notification (set Resend secrets HERE only)
   - type: web
     name: helpcentre-pro-notify
     runtime: node
@@ -330,10 +308,12 @@ services:
           envVarKey: INTERNAL_SERVICE_KEY
       - key: RESEND_API_KEY
         sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
       - key: EMAIL_FROM
         sync: false
 
-  # ── Tenant / workspace frontend
+  # ── Tenant frontend
   - type: web
     name: helpcentre-pro-web
     runtime: static
@@ -354,7 +334,7 @@ services:
       - key: VITE_ADMIN_URL
         value: https://helpcentre-pro-admin.onrender.com
 
-  # ── Admin portal frontend
+  # ── Admin frontend
   - type: web
     name: helpcentre-pro-admin
     runtime: static
