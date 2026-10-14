@@ -557,7 +557,6 @@ export async function updateTenant(tenantId, payload, actorId) {
             }
         }
     });
-
     return getTenantById(tenantId);
 }
 
