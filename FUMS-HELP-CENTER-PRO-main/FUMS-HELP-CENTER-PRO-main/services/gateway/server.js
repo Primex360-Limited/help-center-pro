@@ -16,16 +16,94 @@ import { probeServiceHealth } from "../../src/platform/serviceClient.js";
 const PORT = Number(process.env.PORT) || 4008;
 const urls = getServiceUrls();
 
+const COLD_START_TIMEOUT_MS = 90000;
+
+function writeJsonUpstreamError(res, statusCode, serviceName, message) {
+    if (!res || res.headersSent || typeof res.writeHead !== "function") {
+        return;
+    }
+    res.writeHead(statusCode, { "content-type": "application/json" });
+    res.end(
+        JSON.stringify({
+            success: false,
+            message:
+                message ||
+                "Upstream service is waking up or unavailable. Please try again in a minute.",
+            service: serviceName
+        })
+    );
+}
+
 /**
  * Express strips the mount path from req.url before the proxy runs.
  * Upstream services still expect the full /api/v1/... path, so restore it.
+ * Free-tier Render cold starts need long timeouts; HTML 502 pages must not
+ * leak through to the SPA.
  */
-function proxyTo(target, { mountPath = "", serviceName, ws = false, timeout = 30000 } = {}) {
+function proxyTo(
+    target,
+    { mountPath = "", serviceName, ws = false, timeout = COLD_START_TIMEOUT_MS } = {}
+) {
+    const useWs = Boolean(ws);
+    const handlers = {
+        proxyReq(proxyReq, req) {
+            proxyReq.setHeader("x-forwarded-path", req.originalUrl || req.url);
+            if (!useWs) {
+                proxyReq.setHeader("accept", "application/json");
+            }
+        },
+        error(err, _req, res) {
+            console.error(`[gateway] proxy error → ${serviceName || target}:`, err.message);
+            writeJsonUpstreamError(res, 502, serviceName || target);
+        }
+    };
+
+    // HTTP only: scrub Render/Express HTML error pages before they hit the SPA.
+    // WebSocket upgrades must stream as-is (selfHandleResponse breaks them).
+    if (!useWs) {
+        handlers.proxyRes = (proxyRes, _req, res) => {
+            const chunks = [];
+            proxyRes.on("data", (chunk) => chunks.push(chunk));
+            proxyRes.on("end", () => {
+                const buffer = Buffer.concat(chunks);
+                const status = proxyRes.statusCode || 502;
+                const contentType = String(
+                    proxyRes.headers["content-type"] || ""
+                ).toLowerCase();
+                const bodyText = buffer.toString("utf8");
+                const looksLikeHtml =
+                    contentType.includes("text/html") ||
+                    /<\s*!?\s*doctype|<\s*html|@font-face|Bad Gateway/i.test(bodyText);
+
+                if (looksLikeHtml && status >= 400) {
+                    console.error(
+                        `[gateway] replaced HTML ${status} from ${serviceName || target}`
+                    );
+                    writeJsonUpstreamError(
+                        res,
+                        status === 502 || status === 503 || status === 504
+                            ? status
+                            : 502,
+                        serviceName || target,
+                        "Upstream service is waking up or unavailable. Please try again in a minute."
+                    );
+                    return;
+                }
+
+                const headers = { ...proxyRes.headers };
+                delete headers["transfer-encoding"];
+                delete headers["content-length"];
+                res.writeHead(status, headers);
+                res.end(buffer);
+            });
+        };
+    }
+
     return createProxyMiddleware({
         target,
         changeOrigin: true,
         xfwd: true,
-        ws: Boolean(ws),
+        ws: useWs,
         proxyTimeout: timeout,
         timeout,
         pathRewrite(path) {
@@ -35,25 +113,8 @@ function proxyTo(target, { mountPath = "", serviceName, ws = false, timeout = 30
             // path is e.g. "/login" or "/login?x=1" after Express mount strip
             return `${mountPath}${path.startsWith("/") ? path : `/${path}`}`;
         },
-        on: {
-            proxyReq(proxyReq, req) {
-                // Belt-and-suspenders: keep original URL visible in logs
-                proxyReq.setHeader("x-forwarded-path", req.originalUrl || req.url);
-            },
-            error(err, _req, res) {
-                console.error(`[gateway] proxy error → ${serviceName || target}:`, err.message);
-                if (res && !res.headersSent && typeof res.writeHead === "function") {
-                    res.writeHead(502, { "content-type": "application/json" });
-                    res.end(
-                        JSON.stringify({
-                            success: false,
-                            message: "Upstream service unavailable",
-                            service: serviceName || target
-                        })
-                    );
-                }
-            }
-        }
+        selfHandleResponse: !useWs,
+        on: handlers
     });
 }
 
@@ -122,7 +183,11 @@ app.use(rateLimiter);
 
 app.use(
     "/api/v1/auth",
-    proxyTo(urls.auth, { mountPath: "/api/v1/auth", serviceName: "auth-service" })
+    proxyTo(urls.auth, {
+        mountPath: "/api/v1/auth",
+        serviceName: "auth-service",
+        timeout: COLD_START_TIMEOUT_MS
+    })
 );
 app.use(
     "/api/v1/admin",

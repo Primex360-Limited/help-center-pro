@@ -50,8 +50,15 @@ export async function callService(baseUrl, path, { method = "GET", body, headers
         }
 
         if (!response.ok) {
+            const rawMessage = data?.message || data?.raw || "";
+            const looksLikeHtml =
+                typeof rawMessage === "string" &&
+                (/<\s*!?\s*doctype|<\s*html|@font-face|Bad Gateway/i.test(rawMessage) ||
+                    rawMessage.length > 300);
             throw new AppError(
-                data?.message || `Upstream service error (${response.status})`,
+                looksLikeHtml
+                    ? `Upstream service error (${response.status})`
+                    : data?.message || `Upstream service error (${response.status})`,
                 response.status >= 400 && response.status < 600 ? response.status : 502
             );
         }
@@ -82,9 +89,11 @@ export async function sendEmailViaNotificationService(payload) {
 
 export async function probeServiceHealth(baseUrl) {
     try {
+        // Free-tier Render cold starts often exceed 30s; keep health probes
+        // short enough for the dashboard but long enough to wake neighbors.
         const data = await callService(baseUrl, "/health", {
             method: "GET",
-            timeoutMs: 4000,
+            timeoutMs: 12000,
             headers: { "x-internal-service-key": undefined }
         });
         return { ok: true, data };

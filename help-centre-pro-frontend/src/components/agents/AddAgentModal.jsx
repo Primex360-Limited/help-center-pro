@@ -49,21 +49,21 @@ export default function AddAgentModal({
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-agent-title">
-      <div className="modal-card">
-        <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+    <div className="admin-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-agent-title">
+      <div className="admin-modal">
+        <button type="button" className="admin-modal__close" onClick={onClose} aria-label="Close">
           <X size={18} />
         </button>
 
         <h2 id="add-agent-title">Add a New Agent</h2>
-        <p className="modal-subtitle">
-          Add a new Agent to your Helpcentre dashboard.
+        <p className="admin-modal__sub">
+          Add a new agent to your help center team.
         </p>
 
-        <form className="modal-form" onSubmit={handleSubmit}>
+        <form className="admin-form" onSubmit={handleSubmit}>
           {error ? <p className="auth-error">{error}</p> : null}
 
-          <div className="field">
+          <div>
             <label htmlFor="invite-email">Email Address</label>
             <input
               id="invite-email"
@@ -76,7 +76,7 @@ export default function AddAgentModal({
             />
           </div>
 
-          <div className="field">
+          <div>
             <label htmlFor="invite-role">Role</label>
             <select
               id="invite-role"
@@ -92,11 +92,11 @@ export default function AddAgentModal({
             </select>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" className="ghost-btn" onClick={onClose} disabled={submitting}>
+          <div className="admin-form__actions">
+            <button type="button" className="admin-btn admin-btn--ghost" onClick={onClose} disabled={submitting}>
               Cancel
             </button>
-            <button type="submit" className="primary-btn" disabled={submitting || !roleId}>
+            <button type="submit" className="admin-btn admin-btn--primary" disabled={submitting || !roleId}>
               {submitting ? "Sending..." : "Send Invite"}
             </button>
           </div>

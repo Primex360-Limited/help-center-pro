@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Mail, Plus } from "lucide-react";
+import { Mail, Plus, Search } from "lucide-react";
 import { inviteUser } from "../../api/invitations.api.js";
 import { listRoles } from "../../api/roles.api.js";
-import { listUsers } from "../../api/users.api.js";
+import { listUsers, activateUser, deactivateUser } from "../../api/users.api.js";
 import AddAgentModal from "../../components/agents/AddAgentModal.jsx";
 import InviteSentModal from "../../components/agents/InviteSentModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import "../../styles/app.css";
 import "../../styles/auth.css";
 import "../../styles/agents.css";
+import "../../styles/admin.css";
 
 function displayName(user) {
   const local = user.email?.split("@")[0] || "";
@@ -39,6 +40,13 @@ function roleLabel(roleName = "") {
   return (roleName || "agent").toLowerCase();
 }
 
+function roleDisplayLabel(roleName = "") {
+  if (roleName === "Tenant Admin" || roleName === "Admin") return "Admin";
+  if (roleName === "Tenant Supervisor") return "Supervisor";
+  if (roleName === "Tenant Agent" || roleName === "Agent") return "Agent";
+  return roleName || "Agent";
+}
+
 export default function Agents() {
   const { hasPermission } = useAuth();
   const canInvite = hasPermission("agent:invite");
@@ -51,6 +59,8 @@ export default function Agents() {
   const [submitting, setSubmitting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [inviteSentEmail, setInviteSentEmail] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [actionBusy, setActionBusy] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -82,12 +92,17 @@ export default function Agents() {
     () =>
       users.filter((user) => {
         const roleName = user.role?.name || "";
+        const matchesSearch =
+          !searchQuery ||
+          displayName(user).toLowerCase().includes(searchQuery.toLowerCase()) ||
+          user.email?.toLowerCase().includes(searchQuery.toLowerCase());
         return (
           user.userType !== "provider" &&
-          !roleName.includes("Provider")
+          !roleName.includes("Provider") &&
+          matchesSearch
         );
       }),
-    [users]
+    [users, searchQuery]
   );
 
   async function handleInvite({ email, roleId }) {
@@ -105,94 +120,162 @@ export default function Agents() {
     }
   }
 
+  async function handleActivate(userId) {
+    setActionBusy(userId);
+    try {
+      await activateUser(userId);
+      await loadData();
+    } catch (err) {
+      setError(err.message || "Failed to activate agent");
+    } finally {
+      setActionBusy("");
+    }
+  }
+
+  async function handleDeactivate(userId) {
+    setActionBusy(userId);
+    try {
+      await deactivateUser(userId);
+      await loadData();
+    } catch (err) {
+      setError(err.message || "Failed to deactivate agent");
+    } finally {
+      setActionBusy("");
+    }
+  }
+
   return (
     <div className="agents-page">
-      <header className="agents-page__header">
+      <div className="admin-page-header">
         <div>
-          <h1>Agents</h1>
-          <p>Manage your support Team and Agents.</p>
+          <h1 className="admin-page-title">Agent Management</h1>
+          <p className="admin-kpi__meta">Manage your support team and their permissions</p>
         </div>
         {canInvite ? (
           <button
             type="button"
-            className="primary-btn agents-page__add"
+            className="admin-btn admin-btn--primary"
             onClick={() => {
               setModalError("");
               setShowAddModal(true);
             }}
           >
-            <Plus size={16} strokeWidth={2.5} />
-            Add New Agent
+            <Plus size={16} />
+            Add Agent
           </button>
         ) : null}
-      </header>
+      </div>
 
-      {error ? <p className="dashboard__error">{error}</p> : null}
+      <div className="admin-filters">
+        <div className="admin-filters__search">
+          <Search size={16} />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search agent..."
+          />
+        </div>
+      </div>
 
-      {loading ? (
-        <p className="dash-empty">Loading agents...</p>
-      ) : agents.length ? (
-        <div className="agents-grid">
-          {agents.map((user) => {
-            const stats = user.ticketStats || {
-              assigned: 0,
-              open: 0,
-              resolved: 0,
-            };
-            const pending = user.status === "invited";
-            return (
-              <article key={user.id || user.email} className="agent-card">
-                {pending ? <span className="agent-card__pending">Pending</span> : null}
-                <div className="agent-card__top">
-                  <div className="agent-card__avatar" aria-hidden="true">
-                    {initials(user)}
-                  </div>
-                  <div className="agent-card__identity">
-                    <div className="agent-card__name-row">
-                      <h3>{displayName(user)}</h3>
-                      <span className={`agent-card__role agent-card__role--${roleChip(user.role?.name)}`}>
-                        {roleLabel(user.role?.name)}
+      {error ? <p className="auth-error">{error}</p> : null}
+
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Assigned</th>
+              <th>Open</th>
+              <th>Resolved</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7}>
+                  <p className="admin-empty">Loading agents...</p>
+                </td>
+              </tr>
+            ) : agents.length ? (
+              agents.map((user) => {
+                const stats = user.ticketStats || {
+                  assigned: 0,
+                  open: 0,
+                  resolved: 0,
+                };
+                const isActive = user.status === "active";
+                const isAdmin = roleLabel(user.role?.name) === "admin";
+                return (
+                  <tr key={user.id || user.email}>
+                    <td>
+                      <div className="admin-workspace">
+                        <div className="admin-workspace__mark">
+                          {initials(user)}
+                        </div>
+                        <div>
+                          <p className="admin-workspace__name">
+                            {displayName(user)}
+                          </p>
+                          <p className="admin-workspace__meta">
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        className={`agent-role-badge ${isAdmin ? "agent-role-badge--admin" : ""}`}
+                      >
+                        {roleDisplayLabel(user.role?.name)}
                       </span>
-                    </div>
-                    <div className="agent-card__email">
-                      <Mail size={14} />
-                      <span>{user.email}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="agent-card__stats">
-                  <div>
-                    <strong>{stats.assigned}</strong>
-                    <span>Assigned</span>
-                  </div>
-                  <div>
-                    <strong className="is-open">{stats.open}</strong>
-                    <span>Open</span>
-                  </div>
-                  <div>
-                    <strong className="is-resolved">{stats.resolved}</strong>
-                    <span>Resolved</span>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="agents-empty">
-          <p>No agents in this workspace yet.</p>
-          {canInvite ? (
-            <button
-              type="button"
-              className="primary-btn"
-              onClick={() => setShowAddModal(true)}
-            >
-              <Plus size={16} />
-              Add New Agent
-            </button>
-          ) : null}
-        </div>
-      )}
+                    </td>
+                    <td>
+                      <span className={`admin-status admin-status--${isActive ? "active" : "inactive"}`}>
+                        {isActive ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td>{stats.assigned}</td>
+                    <td>{stats.open}</td>
+                    <td>{stats.resolved}</td>
+                    <td>
+                      <div className="agent-actions">
+                        {isActive ? (
+                          <button
+                            type="button"
+                            className="agent-action-btn agent-action-btn--deactivate"
+                            onClick={() => handleDeactivate(user.id)}
+                            disabled={actionBusy === user.id}
+                          >
+                            Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="agent-action-btn agent-action-btn--activate"
+                            onClick={() => handleActivate(user.id)}
+                            disabled={actionBusy === user.id}
+                          >
+                            Activate
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={7}>
+                  <p className="admin-empty">No agents in this workspace yet.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {showAddModal ? (
         <AddAgentModal

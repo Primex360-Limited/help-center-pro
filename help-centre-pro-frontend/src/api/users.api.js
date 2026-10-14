@@ -23,3 +23,19 @@ export async function deleteUser(id) {
     auth: true,
   });
 }
+
+export async function activateUser(id) {
+  return apiRequest(`/users/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: { status: "active" },
+  });
+}
+
+export async function deactivateUser(id) {
+  return apiRequest(`/users/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: { status: "inactive" },
+  });
+}

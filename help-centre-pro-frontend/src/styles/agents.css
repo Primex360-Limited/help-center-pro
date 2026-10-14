@@ -4,6 +4,100 @@
   gap: 22px;
 }
 
+/* Agent Role Badge */
+.agent-role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.agent-role-badge--admin {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+/* Agent Action Buttons */
+.agent-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.agent-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1.5px solid;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.agent-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agent-action-btn--activate {
+  background: transparent;
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.agent-action-btn--activate:hover:not(:disabled) {
+  background: #10b981;
+  color: #fff;
+}
+
+.agent-action-btn--deactivate {
+  background: transparent;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.agent-action-btn--deactivate:hover:not(:disabled) {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* Status indicator for inactive */
+.admin-status--inactive {
+  color: #98a2b3;
+}
+
+.admin-status--inactive::before {
+  background: #98a2b3;
+}
+
+/* Remove old card styles that are no longer used */
+.agents-grid,
+.agent-card,
+.agent-card__pending,
+.agent-card__top,
+.agent-card__avatar,
+.agent-card__name-row,
+.agent-card__name-row h3,
+.agent-card__role,
+.agent-card__email,
+.agent-card__stats,
+.agent-card__stats div,
+.agent-card__stats strong,
+.agent-card__stats strong.is-open,
+.agent-card__stats strong.is-resolved,
+.agent-card__stats span,
+.agents-empty {
+  display: none;
+}
+
 .agents-page__header {
   display: flex;
   align-items: flex-start;

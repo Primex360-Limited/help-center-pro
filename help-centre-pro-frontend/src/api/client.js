@@ -63,11 +63,8 @@ export async function apiRequest(path, options = {}) {
       payload?.error ||
       `Request failed (${response.status})`;
 
-    // Upstream Express HTML errors (e.g. "Cannot POST /login") should not
-    // dump raw markup into the login form.
-    if (typeof message === "string" && /<\s*!?\s*doctype|<\s*html/i.test(message)) {
-      const plain = message.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-      message = plain || `Request failed (${response.status})`;
+    if (typeof message === "string") {
+      message = sanitizeApiErrorMessage(message, response.status);
     }
 
     const error = new Error(message);
@@ -77,4 +74,32 @@ export async function apiRequest(path, options = {}) {
   }
 
   return payload;
+}
+
+/**
+ * Never surface gateway/proxy HTML (Render 502 pages, Express dumps, CSS
+ * @font-face blobs) inside auth forms.
+ */
+function sanitizeApiErrorMessage(raw, status) {
+  const text = String(raw || "");
+  const looksLikeHtmlOrCss =
+    /<\s*!?\s*doctype|<\s*html|<\s*body|@font-face|font-family:\s*["']Roobert|Bad Gateway|Powered by/i.test(
+      text
+    ) ||
+    text.length > 400;
+
+  if (!looksLikeHtmlOrCss) {
+    return text.trim() || `Request failed (${status})`;
+  }
+
+  if (status === 502 || status === 503 || status === 504 || /Bad Gateway/i.test(text)) {
+    return "The API is waking up or temporarily unavailable. Wait about a minute and try again.";
+  }
+
+  const plain = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (plain && plain.length <= 200 && !/@font-face|data:font/i.test(plain)) {
+    return plain;
+  }
+
+  return `Request failed (${status}). Please try again shortly.`;
 }

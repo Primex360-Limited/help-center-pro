@@ -572,6 +572,14 @@
   color: #6941c6;
 }
 
+.admin-status--inactive {
+  color: #98a2b3;
+}
+
+.admin-status--inactive::before {
+  background: #98a2b3;
+}
+
 .admin-row-actions {
   position: relative;
 }
