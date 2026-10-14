@@ -1,11 +1,47 @@
-# Help Centre Pro — local full-stack stack.
+# Help Centre Pro — microservice stack.
 #
 # One-click: double-click Start-Help-Centre-Pro.bat
 # Or:        docker compose up --build
 #
-# Backend  : http://localhost:4008        (Swagger at /api-docs)
-# Frontend : http://localhost:5173
+# Gateway   : http://localhost:4008   (Swagger at /api-docs)
+# Frontend  : http://localhost:5173
+#
+# Domain services (internal):
+#   auth 4010 | tenant 4011 | identity 4012 | tickets 4013 | notification 4014
 name: help-center-pro
+
+x-backend-env: &backend-env
+  NODE_ENV: development
+  FRONTEND_URL: http://localhost:5173
+  DATABASE_URL_PRODUCTION: postgresql://postgres:password@postgres:5432/help_center_pro?schema=public
+  POSTGRES_REQUIRED: "true"
+  JWT_ACCESS_SECRET: help_center_pro_dev_access_secret_change_me_32chars
+  JWT_REFRESH_SECRET: help_center_pro_dev_refresh_secret_change_me_32chars
+  JWT_ACCESS_EXPIRES_IN: 15m
+  JWT_REFRESH_EXPIRES_IN: 7d
+  REDIS_URL: redis://redis:6379
+  REDIS_REQUIRED: "false"
+  MONGODB_REQUIRED: "false"
+  FLEXIBLE_USER_MANAGEMENT: ""
+  SEED_TEST_USER: "true"
+  INTERNAL_SERVICE_KEY: help_center_pro_internal_dev_key_change_me
+  AUTH_SERVICE_URL: http://auth-service:4010
+  TENANT_SERVICE_URL: http://tenant-service:4011
+  IDENTITY_SERVICE_URL: http://identity-service:4012
+  TICKETS_SERVICE_URL: http://tickets-service:4013
+  NOTIFICATION_SERVICE_URL: http://notification-service:4014
+  USE_NOTIFICATION_SERVICE: "true"
+
+x-backend-build: &backend-build
+  build:
+    context: ./FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+  env_file:
+    - ./FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/.env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
 
 services:
   postgres:
@@ -34,36 +70,116 @@ services:
       timeout: 3s
       retries: 20
 
-  backend:
-    build:
-      context: ./FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
-    container_name: hcp-backend
+  notification-service:
+    <<: *backend-build
+    container_name: hcp-notification
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: notification-service
+      PORT: "4014"
+    command: ["node", "services/notification-service/server.js"]
+
+  auth-service:
+    <<: *backend-build
+    container_name: hcp-auth
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: auth-service
+      PORT: "4010"
+    command: sh -c "npx prisma migrate deploy && node services/auth-service/server.js"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Loads Resend / JWT / EMAIL_* from the local backend .env.
-    # Keys below override only what must differ inside Docker networking.
-    env_file:
-      - ./FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/.env
+      notification-service:
+        condition: service_started
+
+  tenant-service:
+    <<: *backend-build
+    container_name: hcp-tenant
     environment:
+      <<: *backend-env
+      SERVICE_NAME: tenant-service
+      PORT: "4011"
+    command: ["node", "services/tenant-service/server.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
+  identity-service:
+    <<: *backend-build
+    container_name: hcp-identity
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: identity-service
+      PORT: "4012"
+    command: ["node", "services/identity-service/server.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  tickets-service:
+    <<: *backend-build
+    container_name: hcp-tickets
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: tickets-service
+      PORT: "4013"
+    command: ["node", "services/tickets-service/server.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+
+  gateway:
+    <<: *backend-build
+    container_name: hcp-gateway
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: gateway
       PORT: "4008"
-      NODE_ENV: development
-      FRONTEND_URL: http://localhost:5173
-      DATABASE_URL_PRODUCTION: postgresql://postgres:password@postgres:5432/help_center_pro?schema=public
-      POSTGRES_REQUIRED: "true"
-      JWT_ACCESS_SECRET: help_center_pro_dev_access_secret_change_me_32chars
-      JWT_REFRESH_SECRET: help_center_pro_dev_refresh_secret_change_me_32chars
-      JWT_ACCESS_EXPIRES_IN: 15m
-      JWT_REFRESH_EXPIRES_IN: 7d
-      REDIS_URL: redis://redis:6379
-      REDIS_REQUIRED: "false"
-      MONGODB_REQUIRED: "false"
-      FLEXIBLE_USER_MANAGEMENT: ""
-      SEED_TEST_USER: "true"
     ports:
       - "4008:4008"
+    command: ["node", "services/gateway/server.js"]
+    depends_on:
+      auth-service:
+        condition: service_started
+      tenant-service:
+        condition: service_started
+      identity-service:
+        condition: service_started
+      tickets-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  # Alias kept so existing docs / Start-*.bat that expect "backend" still work.
+  backend:
+    <<: *backend-build
+    container_name: hcp-backend
+    profiles: ["monolith"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: monolith
+      PORT: "4008"
+      USE_NOTIFICATION_SERVICE: "false"
+      NOTIFICATION_SERVICE_URL: ""
+    ports:
+      - "4009:4008"
     command: sh -c "npx prisma migrate deploy && node server.js"
 
   frontend:
@@ -71,7 +187,7 @@ services:
       context: ./help-centre-pro-frontend
     container_name: hcp-frontend
     depends_on:
-      - backend
+      - gateway
     environment:
       VITE_API_URL: http://localhost:4008
       VITE_APP_NAME: HelpCenter Pro

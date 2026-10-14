@@ -9,6 +9,12 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "start:gateway": "node services/gateway/server.js",
+    "start:auth": "node services/auth-service/server.js",
+    "start:tenant": "node services/tenant-service/server.js",
+    "start:identity": "node services/identity-service/server.js",
+    "start:tickets": "node services/tickets-service/server.js",
+    "start:notification": "node services/notification-service/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand"
@@ -23,6 +29,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
     "helmet": "^8.1.0",
+    "http-proxy-middleware": "^3.0.7",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.3",
     "morgan": "^1.10.1",

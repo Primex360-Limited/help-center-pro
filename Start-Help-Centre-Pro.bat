@@ -29,7 +29,8 @@ if not exist "FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\.env" (
   exit /b 1
 )
 
-echo Building and starting Postgres, Redis, API, and Frontend...
+echo Building and starting microservice stack + Frontend...
+echo   gateway, auth, tenant, identity, tickets, notification, postgres, redis
 echo.
 docker compose up --build -d
 if errorlevel 1 (
@@ -41,12 +42,13 @@ if errorlevel 1 (
 
 echo.
 echo Waiting for services...
-timeout /t 12 /nobreak >nul
+timeout /t 20 /nobreak >nul
 
 echo.
 echo Ready:
 echo   Frontend  http://localhost:5173
-echo   Backend   http://localhost:4008
+echo   Gateway   http://localhost:4008
+echo   Health    http://localhost:4008/health
 echo   Swagger   http://localhost:4008/api-docs
 echo.
 echo Platform Admin portal:

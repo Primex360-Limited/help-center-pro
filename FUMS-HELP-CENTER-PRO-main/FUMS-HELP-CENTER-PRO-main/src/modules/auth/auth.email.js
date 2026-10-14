@@ -29,6 +29,19 @@ async function dispatchEmail({ to, subject, html }) {
         return { skipped: true };
     }
 
+    // Microservice path: hand off to notification-service over HTTP.
+    if (env.NOTIFICATION_SERVICE_URL && env.USE_NOTIFICATION_SERVICE) {
+        const { sendEmailViaNotificationService } = await import(
+            "../../platform/serviceClient.js"
+        );
+        return sendEmailViaNotificationService({
+            to,
+            subject,
+            html,
+            from: env.EMAIL_FROM
+        });
+    }
+
     const resend = getResendClient();
     const logoAttachment = getBrandLogoAttachment();
     const payload = {

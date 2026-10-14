@@ -35,9 +35,13 @@ STEP 3 — Deploy on Render (once, ~5 minutes)
 4. Select repo: ebubeprimex/Help_Center_Pro_webapp
 5. Render reads render.yaml and creates:
      - helpcentre-pro-db    (Postgres)
-     - helpcentre-pro-api   (Backend)
+     - helpcentre-pro-api   (Backend monolith — same /api/v1 contract)
      - helpcentre-pro-web   (Tenant / workspace app)
      - helpcentre-pro-admin (Platform Admin Portal — separate URL)
+
+   Local Docker runs the full microservice mesh (gateway + auth + tenant +
+   identity + tickets + notification). Render stays on one API process so the
+   free Blueprint keeps working; paths and responses are identical.
 6. Blueprint already sets API URL + CORS for the known onrender hosts.
    Still set email secrets on helpcentre-pro-api before Apply:
 

@@ -38,6 +38,20 @@ export const env = {
     SEED_TEST_USER: bool(process.env.SEED_TEST_USER, true),
     // Seeds the default platform super admin (ebube.okechukwu@primex360.com).
     SEED_PROVIDER_SUPER_ADMIN: bool(process.env.SEED_PROVIDER_SUPER_ADMIN, true),
+
+    // Microservice mesh (gateway + domain services). Unset = monolith.
+    SERVICE_NAME: process.env.SERVICE_NAME || "monolith",
+    INTERNAL_SERVICE_KEY: process.env.INTERNAL_SERVICE_KEY || "",
+    AUTH_SERVICE_URL: process.env.AUTH_SERVICE_URL || "",
+    TENANT_SERVICE_URL: process.env.TENANT_SERVICE_URL || "",
+    IDENTITY_SERVICE_URL: process.env.IDENTITY_SERVICE_URL || "",
+    TICKETS_SERVICE_URL: process.env.TICKETS_SERVICE_URL || "",
+    NOTIFICATION_SERVICE_URL: process.env.NOTIFICATION_SERVICE_URL || "",
+    // When true (default if NOTIFICATION_SERVICE_URL set), auth emails go via notification-service.
+    USE_NOTIFICATION_SERVICE: bool(
+        process.env.USE_NOTIFICATION_SERVICE,
+        Boolean(process.env.NOTIFICATION_SERVICE_URL)
+    ),
 };
 
 export function assertCriticalEnv() {
