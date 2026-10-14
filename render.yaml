@@ -1,23 +1,95 @@
-# HelpCentre Pro — one-click Render Blueprint
+# HelpCentre Pro — microservice Blueprint
 # Docs: https://render.com/docs/blueprint-spec
 #
-# After connecting GitHub (ebubeprimex), click "New +" → "Blueprint"
-# and select this repo. Render creates Postgres + API + Tenant app + Admin app.
+# Public API stays https://helpcentre-pro-api.onrender.com (gateway).
+# Domain services are separate Render web services the gateway proxies to.
+# After pushing this file: Blueprint → Manual sync → apply new services.
 
 services:
+  # ── Gateway (public /api/v1 — keep this name so frontends keep working)
   - type: web
     name: helpcentre-pro-api
     runtime: node
     plan: free
     rootDir: FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
     buildCommand: npm install && npx prisma generate
-    startCommand: npx prisma migrate deploy && node server.js
-    healthCheckPath: /health
+    startCommand: node services/gateway/server.js
+    healthCheckPath: /health/live
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "4008"
+      - key: SERVICE_NAME
+        value: gateway
+      - key: FRONTEND_URL
+        value: https://helpcentre-pro-web.onrender.com
+      - key: ADMIN_FRONTEND_URL
+        value: https://helpcentre-pro-admin.onrender.com
+      - key: CORS_ORIGINS
+        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: AUTH_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: TENANT_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-tenant
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: IDENTITY_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-identity
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: TICKETS_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-tickets
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NOTIFICATION_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: INTERNAL_SERVICE_KEY
+      # Gateway does not open DB sockets, but shared JWT vars keep probes consistent
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_REFRESH_SECRET
+      - key: DATABASE_URL_PRODUCTION
+        fromDatabase:
+          name: helpcentre-pro-db
+          property: connectionString
+
+  # ── Auth (signup / login / session / role seed / migrations)
+  - type: web
+    name: helpcentre-pro-auth
+    runtime: node
+    plan: free
+    rootDir: FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx prisma migrate deploy && node services/auth-service/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4010"
+      - key: SERVICE_NAME
+        value: auth-service
       - key: POSTGRES_REQUIRED
         value: "true"
       - key: MONGODB_REQUIRED
@@ -30,10 +102,18 @@ services:
         value: "true"
       - key: EMAIL_ENABLED
         value: "true"
+      - key: USE_NOTIFICATION_SERVICE
+        value: "true"
       - key: JWT_ACCESS_EXPIRES_IN
         value: 15m
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
+      - key: FRONTEND_URL
+        value: https://helpcentre-pro-web.onrender.com
+      - key: ADMIN_FRONTEND_URL
+        value: https://helpcentre-pro-admin.onrender.com
+      - key: CORS_ORIGINS
+        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
       - key: DATABASE_URL_PRODUCTION
         fromDatabase:
           name: helpcentre-pro-db
@@ -42,12 +122,13 @@ services:
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
-      - key: FRONTEND_URL
-        value: https://helpcentre-pro-web.onrender.com
-      - key: ADMIN_FRONTEND_URL
-        value: https://helpcentre-pro-admin.onrender.com
-      - key: CORS_ORIGINS
-        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: INTERNAL_SERVICE_KEY
+        generateValue: true
+      - key: NOTIFICATION_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: RESEND_API_KEY
         sync: false
       - key: RESEND_WEBHOOK_SECRET
@@ -57,7 +138,202 @@ services:
       - key: SUPPORT_EMAIL_FROM
         sync: false
 
-  # Tenant / workspace app
+  # ── Tenant / platform admin API
+  - type: web
+    name: helpcentre-pro-tenant
+    runtime: node
+    plan: free
+    rootDir: FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+    buildCommand: npm install && npx prisma generate
+    startCommand: node services/tenant-service/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4011"
+      - key: SERVICE_NAME
+        value: tenant-service
+      - key: POSTGRES_REQUIRED
+        value: "true"
+      - key: MONGODB_REQUIRED
+        value: "false"
+      - key: REDIS_REQUIRED
+        value: "false"
+      - key: FRONTEND_URL
+        value: https://helpcentre-pro-web.onrender.com
+      - key: ADMIN_FRONTEND_URL
+        value: https://helpcentre-pro-admin.onrender.com
+      - key: CORS_ORIGINS
+        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: DATABASE_URL_PRODUCTION
+        fromDatabase:
+          name: helpcentre-pro-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_REFRESH_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: INTERNAL_SERVICE_KEY
+
+  # ── Identity (users, roles, invitations)
+  - type: web
+    name: helpcentre-pro-identity
+    runtime: node
+    plan: free
+    rootDir: FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+    buildCommand: npm install && npx prisma generate
+    startCommand: node services/identity-service/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4012"
+      - key: SERVICE_NAME
+        value: identity-service
+      - key: POSTGRES_REQUIRED
+        value: "true"
+      - key: MONGODB_REQUIRED
+        value: "false"
+      - key: REDIS_REQUIRED
+        value: "false"
+      - key: EMAIL_ENABLED
+        value: "true"
+      - key: USE_NOTIFICATION_SERVICE
+        value: "true"
+      - key: FRONTEND_URL
+        value: https://helpcentre-pro-web.onrender.com
+      - key: ADMIN_FRONTEND_URL
+        value: https://helpcentre-pro-admin.onrender.com
+      - key: CORS_ORIGINS
+        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: DATABASE_URL_PRODUCTION
+        fromDatabase:
+          name: helpcentre-pro-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_REFRESH_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: INTERNAL_SERVICE_KEY
+      - key: NOTIFICATION_SERVICE_URL
+        fromService:
+          name: helpcentre-pro-notify
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+  # ── Tickets + Socket.IO
+  - type: web
+    name: helpcentre-pro-tickets
+    runtime: node
+    plan: free
+    rootDir: FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+    buildCommand: npm install && npx prisma generate
+    startCommand: node services/tickets-service/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4013"
+      - key: SERVICE_NAME
+        value: tickets-service
+      - key: POSTGRES_REQUIRED
+        value: "true"
+      - key: MONGODB_REQUIRED
+        value: "false"
+      - key: REDIS_REQUIRED
+        value: "false"
+      - key: FRONTEND_URL
+        value: https://helpcentre-pro-web.onrender.com
+      - key: ADMIN_FRONTEND_URL
+        value: https://helpcentre-pro-admin.onrender.com
+      - key: CORS_ORIGINS
+        value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      - key: DATABASE_URL_PRODUCTION
+        fromDatabase:
+          name: helpcentre-pro-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_ACCESS_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: JWT_REFRESH_SECRET
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: INTERNAL_SERVICE_KEY
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SUPPORT_EMAIL_FROM
+        sync: false
+
+  # ── Notification (internal email)
+  - type: web
+    name: helpcentre-pro-notify
+    runtime: node
+    plan: free
+    rootDir: FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main
+    buildCommand: npm install && npx prisma generate
+    startCommand: node services/notification-service/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4014"
+      - key: SERVICE_NAME
+        value: notification-service
+      - key: EMAIL_ENABLED
+        value: "true"
+      - key: FRONTEND_URL
+        value: https://helpcentre-pro-web.onrender.com
+      - key: INTERNAL_SERVICE_KEY
+        fromService:
+          name: helpcentre-pro-auth
+          type: web
+          envVarKey: INTERNAL_SERVICE_KEY
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+  # ── Tenant / workspace frontend
   - type: web
     name: helpcentre-pro-web
     runtime: static
@@ -78,7 +354,7 @@ services:
       - key: VITE_ADMIN_URL
         value: https://helpcentre-pro-admin.onrender.com
 
-  # Dedicated Admin Portal (different URL from the tenant app)
+  # ── Admin portal frontend
   - type: web
     name: helpcentre-pro-admin
     runtime: static

@@ -68,6 +68,16 @@ app.use(cors(corsOrigin));
 app.options(/.*/, cors(corsOrigin));
 app.use(cookieParser());
 
+// Render / load-balancer liveness — must stay 200 even if upstreams are cold.
+app.get("/health/live", (_req, res) => {
+    res.json({
+        success: true,
+        service: SERVICE_NAMES.GATEWAY,
+        status: "live",
+        timestamp: new Date().toISOString()
+    });
+});
+
 app.get("/health", async (_req, res) => {
     const probes = await Promise.all([
         probeServiceHealth(urls.auth).then((r) => ["auth-service", r]),
@@ -85,7 +95,8 @@ app.get("/health", async (_req, res) => {
     );
     const allOk = probes.every(([, result]) => result.ok);
 
-    res.status(allOk ? 200 : 503).json({
+    // Always 200 so free-tier cold starts do not flap the gateway deploy.
+    res.json({
         success: allOk,
         service: SERVICE_NAMES.GATEWAY,
         status: allOk ? "ok" : "degraded",
