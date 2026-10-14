@@ -16,24 +16,39 @@ import { probeServiceHealth } from "../../src/platform/serviceClient.js";
 const PORT = Number(process.env.PORT) || 4008;
 const urls = getServiceUrls();
 
-function proxyTo(target, options = {}) {
+/**
+ * Express strips the mount path from req.url before the proxy runs.
+ * Upstream services still expect the full /api/v1/... path, so restore it.
+ */
+function proxyTo(target, { mountPath = "", serviceName, ws = false, timeout = 30000 } = {}) {
     return createProxyMiddleware({
         target,
         changeOrigin: true,
         xfwd: true,
-        ws: Boolean(options.ws),
-        proxyTimeout: options.timeout || 30000,
-        timeout: options.timeout || 30000,
+        ws: Boolean(ws),
+        proxyTimeout: timeout,
+        timeout,
+        pathRewrite(path) {
+            if (!mountPath) {
+                return path;
+            }
+            // path is e.g. "/login" or "/login?x=1" after Express mount strip
+            return `${mountPath}${path.startsWith("/") ? path : `/${path}`}`;
+        },
         on: {
+            proxyReq(proxyReq, req) {
+                // Belt-and-suspenders: keep original URL visible in logs
+                proxyReq.setHeader("x-forwarded-path", req.originalUrl || req.url);
+            },
             error(err, _req, res) {
-                console.error(`[gateway] proxy error → ${target}:`, err.message);
+                console.error(`[gateway] proxy error → ${serviceName || target}:`, err.message);
                 if (res && !res.headersSent && typeof res.writeHead === "function") {
                     res.writeHead(502, { "content-type": "application/json" });
                     res.end(
                         JSON.stringify({
                             success: false,
                             message: "Upstream service unavailable",
-                            service: options.serviceName || target
+                            service: serviceName || target
                         })
                     );
                 }
@@ -68,7 +83,6 @@ app.use(cors(corsOrigin));
 app.options(/.*/, cors(corsOrigin));
 app.use(cookieParser());
 
-// Render / load-balancer liveness — must stay 200 even if upstreams are cold.
 app.get("/health/live", (_req, res) => {
     res.json({
         success: true,
@@ -95,7 +109,6 @@ app.get("/health", async (_req, res) => {
     );
     const allOk = probes.every(([, result]) => result.ok);
 
-    // Always 200 so free-tier cold starts do not flap the gateway deploy.
     res.json({
         success: allOk,
         service: SERVICE_NAMES.GATEWAY,
@@ -107,21 +120,51 @@ app.get("/health", async (_req, res) => {
 
 app.use(rateLimiter);
 
-// Preserve /api/v1 contract for the frontend — route by domain prefix.
-app.use("/api/v1/auth", proxyTo(urls.auth, { serviceName: "auth-service" }));
-app.use("/api/v1/admin", proxyTo(urls.tenant, { serviceName: "tenant-service" }));
-app.use("/api/v1/users", proxyTo(urls.identity, { serviceName: "identity-service" }));
-app.use("/api/v1/roles", proxyTo(urls.identity, { serviceName: "identity-service" }));
-app.use("/api/v1/invitations", proxyTo(urls.identity, { serviceName: "identity-service" }));
+app.use(
+    "/api/v1/auth",
+    proxyTo(urls.auth, { mountPath: "/api/v1/auth", serviceName: "auth-service" })
+);
+app.use(
+    "/api/v1/admin",
+    proxyTo(urls.tenant, { mountPath: "/api/v1/admin", serviceName: "tenant-service" })
+);
+app.use(
+    "/api/v1/users",
+    proxyTo(urls.identity, { mountPath: "/api/v1/users", serviceName: "identity-service" })
+);
+app.use(
+    "/api/v1/roles",
+    proxyTo(urls.identity, { mountPath: "/api/v1/roles", serviceName: "identity-service" })
+);
+app.use(
+    "/api/v1/invitations",
+    proxyTo(urls.identity, {
+        mountPath: "/api/v1/invitations",
+        serviceName: "identity-service"
+    })
+);
 app.use(
     "/api/v1/tickets",
-    proxyTo(urls.tickets, { serviceName: "tickets-service", ws: true, timeout: 60000 })
+    proxyTo(urls.tickets, {
+        mountPath: "/api/v1/tickets",
+        serviceName: "tickets-service",
+        ws: true,
+        timeout: 60000
+    })
 );
 app.use(
     "/socket.io",
-    proxyTo(urls.tickets, { serviceName: "tickets-service", ws: true, timeout: 60000 })
+    proxyTo(urls.tickets, {
+        mountPath: "/socket.io",
+        serviceName: "tickets-service",
+        ws: true,
+        timeout: 60000
+    })
 );
-app.use("/api/v1/health", proxyTo(urls.auth, { serviceName: "auth-service" }));
+app.use(
+    "/api/v1/health",
+    proxyTo(urls.auth, { mountPath: "/api/v1/health", serviceName: "auth-service" })
+);
 
 app.use(
     "/api-docs",
@@ -144,18 +187,11 @@ app.use(errorHandler);
 
 const httpServer = app.listen(PORT, () => {
     console.log(`[gateway] public API on :${PORT}`);
-    console.log(`[gateway] routing → auth:${urls.auth} tenant:${urls.tenant} identity:${urls.identity} tickets:${urls.tickets} notify:${urls.notification}`);
+    console.log(
+        `[gateway] routing → auth:${urls.auth} tenant:${urls.tenant} identity:${urls.identity} tickets:${urls.tickets} notify:${urls.notification}`
+    );
     console.log(`[gateway] health: http://localhost:${PORT}/health`);
     console.log(`[gateway] docs: http://localhost:${PORT}/api-docs`);
-});
-
-// Socket.IO upgrade traffic for tickets realtime
-httpServer.on("upgrade", (req, socket, head) => {
-    // http-proxy-middleware attaches upgrade handler when ws:true on a mounted path;
-    // this is a safety net log for debugging websocket issues.
-    if (req.url?.startsWith("/socket.io") || req.url?.includes("tickets")) {
-        console.log(`[gateway] ws upgrade: ${req.url}`);
-    }
 });
 
 process.once("SIGINT", () => {

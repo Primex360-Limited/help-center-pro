@@ -58,10 +58,18 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    const message =
+    let message =
       payload?.message ||
       payload?.error ||
       `Request failed (${response.status})`;
+
+    // Upstream Express HTML errors (e.g. "Cannot POST /login") should not
+    // dump raw markup into the login form.
+    if (typeof message === "string" && /<\s*!?\s*doctype|<\s*html/i.test(message)) {
+      const plain = message.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      message = plain || `Request failed (${response.status})`;
+    }
+
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
