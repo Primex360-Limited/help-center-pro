@@ -27,23 +27,54 @@ export const tenantIdParamSchema = z.object({
     id: uuidSchema
 });
 
+const COMPANY_SIZES = [
+    "1-10 employees",
+    "11-50 employees",
+    "51-200 employees",
+    "201+ employees"
+];
+
+const LANGUAGE_CODES = [
+    "en",
+    "es",
+    "fr",
+    "de",
+    "zh",
+    "ja",
+    "pt",
+    "ru",
+    "ar",
+    "hi"
+];
+
 export const createTenantInviteSchema = z
     .object({
         workspaceName: z.string().min(2).max(120),
         primaryDomain: z.string().min(3).max(180).optional(),
+        website: z.string().max(180).optional(),
         slug: z.string().min(2).max(48).optional(),
         plan: z.enum(planKeys).default("growth"),
         country: z.string().min(2).max(80).optional(),
         firstName: z.string().min(1).max(80),
         lastName: z.string().min(1).max(80),
         email: z.string().email(),
-        password: z.string().min(8).max(128).optional()
+        password: z.string().min(8).max(128).optional(),
+        timezone: z.string().min(2).max(80),
+        industry: z.string().min(2).max(80),
+        language: z.enum(LANGUAGE_CODES),
+        companySize: z.enum(COMPANY_SIZES)
     })
     .transform((data) => {
         const domain =
             data.primaryDomain?.trim().toLowerCase() ||
             `${slugify(data.workspaceName) || "workspace"}.helpcentrepro.com`;
         const slug = data.slug?.trim().toLowerCase() || slugify(domain.split(".")[0] || data.workspaceName);
+        const websiteRaw = String(data.website || "").trim();
+        const website = websiteRaw
+            ? /^https?:\/\//i.test(websiteRaw)
+                ? websiteRaw
+                : `https://${websiteRaw}`
+            : null;
 
         return {
             ...data,
@@ -52,8 +83,13 @@ export const createTenantInviteSchema = z
             lastName: data.lastName.trim(),
             workspaceName: data.workspaceName.trim(),
             primaryDomain: domain,
+            website,
             slug: slug || `ws-${Date.now().toString(36)}`,
-            country: data.country?.trim() || null
+            country: data.country?.trim() || null,
+            timezone: data.timezone.trim(),
+            industry: data.industry.trim(),
+            language: data.language,
+            companySize: data.companySize
         };
     });
 

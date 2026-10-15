@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PaperPlaneIcon from "../../components/auth/PaperPlaneIcon.jsx";
 import { verifyEmail } from "../../api/auth.api.js";
 import "../../styles/auth.css";
@@ -7,6 +8,7 @@ import "../../styles/auth.css";
 export default function VerifyEmail() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const token = params.get("token") || "";
   const [status, setStatus] = useState(token ? "verifying" : "missing");
   const [email, setEmail] = useState("");
@@ -26,6 +28,7 @@ export default function VerifyEmail() {
         const needsPassword =
           Boolean(result?.data?.requiresPasswordSetup) ||
           Boolean(result?.data?.mustChangePassword);
+        const profileCompleted = Boolean(result?.data?.profileCompleted);
 
         setEmail(verifiedEmail);
         setStatus("success");
@@ -45,9 +48,21 @@ export default function VerifyEmail() {
             return;
           }
 
-          navigate("/login", {
+          if (profileCompleted) {
+            navigate("/login", {
+              replace: true,
+              state: { email: verifiedEmail, verified: true },
+            });
+            return;
+          }
+
+          navigate("/check-email", {
             replace: true,
-            state: { email: verifiedEmail, verified: true },
+            state: {
+              email: verifiedEmail,
+              purpose: "verify",
+              verified: true,
+            },
           });
         }, 700);
       } catch {
@@ -64,39 +79,30 @@ export default function VerifyEmail() {
     <div className="verify-page">
       <div className="verify-card">
         <PaperPlaneIcon />
-        <h1 className="verify-heading">Verify Email Address</h1>
+        <h1 className="verify-heading">{t("auth.checkEmail.title")}</h1>
 
         {status === "verifying" ? (
           <>
-            <p className="verify-copy">Confirming your verification link...</p>
-            <p className="verify-email">Please wait</p>
+            <p className="verify-copy">{t("auth.verify.confirming")}</p>
+            <p className="verify-email">{t("auth.verify.pleaseWait")}</p>
           </>
         ) : null}
 
         {status === "success" ? (
           <>
-            <p className="verify-copy">
-              Your email has been verified successfully
-            </p>
-            <p className="verify-email">{email || "Verified"}</p>
+            <p className="verify-copy">{t("auth.verify.success")}</p>
+            <p className="verify-email">{email || t("auth.verify.verified")}</p>
           </>
         ) : null}
 
-        {status === "missing" ? (
+        {status === "missing" || status === "error" ? (
           <>
             <p className="verify-copy">
-              This verification link is incomplete or invalid
+              {status === "missing"
+                ? t("auth.verify.incomplete")
+                : t("auth.verify.expired")}
             </p>
-            <p className="verify-email">Request a new link to continue</p>
-          </>
-        ) : null}
-
-        {status === "error" ? (
-          <>
-            <p className="verify-copy">
-              This verification link is invalid or has expired
-            </p>
-            <p className="verify-email">Request a new link to continue</p>
+            <p className="verify-email">{t("auth.verify.requestNew")}</p>
           </>
         ) : null}
 
@@ -104,9 +110,16 @@ export default function VerifyEmail() {
           className="verify-btn"
           type="button"
           disabled={status === "verifying" || status === "success"}
-          onClick={() => navigate("/login")}
+          onClick={() =>
+            navigate(email ? "/check-email" : "/signup", {
+              replace: true,
+              state: email ? { email, purpose: "verify", verified: status === "success" } : undefined,
+            })
+          }
         >
-          {status === "success" ? "Continuing..." : "Back to Sign In"}
+          {status === "success"
+            ? t("auth.verify.continuing")
+            : t("auth.verify.back")}
         </button>
       </div>
     </div>

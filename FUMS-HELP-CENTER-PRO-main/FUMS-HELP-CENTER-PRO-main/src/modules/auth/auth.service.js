@@ -224,12 +224,44 @@ async function sendWorkspaceWelcome({ to, firstName }) {
 }
 
 /**
- * Finish signup for an incomplete account (invited / unverified / never signed in).
- * Self-serve users are marked verified immediately — no email verification step.
+ * Issue a fresh email-verification token and send the verification mail.
+ */
+async function issueAndSendVerification(user) {
+    const rawVerificationToken = generateRandomToken();
+
+    await prisma.verificationToken.create({
+        data: {
+            userId: user.id,
+            tokenHash: hashToken(rawVerificationToken),
+            expiresAt: new Date(Date.now() + ONE_HOUR_IN_MS)
+        }
+    });
+
+    const emailSent = await safeSendEmail(
+        () =>
+            sendVerificationEmail({
+                to: user.email,
+                firstName: user.firstName,
+                token: rawVerificationToken
+            }),
+        "verification email"
+    );
+
+    return {
+        emailSent,
+        ...(env.NODE_ENV !== "production"
+            ? { verificationToken: rawVerificationToken }
+            : {})
+    };
+}
+
+/**
+ * Finish signup for an incomplete account (invited / unverified).
+ * Unverified self-serve accounts keep emailVerified=false and get a new link.
  */
 async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName, password }) {
     const passwordHash = await hashPassword(password);
-    const verifiedAt = new Date();
+    const needsEmailVerification = !existingUser.emailVerified;
 
     if (existingUser.tenantId) {
         await prisma.tenant.updateMany({
@@ -248,15 +280,16 @@ async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName
             lastName,
             passwordHash,
             status: USER_STATUS.ACTIVE,
-            emailVerified: true,
-            emailVerifiedAt: existingUser.emailVerifiedAt ?? verifiedAt,
+            emailVerified: needsEmailVerification ? false : true,
+            emailVerifiedAt: needsEmailVerification
+                ? existingUser.emailVerifiedAt
+                : existingUser.emailVerifiedAt ?? new Date(),
             mustChangePassword: false,
             userType: existingUser.tenantId ? USER_TYPE.TENANT : existingUser.userType
         }
     });
 
-    // Clear pending invitations so the user is not stuck on invite activation.
-    if (existingUser.tenantId) {
+    if (existingUser.tenantId && !needsEmailVerification) {
         await prisma.agentInvitation.updateMany({
             where: {
                 userId: user.id,
@@ -273,10 +306,19 @@ async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName
           })
         : null;
 
-    const emailSent = await sendWorkspaceWelcome({
-        to: user.email,
-        firstName: user.firstName
-    });
+    let emailSent = false;
+    let verificationToken = null;
+
+    if (needsEmailVerification) {
+        const issued = await issueAndSendVerification(user);
+        emailSent = issued.emailSent;
+        verificationToken = issued.verificationToken || null;
+    } else {
+        emailSent = await sendWorkspaceWelcome({
+            to: user.email,
+            firstName: user.firstName
+        });
+    }
 
     await recordAuditLog({
         tenantId: user.tenantId,
@@ -286,13 +328,16 @@ async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName
         entityId: user.id,
         metadata: {
             email: user.email,
-            registrationType: "workspace_self_serve_claim"
+            registrationType: "workspace_self_serve_claim",
+            needsEmailVerification
         }
     });
 
     return {
         emailSent,
         claimed: true,
+        email: user.email,
+        ...(verificationToken ? { verificationToken } : {}),
         workspace: tenant,
         user: {
             id: user.id,
@@ -304,28 +349,32 @@ async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName
 }
 
 /**
- * Public self-serve signup: creates an active workspace + tenant admin.
- * No invitation / verification link — user can sign in immediately.
+ * Public self-serve signup:
+ * 1) Create workspace + tenant admin (emailVerified=false)
+ * 2) Send verification email
+ * 3) User completes company details after verifying
  */
-export async function registerWorkspaceAccount({
-    fullName,
-    email,
-    password
-}) {
+export async function registerWorkspaceAccount({ fullName, email, password }) {
     const normalizedEmail = normalizeEmail(email);
     const { firstName, lastName } = splitFullName(fullName);
+
+    if (!password || String(password).length < 8) {
+        throw new AppError("Password must be at least 8 characters", 400);
+    }
 
     const existingUser = await prisma.user.findFirst({
         where: { email: normalizedEmail },
         select: {
             id: true,
+            email: true,
             tenantId: true,
             userType: true,
             status: true,
             emailVerified: true,
             emailVerifiedAt: true,
             lastLoginAt: true,
-            mustChangePassword: true
+            mustChangePassword: true,
+            firstName: true
         }
     });
 
@@ -361,7 +410,8 @@ export async function registerWorkspaceAccount({
     const localPart = normalizedEmail.split("@")[0] || firstName;
     const companyHint = domainPart.split(".")[0];
     const workspaceName =
-        companyHint && !["gmail", "yahoo", "outlook", "hotmail", "icloud", "protonmail"].includes(
+        companyHint &&
+        !["gmail", "yahoo", "outlook", "hotmail", "icloud", "protonmail"].includes(
             companyHint.toLowerCase()
         )
             ? companyHint.charAt(0).toUpperCase() + companyHint.slice(1)
@@ -370,7 +420,6 @@ export async function registerWorkspaceAccount({
     const slug = await allocateUniqueSlug(companyHint || localPart || firstName);
     const plan = resolvePlan("trial");
     const passwordHash = await hashPassword(password);
-    const verifiedAt = new Date();
 
     const tenant = await prisma.tenant.create({
         data: {
@@ -406,17 +455,14 @@ export async function registerWorkspaceAccount({
             lastName,
             roleId: adminRole.id,
             status: USER_STATUS.ACTIVE,
-            emailVerified: true,
-            emailVerifiedAt: verifiedAt,
+            emailVerified: false,
             mustChangePassword: false,
+            profileCompleted: false,
             deniedPermissions: []
         }
     });
 
-    const emailSent = await sendWorkspaceWelcome({
-        to: user.email,
-        firstName: user.firstName
-    });
+    const issued = await issueAndSendVerification(user);
 
     await recordAuditLog({
         tenantId: tenant.id,
@@ -441,8 +487,12 @@ export async function registerWorkspaceAccount({
     });
 
     return {
-        emailSent,
+        emailSent: issued.emailSent,
         claimed: false,
+        email: user.email,
+        ...(issued.verificationToken
+            ? { verificationToken: issued.verificationToken }
+            : {}),
         workspace: { id: tenant.id, name: tenant.name, slug: tenant.slug },
         user: {
             id: user.id,
@@ -450,6 +500,93 @@ export async function registerWorkspaceAccount({
             firstName: user.firstName,
             lastName: user.lastName
         }
+    };
+}
+
+/**
+ * Complete company details after email verification (signup step 3).
+ */
+export async function completeUserProfile({
+    email,
+    companyName,
+    website,
+    timezone,
+    industry,
+    language,
+    companySize
+}) {
+    const normalizedEmail = normalizeEmail(email);
+
+    const user = await prisma.user.findFirst({
+        where: { email: normalizedEmail },
+        select: {
+            id: true,
+            tenantId: true,
+            emailVerified: true,
+            profileCompleted: true
+        }
+    });
+
+    if (!user) {
+        throw new AppError("User not found", 404);
+    }
+
+    if (!user.emailVerified) {
+        throw new AppError("Verify your email before completing company details", 403);
+    }
+
+    const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            timezone,
+            industry,
+            language,
+            companySize,
+            profileCompleted: true
+        }
+    });
+
+    if (user.tenantId) {
+        const existing = await prisma.tenant.findUnique({
+            where: { id: user.tenantId },
+            select: { settings: true }
+        });
+        const settings =
+            existing?.settings && typeof existing.settings === "object"
+                ? { ...existing.settings }
+                : {};
+
+        await prisma.tenant.update({
+            where: { id: user.tenantId },
+            data: {
+                name: companyName.trim(),
+                settings: {
+                    ...settings,
+                    website: website || null,
+                    industry,
+                    timezone,
+                    language,
+                    companySize
+                }
+            }
+        });
+    }
+
+    await recordAuditLog({
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: AUDIT_ACTION.USER_UPDATED,
+        entity: "User",
+        entityId: user.id,
+        metadata: {
+            profileCompleted: true,
+            companyName,
+            language
+        }
+    });
+
+    return {
+        user: sanitizeUser(updatedUser)
     };
 }
 
@@ -767,6 +904,210 @@ export async function loginUser({
     };
 }
 
+async function issueSessionForUser(user, { deviceInfo, ipAddress } = {}) {
+    const payload = buildAuthPayload(user);
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken(payload);
+    const refreshTokenHash = hashToken(refreshToken);
+
+    await prisma.session.create({
+        data: {
+            userId: user.id,
+            tenantId: user.tenantId ?? null,
+            deviceInfo: deviceInfo ?? null,
+            ipAddress: ipAddress ?? null,
+            refreshTokenHash,
+            expiresAt: new Date(Date.now() + SEVEN_DAYS_IN_MS)
+        }
+    });
+
+    const loginTime = new Date();
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            lastLoginAt: loginTime,
+            lastSeenAt: loginTime,
+            isOnline: true
+        }
+    });
+
+    return {
+        user: await attachAccessProfile(user.id),
+        accessToken,
+        refreshToken
+    };
+}
+
+/**
+ * Sign in / register with a verified Firebase (Google) ID token.
+ * New accounts skip email verification and continue to company details.
+ */
+export async function authenticateWithFirebaseGoogle({
+    idToken,
+    deviceInfo,
+    ipAddress
+}) {
+    const { verifyFirebaseIdToken } = await import("../../config/firebaseAdmin.js");
+    let identity;
+
+    try {
+        identity = await verifyFirebaseIdToken(idToken);
+    } catch (error) {
+        if (error?.statusCode === 503) {
+            throw new AppError(error.message, 503);
+        }
+        throw new AppError("Invalid Google sign-in token", 401);
+    }
+
+    if (!identity.emailVerified) {
+        throw new AppError("Verify your Google email before continuing", 403);
+    }
+
+    const existing = await prisma.user.findFirst({
+        where: { email: identity.email },
+        include: {
+            role: { include: { permissions: { include: { permission: true } } } }
+        }
+    });
+
+    if (existing) {
+        if (existing.userType === USER_TYPE.PROVIDER || existing.tenantId === null) {
+            throw new AppError(
+                "This email is reserved for the Admin Portal. Use a different Google account.",
+                409
+            );
+        }
+
+        if (existing.status !== USER_STATUS.ACTIVE && existing.status !== USER_STATUS.INVITED) {
+            throw new AppError("User account is not active", 403);
+        }
+
+        const meta =
+            existing.metadata && typeof existing.metadata === "object"
+                ? { ...existing.metadata }
+                : {};
+
+        await prisma.user.update({
+            where: { id: existing.id },
+            data: {
+                emailVerified: true,
+                emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
+                status: USER_STATUS.ACTIVE,
+                mustChangePassword: false,
+                profileImage: existing.profileImage || identity.picture || null,
+                metadata: {
+                    ...meta,
+                    authProvider: "google",
+                    firebaseUid: identity.uid
+                }
+            }
+        });
+
+        const hydrated = await findUserWithRole(existing.id);
+        const session = await issueSessionForUser(hydrated, { deviceInfo, ipAddress });
+
+        await recordAuditLog({
+            tenantId: existing.tenantId,
+            userId: existing.id,
+            action: AUDIT_ACTION.LOGIN_SUCCESS,
+            entity: "Session",
+            metadata: { provider: "google", ipAddress, deviceInfo }
+        });
+
+        return {
+            ...session,
+            isNewUser: false,
+            needsProfileSetup: !Boolean(existing.profileCompleted)
+        };
+    }
+
+    const { firstName, lastName } = splitFullName(identity.name || identity.email.split("@")[0]);
+    const domainPart = identity.email.split("@")[1] || "workspace";
+    const localPart = identity.email.split("@")[0] || firstName;
+    const companyHint = domainPart.split(".")[0];
+    const workspaceName =
+        companyHint &&
+        !["gmail", "yahoo", "outlook", "hotmail", "icloud", "protonmail"].includes(
+            companyHint.toLowerCase()
+        )
+            ? companyHint.charAt(0).toUpperCase() + companyHint.slice(1)
+            : `${firstName}'s Workspace`;
+
+    const slug = await allocateUniqueSlug(companyHint || localPart || firstName);
+    const plan = resolvePlan("trial");
+    const passwordHash = await hashPassword(generateRandomToken());
+
+    const tenant = await prisma.tenant.create({
+        data: {
+            name: workspaceName,
+            slug,
+            primaryDomain: `${slug}.helpcentrepro.com`,
+            status: TENANT_STATUS.ACTIVE,
+            plan: plan.key,
+            seatLimit: plan.seatLimit,
+            settings: {
+                trial: true,
+                mrr: plan.mrr,
+                selfServe: true,
+                ownerEmail: identity.email,
+                authProvider: "google"
+            }
+        }
+    });
+
+    const roles = await provisionTenantRoles(tenant.id);
+    const adminRole = roles[TENANT_ROLE.ADMIN];
+    if (!adminRole) {
+        throw new AppError("Failed to provision workspace admin role", 500);
+    }
+
+    const user = await prisma.user.create({
+        data: {
+            tenantId: tenant.id,
+            userType: USER_TYPE.TENANT,
+            email: identity.email,
+            passwordHash,
+            firstName,
+            lastName,
+            roleId: adminRole.id,
+            status: USER_STATUS.ACTIVE,
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+            mustChangePassword: false,
+            profileCompleted: false,
+            profileImage: identity.picture || null,
+            deniedPermissions: [],
+            metadata: {
+                authProvider: "google",
+                firebaseUid: identity.uid
+            }
+        }
+    });
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: user.id,
+        action: AUDIT_ACTION.USER_REGISTERED,
+        entity: "User",
+        entityId: user.id,
+        metadata: {
+            email: user.email,
+            registrationType: "google_firebase",
+            workspaceName
+        }
+    });
+
+    const hydrated = await findUserWithRole(user.id);
+    const session = await issueSessionForUser(hydrated, { deviceInfo, ipAddress });
+
+    return {
+        ...session,
+        isNewUser: true,
+        needsProfileSetup: true,
+        workspace: { id: tenant.id, name: tenant.name, slug: tenant.slug }
+    };
+}
+
 /** Load the user behind a refresh-token session, validating its lifecycle. */
 async function loadRefreshSessionUser({ refreshToken }) {
     if (!refreshToken) {
@@ -933,18 +1274,21 @@ export async function getCurrentUser(userId) {
     return attachAccessProfile(userId);
 }
 
-/** Poll whether an email has been verified yet (login page helper). */
+/** Poll whether an email has been verified yet (signup check-email helper). */
 export async function getEmailVerificationStatus({ email, tenantId = null }) {
     const user = await findUserByEmail(email, tenantId);
 
     if (!user) {
-        return { verified: false };
+        return { verified: false, profileCompleted: false };
     }
 
     return {
         verified: Boolean(user.emailVerified),
         mustChangePassword: Boolean(user.mustChangePassword),
-        status: user.status
+        profileCompleted: Boolean(user.profileCompleted),
+        status: user.status,
+        email: user.email,
+        language: user.language || null
     };
 }
 
@@ -1045,7 +1389,9 @@ export async function verifyEmailToken({ token }) {
         mustChangePassword: requiresPasswordSetup,
         requiresPasswordSetup,
         passwordSetupToken,
-        email: user.email
+        email: user.email,
+        profileCompleted: Boolean(user.profileCompleted),
+        language: user.language || null
     };
 }
 /** Issue a password-reset token. Never reveals whether the email exists. */

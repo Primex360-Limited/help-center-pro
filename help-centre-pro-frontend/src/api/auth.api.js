@@ -87,3 +87,23 @@ export async function updatePassword(payload) {
     body: payload,
   });
 }
+
+export async function completeProfile(payload) {
+  return apiRequest("/auth/complete-profile", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function googleAuth(idToken) {
+  const result = await apiRequest("/auth/google", {
+    method: "POST",
+    body: { idToken },
+  });
+
+  if (result?.data?.accessToken) {
+    setStoredToken(result.data.accessToken);
+  }
+
+  return result;
+}

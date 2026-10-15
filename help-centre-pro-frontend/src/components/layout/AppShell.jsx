@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   LayoutDashboard,
   Ticket,
@@ -21,8 +22,8 @@ import SidebarBrand from "./SidebarBrand.jsx";
 import "../../styles/app.css";
 
 const PRIMARY_NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true, ready: true },
-  { to: "/tickets", label: "Tickets", icon: Ticket, ready: true },
+  { to: "/dashboard", label: "nav.dashboard", icon: LayoutDashboard, end: true, ready: true },
+  { to: "/tickets", label: "nav.tickets", icon: Ticket, ready: true },
   { to: "/live-chat", label: "Live Chat", icon: MessageSquare, ready: false },
   { to: "/calls", label: "Calls", icon: Phone, ready: false },
   { to: "/customers", label: "Customers", icon: Users, ready: false },
@@ -30,10 +31,10 @@ const PRIMARY_NAV = [
 ];
 
 const SECONDARY_NAV = [
-  { to: "/agents", label: "Agents", icon: UserRound, ready: true },
+  { to: "/agents", label: "nav.agents", icon: UserRound, ready: true },
   { to: "/templates", label: "Templates", icon: FileText, ready: false },
   { to: "/automations", label: "Automations", icon: Zap, ready: false },
-  { to: "/settings", label: "Settings", icon: Settings, ready: false },
+  { to: "/settings", label: "nav.settings", icon: Settings, ready: false },
 ];
 
 function tenantRoleLabel(roleName) {
@@ -44,6 +45,7 @@ function tenantRoleLabel(roleName) {
 
 function NavItem({ item }) {
   const Icon = item.icon;
+  const { t } = useTranslation();
   return (
     <NavLink
       to={item.to}
@@ -53,23 +55,25 @@ function NavItem({ item }) {
       }
     >
       <Icon size={18} strokeWidth={1.9} />
-      <span>{item.label}</span>
+      <span>{t(item.label)}</span>
     </NavLink>
   );
 }
 
 function ComingSoonNav({ item }) {
   const Icon = item.icon;
+  const { t } = useTranslation();
   return (
     <button type="button" className="app-nav__item app-nav__item--soon" disabled>
       <Icon size={18} strokeWidth={1.9} />
-      <span>{item.label}</span>
+      <span>{t(item.label)}</span>
     </button>
   );
 }
 
 export default function AppShell() {
   const { user, logout, canManageUsers } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [howtoDismissed, setHowtoDismissed] = useState(false);
   const [search, setSearch] = useState("");
@@ -175,8 +179,8 @@ export default function AppShell() {
               type="button"
               className="app-sidebar__logout"
               onClick={handleLogout}
-              aria-label="Logout"
-              title="Logout"
+              aria-label={t("nav.logout")}
+              title={t("nav.logout")}
             >
               <LogOut size={16} />
             </button>
@@ -206,7 +210,7 @@ export default function AppShell() {
               onClick={() => navigate("/tickets/new")}
             >
               <Plus size={16} strokeWidth={2.5} />
-              New Ticket
+              {t("nav.newTicket")}
             </button>
           </div>
         </header>

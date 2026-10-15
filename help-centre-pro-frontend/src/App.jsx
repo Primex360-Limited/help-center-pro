@@ -9,10 +9,11 @@ import CheckEmail from "./pages/auth/CheckEmail.jsx";
 import CreatePassword from "./pages/auth/CreatePassword.jsx";
 import ForgotPassword from "./pages/auth/ForgotPassword.jsx";
 import Login from "./pages/auth/Login.jsx";
+import NewSignup from "./pages/auth/NewSignup.jsx";
 import PortalAccessDenied from "./pages/auth/PortalAccessDenied.jsx";
+import ProfileSetup from "./pages/auth/ProfileSetup.jsx";
 import ResetPassword from "./pages/auth/ResetPassword.jsx";
 import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
-import WorkspaceSignup from "./pages/auth/WorkspaceSignup.jsx";
 import Agents from "./pages/agents/Agents.jsx";
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
 import PlatformOverview from "./pages/admin/PlatformOverview.jsx";
@@ -26,7 +27,8 @@ export default function App() {
   if (isTenantPortal) {
     return (
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/signup" replace />} />
+        <Route path="/signup" element={<NewSignup />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/check-email" element={<CheckEmail />} />
@@ -34,6 +36,7 @@ export default function App() {
         <Route path="/create-password" element={<CreatePassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/accept-invitation" element={<AcceptInvitation />} />
+        <Route path="/profile-setup" element={<ProfileSetup />} />
         <Route
           path="/change-password"
           element={
@@ -63,9 +66,8 @@ export default function App() {
           />
         </Route>
 
-        <Route path="/signup" element={<WorkspaceSignup />} />
         <Route path="/admin/*" element={<PortalAccessDenied />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/signup" replace />} />
       </Routes>
     );
   }
@@ -124,9 +126,9 @@ export default function App() {
   // Combined (local development): both portals on one origin.
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Navigate to="/signup" replace />} />
+      <Route path="/signup" element={<NewSignup />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<WorkspaceSignup />} />
       <Route path="/admin/signup" element={<Navigate to="/admin/login" replace />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/check-email" element={<CheckEmail />} />
@@ -134,6 +136,7 @@ export default function App() {
       <Route path="/create-password" element={<CreatePassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/accept-invitation" element={<AcceptInvitation />} />
+      <Route path="/profile-setup" element={<ProfileSetup />} />
       <Route path="/admin/login" element={<AdminLogin />} />
 
       <Route
@@ -177,7 +180,7 @@ export default function App() {
         />
       </Route>
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/signup" replace />} />
     </Routes>
   );
 }

@@ -342,7 +342,12 @@ export async function inviteTenantWorkspace(payload, invitedBy) {
                 country: payload.country,
                 trial: plan.key === "trial",
                 mrr: plan.mrr,
-                invitedAdminEmail: payload.email
+                invitedAdminEmail: payload.email,
+                website: payload.website || null,
+                industry: payload.industry || null,
+                timezone: payload.timezone || null,
+                language: payload.language || null,
+                companySize: payload.companySize || null
             }
         }
     });
@@ -366,7 +371,12 @@ export async function inviteTenantWorkspace(payload, invitedBy) {
             emailVerified: false,
             mustChangePassword: true,
             invitedById: invitedBy,
-            deniedPermissions: []
+            deniedPermissions: [],
+            timezone: payload.timezone,
+            industry: payload.industry,
+            language: payload.language,
+            companySize: payload.companySize,
+            profileCompleted: Boolean(payload.timezone && payload.industry && payload.language && payload.companySize)
         }
     });
 

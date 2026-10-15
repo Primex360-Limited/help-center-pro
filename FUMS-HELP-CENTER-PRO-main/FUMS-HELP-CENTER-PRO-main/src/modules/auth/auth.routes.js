@@ -5,6 +5,7 @@ import { authRateLimiter } from "../../middleware/rateLimiter.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import {
     forgotPassword,
+    googleAuth,
     login,
     logout,
     me,
@@ -17,10 +18,13 @@ import {
     updateUserPassword,
     verificationStatus,
     verifyEmail,
+    completeProfile,
 } from "./auth.controller.js";
 import {
+    completeProfileSchema,
     emailOnlySchema,
     forgotPasswordSchema,
+    googleAuthSchema,
     loginSchema,
     registerSchema,
     resetPasswordSchema,
@@ -86,6 +90,20 @@ authRoutes.post(
     authRateLimiter,
     validate(workspaceSignupSchema),
     asyncHandler(registerWorkspace)
+);
+
+/**
+ * @openapi
+ * /auth/google:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Sign in or register with a Firebase Google ID token
+ */
+authRoutes.post(
+    "/google",
+    authRateLimiter,
+    validate(googleAuthSchema),
+    asyncHandler(googleAuth)
 );
 
 /**
@@ -298,6 +316,41 @@ authRoutes.post(
     authRateLimiter,
     validate(resetPasswordSchema),
     asyncHandler(resetUserPassword)
+);
+
+/**
+ * @openapi
+ * /auth/complete-profile:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Complete user profile after email verification
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, timezone, industry, language, companySize]
+ *             properties:
+ *               email:
+ *                 type: string
+ *               timezone:
+ *                 type: string
+ *               industry:
+ *                 type: string
+ *               language:
+ *                 type: string
+ *               companySize:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile completed successfully
+ */
+authRoutes.post(
+    "/complete-profile",
+    authRateLimiter,
+    validate(completeProfileSchema),
+    asyncHandler(completeProfile)
 );
 
 export default authRoutes;

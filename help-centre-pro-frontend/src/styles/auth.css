@@ -358,11 +358,13 @@
 }
 
 .verify-plane {
-  width: 168px;
+  width: min(280px, 72vw);
   height: auto;
-  margin: 0 auto 20px;
+  margin: 4px auto 22px;
   display: block;
   object-fit: contain;
+  background: transparent;
+  filter: drop-shadow(0 18px 36px rgba(21, 112, 239, 0.22));
   user-select: none;
   pointer-events: none;
 }
@@ -390,7 +392,7 @@
   font-size: 14px;
   line-height: 1.4;
   font-weight: 700;
-  color: #111111;
+  color: #1849a9;
 }
 
 .verify-btn {
@@ -429,7 +431,7 @@
   }
 
   .verify-plane {
-    width: 140px;
+    width: min(220px, 78vw);
   }
 
   .verify-copy {
@@ -549,4 +551,441 @@
   .auth-title {
     font-size: 24px;
   }
+}
+
+/* —— Brand logo (light on blue hero) —— */
+.auth-brand--light .auth-brand__logo {
+  filter: brightness(0) invert(1) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.18));
+}
+
+.auth-brand--tagline {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-brand__tagline {
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #667085;
+}
+
+/* —— Signup split (Image 1) —— */
+.signup-split {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(360px, 45%) minmax(0, 1fr);
+  background: #eef2f7;
+}
+
+.signup-split__hero {
+  position: relative;
+  overflow: hidden;
+  padding: 0;
+  background: linear-gradient(180deg, #0b2f8f 0%, #1557d0 45%, #1e70e8 100%);
+  min-height: 100vh;
+}
+
+.signup-split__hero-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  object-fit: cover;
+  object-position: center top;
+  user-select: none;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.signup-split__panel {
+  display: grid;
+  place-items: center;
+  padding: 48px 32px;
+  background: #eef2f7;
+}
+
+.signup-split__card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid rgba(16, 24, 40, 0.06);
+  box-shadow: 0 18px 50px rgba(16, 24, 40, 0.1);
+  padding: 40px 36px 32px;
+}
+
+.signup-split__card .auth-brand {
+  margin-bottom: 20px;
+}
+
+.signup-split__title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #101828;
+  letter-spacing: -0.03em;
+  text-align: center;
+}
+
+.signup-split__subtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #667085;
+  text-align: center;
+}
+
+.signup-split__form {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.signup-input {
+  height: 44px;
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+}
+
+.signup-input-wrap {
+  position: relative;
+}
+
+.signup-input-wrap .signup-input {
+  padding-right: 44px;
+}
+
+.signup-eye {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #98a2b3;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.signup-or {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  color: #98a2b3;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.signup-or::before,
+.signup-or::after {
+  content: "";
+  height: 1px;
+  background: #eaecf0;
+}
+
+.signup-google {
+  width: 100%;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 8px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  color: #344054;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.signup-google:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #98a2b3;
+}
+
+.signup-google:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.signup-cta {
+  height: 48px;
+  border-radius: 8px;
+  margin-top: 4px;
+  background: #1e70e8;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.signup-cta:hover:not(:disabled) {
+  background: #175cd3;
+}
+
+.signup-split__footer {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: #667085;
+}
+
+.signup-split__footer a {
+  color: #1570ef;
+  font-weight: 650;
+}
+
+.signup-split__footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 960px) {
+  .signup-split {
+    grid-template-columns: 1fr;
+  }
+
+  .signup-split__hero {
+    min-height: 360px;
+    max-height: 48vh;
+  }
+
+  .signup-split__hero-art {
+    min-height: 360px;
+    object-position: center top;
+  }
+
+  .signup-split__panel {
+    padding: 28px 16px 40px;
+  }
+}
+
+/* —— Verify email polish —— */
+.verify-email {
+  color: #1849a9;
+}
+
+.verify-ready {
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #067647;
+}
+
+/* —— Company details (Image 3) —— */
+.company-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 16px;
+  background: #0b1220;
+}
+
+.company-card {
+  width: 100%;
+  max-width: 480px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  padding: 36px 32px 28px;
+}
+
+.company-title {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #101828;
+}
+
+.company-loading {
+  margin: 24px 0 8px;
+  text-align: center;
+  color: #667085;
+}
+
+.company-form {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+.company-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px 4px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.company-row__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.company-row__icon--accent {
+  background: #eff8ff;
+  color: #1570ef;
+}
+
+.company-row__field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.company-row__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #98a2b3;
+}
+
+.company-row__field input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #101828;
+}
+
+.company-row__field input::placeholder {
+  color: #98a2b3;
+  font-weight: 500;
+}
+
+.company-cta {
+  margin-top: 28px;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 10px;
+  background: #1570ef;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.company-cta:hover:not(:disabled) {
+  background: #175cd3;
+}
+
+.company-cta:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* —— Premium select —— */
+.premium-select {
+  position: relative;
+  width: 100%;
+}
+
+.premium-select__trigger {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #101828;
+  cursor: pointer;
+  text-align: left;
+}
+
+.premium-select__trigger.is-placeholder {
+  color: #98a2b3;
+  font-weight: 500;
+}
+
+.premium-select__chevron {
+  color: #98a2b3;
+  flex: 0 0 auto;
+  transition: transform 0.15s ease;
+}
+
+.premium-select.is-open .premium-select__chevron {
+  transform: rotate(180deg);
+}
+
+.premium-select__menu {
+  position: absolute;
+  z-index: 30;
+  left: -8px;
+  right: -8px;
+  top: calc(100% + 10px);
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(16, 24, 40, 0.14);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.premium-select__option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #344054;
+  cursor: pointer;
+}
+
+.premium-select__option:hover,
+.premium-select__option.is-active {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.premium-select__native {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  width: 0;
+}
+
+.admin-form .premium-select__trigger {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.admin-form .premium-select__menu {
+  left: 0;
+  right: 0;
 }

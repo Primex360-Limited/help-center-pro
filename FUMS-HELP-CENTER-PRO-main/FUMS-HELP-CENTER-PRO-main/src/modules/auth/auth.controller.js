@@ -2,6 +2,8 @@ import successResponse from "../../shared/utils/apiResponse.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import {
     changePassword,
+    authenticateWithFirebaseGoogle,
+    completeUserProfile,
     getCurrentUser,
     getEmailVerificationStatus,
     getPlatformStatus,
@@ -46,13 +48,17 @@ export async function registerWorkspace(req, res) {
     return successResponse(
         res,
         result.claimed
-            ? "Account ready. Please sign in to continue."
-            : "Account created successfully. Please sign in to continue.",
+            ? "Account updated. Please verify your email to continue."
+            : "Account created. Please verify your email to continue.",
         {
             emailSent: Boolean(result.emailSent),
             claimed: Boolean(result.claimed),
+            email: result.email || result.user?.email || null,
             workspace: result.workspace,
-            user: result.user
+            user: result.user,
+            ...(result.verificationToken
+                ? { verificationToken: result.verificationToken }
+                : {})
         },
         201
     );
@@ -102,6 +108,33 @@ export async function login(req, res) {
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
     });
+}
+
+export async function googleAuth(req, res) {
+    const result = await authenticateWithFirebaseGoogle({
+        idToken: req.validatedBody.idToken,
+        deviceInfo: req.headers["user-agent"] || "unknown",
+        ipAddress: req.ip
+    });
+
+    setAuthCookies(res, {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
+    });
+
+    return successResponse(
+        res,
+        result.isNewUser ? "Google account created" : "Google sign-in successful",
+        {
+            user: result.user,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            isNewUser: Boolean(result.isNewUser),
+            needsProfileSetup: Boolean(result.needsProfileSetup),
+            workspace: result.workspace || null
+        },
+        result.isNewUser ? 201 : 200
+    );
 }
 
 export async function refresh(req, res) {
@@ -194,5 +227,16 @@ export async function updateUserPassword(req, res) {
     return successResponse(
         res,
         "Password updated successfully. Please log in again with your new password."
+    );
+}
+
+export async function completeProfile(req, res) {
+    const result = await completeUserProfile(req.validatedBody);
+
+    return successResponse(
+        res,
+        "Profile completed successfully",
+        result,
+        200
     );
 }

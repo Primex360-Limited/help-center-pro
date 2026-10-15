@@ -6,8 +6,8 @@ export default function PaperPlaneIcon({ className = "verify-plane" }) {
       className={className}
       src={paperPlane}
       alt=""
-      width={168}
-      height={140}
+      width={280}
+      height={194}
       draggable="false"
     />
   );

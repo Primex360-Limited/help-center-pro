@@ -36,6 +36,21 @@ export default function ProtectedRoute({
     return <Navigate to="/change-password" replace />;
   }
 
+  if (
+    !providerOnly &&
+    !isProviderUser(user) &&
+    user?.profileCompleted === false &&
+    location.pathname !== "/profile-setup"
+  ) {
+    return (
+      <Navigate
+        to="/profile-setup"
+        replace
+        state={{ email: user.email, verified: true }}
+      />
+    );
+  }
+
   if (providerOnly && !isProviderUser(user)) {
     return <Navigate to="/dashboard" replace />;
   }

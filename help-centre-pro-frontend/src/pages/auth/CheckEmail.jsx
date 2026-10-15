@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PaperPlaneIcon from "../../components/auth/PaperPlaneIcon.jsx";
 import { getVerificationStatus } from "../../api/auth.api.js";
+import { normalizeLanguageCode } from "../../constants/profileOptions.js";
+import i18n from "../../i18n/config.js";
 import "../../styles/auth.css";
 
 export default function CheckEmail() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const checkingRef = useRef(false);
 
   const email = location.state?.email || "";
   const purpose = location.state?.purpose || "verify";
-  const [verified, setVerified] = useState(false);
+  const [verified, setVerified] = useState(Boolean(location.state?.verified));
+  const [profileCompleted, setProfileCompleted] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
@@ -22,10 +27,19 @@ export default function CheckEmail() {
     checkingRef.current = true;
     try {
       const result = await getVerificationStatus(email);
-      const isVerified = Boolean(result?.data?.verified);
+      const data = result?.data || null;
+      const isVerified = Boolean(data?.verified);
       setVerified(isVerified);
-      setMustChangePassword(Boolean(result?.data?.mustChangePassword));
-      return result?.data || null;
+      setMustChangePassword(Boolean(data?.mustChangePassword));
+      setProfileCompleted(Boolean(data?.profileCompleted));
+
+      if (data?.language) {
+        const code = normalizeLanguageCode(data.language);
+        i18n.changeLanguage(code);
+        localStorage.setItem("language", code);
+      }
+
+      return data;
     } catch {
       return null;
     } finally {
@@ -35,23 +49,10 @@ export default function CheckEmail() {
 
   useEffect(() => {
     if (!email || purpose === "reset") return undefined;
-
     checkStatus();
     const interval = setInterval(checkStatus, 2500);
     return () => clearInterval(interval);
   }, [email, purpose, checkStatus]);
-
-  useEffect(() => {
-    if (!verified || purpose === "reset") return;
-    if (mustChangePassword) {
-      setHint("Email verified. Finish setup from the link in your email.");
-      return;
-    }
-    navigate("/login", {
-      replace: true,
-      state: { email, verified: true },
-    });
-  }, [verified, mustChangePassword, purpose, navigate, email]);
 
   async function handleContinue() {
     setHint("");
@@ -59,17 +60,29 @@ export default function CheckEmail() {
 
     try {
       if (purpose === "reset") {
-        setHint("Open the link in your email to create your new password.");
+        setHint(t("auth.checkEmail.openResetLink"));
         return;
       }
 
       if (!email) {
-        setHint("Missing email. Please sign up again.");
+        setHint(t("auth.checkEmail.missingEmail"));
         return;
       }
 
       const status = await checkStatus();
-      if (status?.verified && !status?.mustChangePassword) {
+      const isVerified = Boolean(status?.verified || verified);
+
+      if (!isVerified) {
+        setHint(t("auth.checkEmail.verifyFirst"));
+        return;
+      }
+
+      if (status?.mustChangePassword || mustChangePassword) {
+        setHint(t("auth.checkEmail.openInviteLink"));
+        return;
+      }
+
+      if (status?.profileCompleted || profileCompleted) {
         navigate("/login", {
           replace: true,
           state: { email, verified: true },
@@ -77,12 +90,10 @@ export default function CheckEmail() {
         return;
       }
 
-      if (status?.verified && status?.mustChangePassword) {
-        setHint("Open the verification link in your email to create your password.");
-        return;
-      }
-
-      setHint("Please open the verification link in your email first.");
+      navigate("/profile-setup", {
+        replace: true,
+        state: { email, verified: true },
+      });
     } finally {
       setBusy(false);
     }
@@ -92,20 +103,21 @@ export default function CheckEmail() {
     <div className="verify-page">
       <div className="verify-card">
         <PaperPlaneIcon />
-        <h1 className="verify-heading">Verify Email Address</h1>
-        <p className="verify-copy">
-          A verification link has been sent to your email address
-        </p>
-        <p className="verify-email">{email || "your email address"}</p>
+        <h1 className="verify-heading">{t("auth.checkEmail.title")}</h1>
+        <p className="verify-copy">{t("auth.checkEmail.subtitle")}</p>
+        <p className="verify-email">{email || t("auth.checkEmail.yourEmail")}</p>
         <button
           className="verify-btn"
           type="button"
           onClick={handleContinue}
           disabled={busy}
         >
-          Continue
+          {busy ? t("common.loading") : t("auth.checkEmail.continue")}
         </button>
         {hint ? <p className="verify-hint">{hint}</p> : null}
+        {verified && purpose !== "reset" ? (
+          <p className="verify-ready">{t("auth.checkEmail.ready")}</p>
+        ) : null}
       </div>
     </div>
   );

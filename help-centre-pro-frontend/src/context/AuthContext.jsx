@@ -8,8 +8,22 @@ import {
 } from "react";
 import * as authApi from "../api/auth.api.js";
 import { getStoredToken, setStoredToken } from "../api/client.js";
+import { normalizeLanguageCode } from "../constants/profileOptions.js";
+import i18n from "../i18n/config.js";
+import { signInWithGooglePopup, signOutFirebase } from "../lib/firebase.js";
 
 const AuthContext = createContext(null);
+
+function applyUserLanguage(user) {
+  if (!user?.language) return;
+  const code = normalizeLanguageCode(user.language);
+  if (i18n.language !== code) {
+    i18n.changeLanguage(code);
+  }
+  localStorage.setItem("language", code);
+  document.documentElement.lang = code;
+  document.documentElement.dir = code === "ar" ? "rtl" : "ltr";
+}
 
 function normalizeUser(user) {
   if (!user) return null;
@@ -20,6 +34,7 @@ function normalizeUser(user) {
     roleName: user.role?.name || user.roleId?.name || null,
     permissions: user.allowedPermissions || user.permissions || [],
     isSuperAdmin: Boolean(user.isSuperAdmin || user.is_super_admin),
+    language: user.language ? normalizeLanguageCode(user.language) : null,
   };
 }
 
@@ -38,6 +53,7 @@ export function AuthProvider({ children }) {
       const result = await authApi.getMe();
       const nextUser = normalizeUser(result?.data?.user);
       setUser(nextUser);
+      applyUserLanguage(nextUser);
       return nextUser;
     } catch {
       setStoredToken(null);
@@ -56,11 +72,25 @@ export function AuthProvider({ children }) {
     const result = await authApi.login({ email, password });
     const nextUser = normalizeUser(result?.data?.user);
     setUser(nextUser);
+    applyUserLanguage(nextUser);
+    return nextUser;
+  }, []);
+
+  const loginWithGoogle = useCallback(async () => {
+    const google = await signInWithGooglePopup();
+    const result = await authApi.googleAuth(google.idToken);
+    const nextUser = normalizeUser(result?.data?.user);
+    if (result?.data?.needsProfileSetup) {
+      nextUser.profileCompleted = false;
+    }
+    setUser(nextUser);
+    applyUserLanguage(nextUser);
     return nextUser;
   }, []);
 
   const logout = useCallback(async () => {
     await authApi.logout();
+    await signOutFirebase();
     setUser(null);
   }, []);
 
@@ -79,6 +109,7 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: Boolean(user),
       login,
+      loginWithGoogle,
       logout,
       refreshUser,
       hasPermission,
@@ -86,7 +117,7 @@ export function AuthProvider({ children }) {
         hasPermission("agent:read") || hasPermission("agent:invite"),
       canManageRoles: hasPermission("role:read") || hasPermission("role:manage"),
     }),
-    [user, loading, login, logout, refreshUser, hasPermission]
+    [user, loading, login, loginWithGoogle, logout, refreshUser, hasPermission]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

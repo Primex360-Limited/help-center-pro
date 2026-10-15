@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Briefcase,
   Clock3,
@@ -18,9 +19,9 @@ const AGENT_TONES = ["tone-blue", "tone-green", "tone-orange", "tone-violet"];
 
 const EMPTY_OVERVIEW = {
   summary: {
-    openTickets: { value: 0, label: "Open Tickets", periodLabel: "Live" },
-    pending: { value: 0, label: "Pending", periodLabel: "Live" },
-    resolvedToday: { value: 0, label: "Resolved Today", periodLabel: "Today" },
+    openTickets: { value: 0, label: "dashboard.openTickets", periodLabel: "Live" },
+    pending: { value: 0, label: "tickets.pending", periodLabel: "Live" },
+    resolvedToday: { value: 0, label: "dashboard.resolvedTickets", periodLabel: "Today" },
     totalCustomers: { value: 0, label: "Total Customers", periodLabel: "All time" },
   },
   ticketsByChannel: {
@@ -82,6 +83,7 @@ function priorityTone(priority) {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -121,7 +123,7 @@ export default function Dashboard() {
     <div className="dashboard">
       <header className="dashboard__hero">
         <div>
-          <h1>Welcome Back {firstName}</h1>
+          <h1>{t("dashboard.welcome")} {firstName}</h1>
           <p>Here&apos;s what your workspace support desk looks like today</p>
         </div>
       </header>
@@ -130,21 +132,21 @@ export default function Dashboard() {
 
       <section className="dashboard__metrics" aria-label="Support metrics">
         <MetricCard
-          title={summary.openTickets.label}
+          title={t(summary.openTickets.label)}
           value={summary.openTickets.value}
           periodLabel={summary.openTickets.periodLabel}
           icon={Briefcase}
           tone="orange"
         />
         <MetricCard
-          title={summary.pending.label}
+          title={t(summary.pending.label)}
           value={summary.pending.value}
           periodLabel={summary.pending.periodLabel}
           icon={Clock3}
           tone="amber"
         />
         <MetricCard
-          title={summary.resolvedToday.label}
+          title={t(summary.resolvedToday.label)}
           value={summary.resolvedToday.value}
           periodLabel={summary.resolvedToday.periodLabel}
           icon={CheckCircle2}

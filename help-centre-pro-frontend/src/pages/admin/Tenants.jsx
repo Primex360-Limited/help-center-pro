@@ -13,6 +13,13 @@ import {
 } from "../../api/admin.api.js";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
+import PremiumSelect from "../../components/auth/PremiumSelect.jsx";
+import {
+  COMPANY_SIZES,
+  INDUSTRIES,
+  LANGUAGES,
+  TIMEZONES,
+} from "../../constants/profileOptions.js";
 import { isPasswordValid } from "../../utils/password.js";
 import "../../styles/admin.css";
 import "../../styles/auth.css";
@@ -41,12 +48,17 @@ function money(value) {
 const EMPTY_FORM = {
   workspaceName: "",
   primaryDomain: "",
+  website: "",
   plan: "growth",
   country: "",
   firstName: "",
   lastName: "",
   email: "",
   password: "",
+  timezone: "Africa/Lagos",
+  industry: "Retail & E-commerce",
+  language: "en",
+  companySize: "",
 };
 
 export default function Tenants() {
@@ -167,6 +179,14 @@ export default function Tenants() {
     event.preventDefault();
     setFormError("");
 
+    if (!form.workspaceName.trim() || form.workspaceName.trim().length < 2) {
+      setFormError("Company / workspace name is required");
+      return;
+    }
+    if (!form.timezone || !form.industry || !form.language || !form.companySize) {
+      setFormError("Complete language, timezone, industry, and company size before inviting");
+      return;
+    }
     if (form.password && !isPasswordValid(form.password)) {
       setFormError("Please meet all password requirements");
       return;
@@ -177,12 +197,17 @@ export default function Tenants() {
       await inviteTenant({
         workspaceName: form.workspaceName.trim(),
         primaryDomain: form.primaryDomain.trim() || undefined,
+        website: form.website.trim() || undefined,
         plan: form.plan,
         country: form.country.trim() || undefined,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         password: form.password || undefined,
+        timezone: form.timezone,
+        industry: form.industry,
+        language: form.language,
+        companySize: form.companySize,
       });
       setShowInvite(false);
       setForm(EMPTY_FORM);
@@ -455,9 +480,9 @@ export default function Tenants() {
             >
               <X size={18} />
             </button>
-            <h2>Add a New Tenant</h2>
+            <h2>Invite a New Tenant</h2>
             <p className="admin-modal__sub">
-              Create a workspace and send a premium invitation link to the tenant admin.
+              Collect the same company details as signup, then send a premium invitation link.
             </p>
 
             <form className="admin-form" onSubmit={handleInvite}>
@@ -465,15 +490,27 @@ export default function Tenants() {
 
               <div className="admin-form__row">
                 <div>
-                  <label htmlFor="tenant-workspace">Workspace Name</label>
+                  <label htmlFor="tenant-workspace">Company / Workspace Name</label>
                   <input
                     id="tenant-workspace"
                     value={form.workspaceName}
                     onChange={updateField("workspaceName")}
-                    placeholder="Primex360"
+                    placeholder="Your company name"
                     required
                   />
                 </div>
+                <div>
+                  <label htmlFor="tenant-website">Website</label>
+                  <input
+                    id="tenant-website"
+                    value={form.website}
+                    onChange={updateField("website")}
+                    placeholder="Company.com"
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form__row">
                 <div>
                   <label htmlFor="tenant-domain">Primary Domain</label>
                   <input
@@ -483,9 +520,6 @@ export default function Tenants() {
                     placeholder="primex360.com"
                   />
                 </div>
-              </div>
-
-              <div className="admin-form__row">
                 <div>
                   <label htmlFor="tenant-plan">Plan</label>
                   <select id="tenant-plan" value={form.plan} onChange={updateField("plan")}>
@@ -496,6 +530,9 @@ export default function Tenants() {
                     <option value="enterprise">Enterprise</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="admin-form__row">
                 <div>
                   <label htmlFor="tenant-country">Country</label>
                   <input
@@ -503,6 +540,17 @@ export default function Tenants() {
                     value={form.country}
                     onChange={updateField("country")}
                     placeholder="Nigeria"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tenant-email">Admin Email</label>
+                  <input
+                    id="tenant-email"
+                    type="email"
+                    value={form.email}
+                    onChange={updateField("email")}
+                    placeholder="admin@company.com"
+                    required
                   />
                 </div>
               </div>
@@ -528,18 +576,6 @@ export default function Tenants() {
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="tenant-email">Email Address</label>
-                <input
-                  id="tenant-email"
-                  type="email"
-                  value={form.email}
-                  onChange={updateField("email")}
-                  placeholder="admin@company.com"
-                  required
-                />
-              </div>
-
               <PasswordField
                 id="tenant-password"
                 label="Temporary Password (optional)"
@@ -549,6 +585,59 @@ export default function Tenants() {
                 autoComplete="new-password"
               />
               {form.password ? <PasswordRequirements password={form.password} /> : null}
+
+              <div className="admin-form__row">
+                <div>
+                  <label htmlFor="tenant-language">Language</label>
+                  <PremiumSelect
+                    id="tenant-language"
+                    value={form.language}
+                    onChange={(value) => setForm((prev) => ({ ...prev, language: value }))}
+                    options={LANGUAGES.map((lang) => ({
+                      value: lang.code,
+                      label: lang.label,
+                    }))}
+                    placeholder="Select language"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tenant-timezone">Timezone</label>
+                  <PremiumSelect
+                    id="tenant-timezone"
+                    value={form.timezone}
+                    onChange={(value) => setForm((prev) => ({ ...prev, timezone: value }))}
+                    options={TIMEZONES}
+                    placeholder="Select timezone"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="admin-form__row">
+                <div>
+                  <label htmlFor="tenant-industry">Industry</label>
+                  <PremiumSelect
+                    id="tenant-industry"
+                    value={form.industry}
+                    onChange={(value) => setForm((prev) => ({ ...prev, industry: value }))}
+                    options={INDUSTRIES}
+                    placeholder="Select industry"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="tenant-company-size">Company Size</label>
+                  <PremiumSelect
+                    id="tenant-company-size"
+                    value={form.companySize}
+                    onChange={(value) => setForm((prev) => ({ ...prev, companySize: value }))}
+                    options={COMPANY_SIZES}
+                    placeholder="Select company size"
+                    required
+                  />
+                </div>
+              </div>
 
               <div className="admin-form__actions">
                 <button
@@ -560,7 +649,7 @@ export default function Tenants() {
                   Cancel
                 </button>
                 <button type="submit" className="admin-btn admin-btn--primary" disabled={submitting}>
-                  {submitting ? "Sending Invite..." : "Invite Link"}
+                  {submitting ? "Sending Invite..." : "Send Invitation"}
                 </button>
               </div>
             </form>
