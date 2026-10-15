@@ -21,6 +21,7 @@ import Tenants from "./pages/admin/Tenants.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import NewTicket from "./pages/tickets/NewTicket.jsx";
 import Tickets from "./pages/tickets/Tickets.jsx";
+import WorkspaceProfile from "./pages/workspace/WorkspaceProfile.jsx";
 
 export default function App() {
   // Tenant host: never expose admin signup/login/shell (and never leak admin URL).
@@ -61,6 +62,14 @@ export default function App() {
             element={
               <ProtectedRoute permission="agent:read" tenantOnly>
                 <Agents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/profile"
+            element={
+              <ProtectedRoute permission="settings:read" tenantOnly>
+                <WorkspaceProfile />
               </ProtectedRoute>
             }
           />
@@ -175,6 +184,14 @@ export default function App() {
           element={
             <ProtectedRoute permission="agent:read" tenantOnly>
               <Agents />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspace/profile"
+          element={
+            <ProtectedRoute permission="settings:read" tenantOnly>
+              <WorkspaceProfile />
             </ProtectedRoute>
           }
         />

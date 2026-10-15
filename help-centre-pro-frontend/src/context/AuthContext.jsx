@@ -116,6 +116,8 @@ export function AuthProvider({ children }) {
       canManageUsers:
         hasPermission("agent:read") || hasPermission("agent:invite"),
       canManageRoles: hasPermission("role:read") || hasPermission("role:manage"),
+      canManageSettings:
+        hasPermission("settings:read") || hasPermission("settings:write"),
     }),
     [user, loading, login, loginWithGoogle, logout, refreshUser, hasPermission]
   );

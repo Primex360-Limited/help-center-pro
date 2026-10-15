@@ -34,7 +34,7 @@ const SECONDARY_NAV = [
   { to: "/agents", label: "nav.agents", icon: UserRound, ready: true },
   { to: "/templates", label: "Templates", icon: FileText, ready: false },
   { to: "/automations", label: "Automations", icon: Zap, ready: false },
-  { to: "/settings", label: "nav.settings", icon: Settings, ready: false },
+  { to: "/workspace/profile", label: "nav.settings", icon: Settings, ready: true },
 ];
 
 function tenantRoleLabel(roleName) {
@@ -72,7 +72,7 @@ function ComingSoonNav({ item }) {
 }
 
 export default function AppShell() {
-  const { user, logout, canManageUsers } = useAuth();
+  const { user, logout, canManageUsers, canManageSettings } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [howtoDismissed, setHowtoDismissed] = useState(false);
@@ -129,10 +129,14 @@ export default function AppShell() {
 
           <nav className="app-nav app-nav--secondary" aria-label="Workspace">
             {SECONDARY_NAV.map((item) => {
-              if (item.to === "/agents" && !canManageUsers) {
-                return <ComingSoonNav key={item.to} item={item} />;
-              }
-              if (item.ready && (item.to !== "/agents" || canManageUsers)) {
+              const allowed =
+                item.to === "/agents"
+                  ? canManageUsers
+                  : item.to === "/workspace/profile"
+                    ? canManageSettings
+                    : true;
+
+              if (item.ready && allowed) {
                 return <NavItem key={item.to} item={item} />;
               }
               return <ComingSoonNav key={item.to} item={item} />;

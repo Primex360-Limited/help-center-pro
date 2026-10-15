@@ -1,0 +1,9 @@
+
+C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\help-centre-pro-frontend\src\components\agents\AddAgentModal.jsx
+  16:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\help-centre-pro-frontend\src\context\AuthContext.jsx
+  128:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+✖ 2 problems (2 errors, 0 warnings)
+

@@ -431,3 +431,250 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------
+   Agent management v2 — KPI strip, toolbar, table + footer helpers
+   --------------------------------------------------------------- */
+
+.agents-kpi-grid {
+  margin-bottom: 18px;
+}
+
+.agents-kpi {
+  position: relative;
+  padding-left: 58px;
+}
+
+.agents-kpi__icon {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.agents-kpi--active .agents-kpi__icon {
+  background: #ecfdf3;
+  color: #12b76a;
+}
+
+.agents-kpi--active .admin-kpi__value {
+  color: #027a48;
+}
+
+.agents-kpi--pending .agents-kpi__icon {
+  background: #f4f3ff;
+  color: #7a5af8;
+}
+
+.agents-kpi--pending .admin-kpi__value {
+  color: #7a5af8;
+}
+
+.agents-kpi--admin .agents-kpi__icon {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.agents-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid #abefc6;
+  background: #ecfdf3;
+  color: #027a48;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.agents-banner svg {
+  flex-shrink: 0;
+}
+
+.agents-filters__count {
+  margin: 0 0 0 auto;
+  align-self: center;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.agents-table__hint {
+  margin: 6px 0 0;
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+.agents-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agents-note svg {
+  flex-shrink: 0;
+  color: #7a5af8;
+}
+
+.agent-role-badge--supervisor {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.agent-role-badge--agent {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+/* ---------------------------------------------------------------
+   Add-agent modal, invite facts and confirm dialog
+   --------------------------------------------------------------- */
+
+.admin-modal--agent {
+  width: min(520px, 100%);
+}
+
+.admin-modal--confirm {
+  width: min(460px, 100%);
+  text-align: center;
+}
+
+.admin-modal--confirm .admin-form__actions {
+  justify-content: center;
+}
+
+.add-agent__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.add-agent__head h2 {
+  margin: 0;
+}
+
+.add-agent__icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.add-agent__input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  background: #fff;
+  color: #98a2b3;
+}
+
+.add-agent__input:focus-within {
+  border-color: #7a5af8;
+  box-shadow: 0 0 0 3px rgba(122, 90, 248, 0.14);
+}
+
+.add-agent__input input {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #101828;
+}
+
+.add-agent__hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.add-agent__hint svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #7a5af8;
+}
+
+.invite-sent__facts {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+
+.invite-sent__facts li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.invite-sent__facts svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #7a5af8;
+}
+
+.confirm-action__icon {
+  width: 46px;
+  height: 46px;
+  margin: 4px auto 14px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.confirm-action__icon--danger {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.confirm-action__icon--primary {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+@media (max-width: 900px) {
+  .agents-kpi {
+    padding-left: 0;
+    padding-top: 56px;
+  }
+
+  .agents-filters__count {
+    margin-left: 0;
+  }
+}
+
+

@@ -4,6 +4,7 @@ import { SERVICE_NAMES } from "../../src/platform/serviceRegistry.js";
 import userRoutes from "../../src/modules/users/user.routes.js";
 import roleRoutes from "../../src/modules/roles/role.routes.js";
 import invitationRoutes from "../../src/modules/invitations/invitation.routes.js";
+import workspaceRoutes from "../../src/modules/workspace/workspace.routes.js";
 import { healthCheck } from "../../src/modules/health/health.controller.js";
 
 const PORT = Number(process.env.PORT) || 4012;
@@ -21,6 +22,7 @@ await startService({
                 app.use("/api/v1", userRoutes);
                 app.use("/api/v1", roleRoutes);
                 app.use("/api/v1", invitationRoutes);
+                app.use("/api/v1", workspaceRoutes);
             }
         });
     }

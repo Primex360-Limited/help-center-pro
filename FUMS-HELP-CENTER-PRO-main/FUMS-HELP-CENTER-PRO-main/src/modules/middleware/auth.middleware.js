@@ -1,6 +1,6 @@
 import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
-import { TENANT_STATUS } from "../../shared/constants/system.js";
+import { TENANT_STATUS, USER_STATUS } from "../../shared/constants/system.js";
 import { toUuidOrNull } from "../../shared/utils/auditLogger.js";
 import { verifyAccessToken } from "../auth/auth.utils.js";
 import { USER_ROLE_INCLUDE } from "../roles/role.service.js";
@@ -78,6 +78,24 @@ export const requireAuth = async (req, res, next) => {
 
         if (currentUser.tenant?.status === TENANT_STATUS.SUSPENDED) {
             return next(new AppError("This workspace has been suspended", 403));
+        }
+
+        /**
+         * Deactivation must bite immediately: a deactivated (`inactive`) or
+         * suspended agent loses access on the next request instead of waiting
+         * for their access token to expire. `invited` users keep access so the
+         * onboarding flow (change password / profile setup) still works.
+         */
+        if (
+            currentUser.status !== USER_STATUS.ACTIVE &&
+            currentUser.status !== USER_STATUS.INVITED
+        ) {
+            return next(
+                new AppError(
+                    "Your account has been deactivated. Contact your workspace administrator.",
+                    403
+                )
+            );
         }
 
         const userTenantId = currentUser.tenantId ?? null;
