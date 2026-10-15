@@ -513,22 +513,45 @@ export async function completeUserProfile({
     timezone,
     industry,
     language,
-    companySize
+    companySize,
+    tenantId = null
 }) {
     const normalizedEmail = normalizeEmail(email);
 
-    const user = await prisma.user.findFirst({
+    const candidates = await prisma.user.findMany({
         where: { email: normalizedEmail },
         select: {
             id: true,
             tenantId: true,
+            userType: true,
             emailVerified: true,
             profileCompleted: true
         }
     });
 
-    if (!user) {
+    if (!candidates.length) {
         throw new AppError("User not found", 404);
+    }
+
+    // The same email can exist in the provider scope and inside one or more
+    // workspaces. Always prefer the row belonging to the workspace the request
+    // came from, otherwise the completion flag is written to the wrong account
+    // and "Company details" keeps coming back on every sign-in.
+    const user =
+        (tenantId &&
+            candidates.find((candidate) => candidate.tenantId === tenantId)) ||
+        candidates.find(
+            (candidate) =>
+                candidate.userType === USER_TYPE.TENANT &&
+                candidate.tenantId !== null
+        ) ||
+        (candidates.length === 1 ? candidates[0] : null);
+
+    if (!user) {
+        throw new AppError(
+            "This email belongs to several workspaces. Complete your company details from your workspace URL.",
+            409
+        );
     }
 
     if (!user.emailVerified) {
@@ -880,12 +903,21 @@ export async function loginUser({
 
     const loginTime = new Date();
 
+    // Anyone who has signed in before has already seen their workspace, so the
+    // "Company details" step must never come back for them. Legacy rows
+    // (invited teammates, signups that never finished) can still carry
+    // `profileCompleted: false`, so repair the flag while we stamp the login —
+    // a single write, no extra round trip.
+    const profileCompletedBackfilled =
+        Boolean(user.lastLoginAt) && !user.profileCompleted;
+
     await prisma.user.update({
         where: { id: user.id },
         data: {
             lastLoginAt: loginTime,
             lastSeenAt: loginTime,
-            isOnline: true
+            isOnline: true,
+            ...(profileCompletedBackfilled ? { profileCompleted: true } : {})
         }
     });
 
@@ -894,7 +926,7 @@ export async function loginUser({
         userId: user.id,
         action: AUDIT_ACTION.LOGIN_SUCCESS,
         entity: "Session",
-        metadata: { ipAddress, deviceInfo }
+        metadata: { ipAddress, deviceInfo, profileCompletedBackfilled }
     });
 
     return {
@@ -987,6 +1019,10 @@ export async function authenticateWithFirebaseGoogle({
                 ? { ...existing.metadata }
                 : {};
 
+        // A Google account that has signed in before is already onboarded, so
+        // repair the flag on the way in — company details never reappear.
+        const isReturningUser = Boolean(existing.lastLoginAt);
+
         await prisma.user.update({
             where: { id: existing.id },
             data: {
@@ -995,6 +1031,9 @@ export async function authenticateWithFirebaseGoogle({
                 status: USER_STATUS.ACTIVE,
                 mustChangePassword: false,
                 profileImage: existing.profileImage || identity.picture || null,
+                ...(isReturningUser && !existing.profileCompleted
+                    ? { profileCompleted: true }
+                    : {}),
                 metadata: {
                     ...meta,
                     authProvider: "google",
@@ -1011,13 +1050,20 @@ export async function authenticateWithFirebaseGoogle({
             userId: existing.id,
             action: AUDIT_ACTION.LOGIN_SUCCESS,
             entity: "Session",
-            metadata: { provider: "google", ipAddress, deviceInfo }
+            metadata: {
+                provider: "google",
+                ipAddress,
+                deviceInfo,
+                profileCompletedBackfilled:
+                    isReturningUser && !existing.profileCompleted
+            }
         });
 
         return {
             ...session,
             isNewUser: false,
-            needsProfileSetup: !Boolean(existing.profileCompleted)
+            needsProfileSetup:
+                !Boolean(existing.profileCompleted) && !isReturningUser
         };
     }
 

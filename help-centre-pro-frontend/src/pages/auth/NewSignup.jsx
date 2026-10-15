@@ -6,6 +6,7 @@ import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import { registerWorkspace } from "../../api/auth.api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isFirebaseConfigured } from "../../lib/firebase.js";
+import { needsCompanyDetails } from "../../utils/onboarding.js";
 import signupHero from "../../assets/signup-hero.png";
 import "../../styles/auth.css";
 
@@ -75,7 +76,7 @@ export default function NewSignup() {
     setGoogleBusy(true);
     try {
       const nextUser = await loginWithGoogle();
-      if (nextUser?.profileCompleted === false) {
+      if (needsCompanyDetails(nextUser)) {
         navigate("/profile-setup", {
           replace: true,
           state: { email: nextUser.email, verified: true },

@@ -11,6 +11,7 @@ import { getStoredToken, setStoredToken } from "../api/client.js";
 import { normalizeLanguageCode } from "../constants/profileOptions.js";
 import i18n from "../i18n/config.js";
 import { signInWithGooglePopup, signOutFirebase } from "../lib/firebase.js";
+import { rememberOnboardedAccount } from "../utils/onboarding.js";
 
 const AuthContext = createContext(null);
 
@@ -23,6 +24,16 @@ function applyUserLanguage(user) {
   localStorage.setItem("language", code);
   document.documentElement.lang = code;
   document.documentElement.dir = code === "ar" ? "rtl" : "ltr";
+}
+
+/**
+ * Keep the browser's onboarding memory in sync with the server flag so a
+ * returning user is never sent through the "Company details" step again.
+ */
+function rememberOnboardingState(user) {
+  if (user?.profileCompleted === true) {
+    rememberOnboardedAccount(user.email);
+  }
 }
 
 function normalizeUser(user) {
@@ -53,6 +64,7 @@ export function AuthProvider({ children }) {
       const result = await authApi.getMe();
       const nextUser = normalizeUser(result?.data?.user);
       setUser(nextUser);
+      rememberOnboardingState(nextUser);
       applyUserLanguage(nextUser);
       return nextUser;
     } catch {
@@ -72,6 +84,7 @@ export function AuthProvider({ children }) {
     const result = await authApi.login({ email, password });
     const nextUser = normalizeUser(result?.data?.user);
     setUser(nextUser);
+    rememberOnboardingState(nextUser);
     applyUserLanguage(nextUser);
     return nextUser;
   }, []);
@@ -82,6 +95,8 @@ export function AuthProvider({ children }) {
     const nextUser = normalizeUser(result?.data?.user);
     if (result?.data?.needsProfileSetup) {
       nextUser.profileCompleted = false;
+    } else {
+      rememberOnboardingState(nextUser);
     }
     setUser(nextUser);
     applyUserLanguage(nextUser);

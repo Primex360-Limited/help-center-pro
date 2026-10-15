@@ -16,6 +16,7 @@ const roleCreateMock = jest.fn();
 
 const tenantFindUniqueMock = jest.fn();
 const tenantFindFirstMock = jest.fn();
+const tenantUpdateMock = jest.fn();
 
 const verificationTokenCreateMock = jest.fn();
 const verificationTokenFindFirstMock = jest.fn();
@@ -63,7 +64,8 @@ const prismaMock = {
     },
     tenant: {
         findUnique: tenantFindUniqueMock,
-        findFirst: tenantFindFirstMock
+        findFirst: tenantFindFirstMock,
+        update: tenantUpdateMock
     },
     verificationToken: {
         create: verificationTokenCreateMock,
@@ -97,11 +99,25 @@ const TENANT_USER = {
     role: { id: ROLE_ID, name: "Tenant Admin" }
 };
 
+const WORKSPACE_B_TENANT_ID = "77777777-7777-4777-8777-777777777777";
+const WORKSPACE_B_USER_ID = "88888888-8888-4888-8888-888888888888";
+
+/** Provider-scope row that shares the workspace admin's email. */
+const PROVIDER_ROW = {
+    id: "44444444-4444-4444-8444-444444444444",
+    tenantId: null,
+    userType: "provider",
+    email: "admin@example.com",
+    emailVerified: true,
+    profileCompleted: false
+};
+
 const ALL_MOCKS = [
     userFindFirstMock, userFindManyMock, userFindUniqueMock, userCreateMock,
     userUpdateMock, sessionCreateMock, sessionFindFirstMock, sessionUpdateMock,
     sessionUpdateManyMock, roleFindFirstMock, roleCreateMock,
-    tenantFindUniqueMock, tenantFindFirstMock, verificationTokenCreateMock,
+    tenantFindUniqueMock, tenantFindFirstMock, tenantUpdateMock,
+    verificationTokenCreateMock,
     verificationTokenFindFirstMock, verificationTokenUpdateMock,
     passwordResetTokenCreateMock, passwordResetTokenFindFirstMock,
     passwordResetTokenUpdateMock, sendVerificationEmailMock,
@@ -247,6 +263,76 @@ describe("loginUser", () => {
         );
     });
 
+    it("treats a returning user as onboarded so company details never reappear", async () => {
+        const { loginUser } = await loadAuthService();
+
+        userFindManyMock.mockResolvedValue([
+            {
+                ...TENANT_USER,
+                profileCompleted: false,
+                lastLoginAt: new Date("2026-02-01T00:00:00.000Z")
+            }
+        ]);
+        tenantFindUniqueMock.mockResolvedValue({ id: TENANT_ID, status: "active" });
+        findUserWithRoleMock.mockResolvedValue({
+            ...TENANT_USER,
+            profileCompleted: true
+        });
+
+        const result = await loginUser({
+            email: "admin@example.com",
+            password: "Secret123!"
+        });
+
+        expect(userUpdateMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: USER_ID },
+                data: expect.objectContaining({
+                    isOnline: true,
+                    profileCompleted: true
+                })
+            })
+        );
+        expect(recordAuditLogMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: "LOGIN_SUCCESS",
+                metadata: expect.objectContaining({
+                    profileCompletedBackfilled: true
+                })
+            })
+        );
+        expect(result.user.profileCompleted).toBe(true);
+    });
+
+    it("keeps a first-time sign-in on the company details step", async () => {
+        const { loginUser } = await loadAuthService();
+
+        userFindManyMock.mockResolvedValue([
+            { ...TENANT_USER, profileCompleted: false, lastLoginAt: null }
+        ]);
+        tenantFindUniqueMock.mockResolvedValue({ id: TENANT_ID, status: "active" });
+        findUserWithRoleMock.mockResolvedValue({
+            ...TENANT_USER,
+            profileCompleted: false
+        });
+
+        const result = await loginUser({
+            email: "admin@example.com",
+            password: "Secret123!"
+        });
+
+        const [firstUpdate] = userUpdateMock.mock.calls[0];
+        expect(firstUpdate.data).not.toHaveProperty("profileCompleted");
+        expect(recordAuditLogMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({
+                    profileCompletedBackfilled: false
+                })
+            })
+        );
+        expect(result.user.profileCompleted).toBe(false);
+    });
+
     it("embeds the PRD claim set in the access token", async () => {
         const { loginUser } = await loadAuthService();
 
@@ -366,6 +452,134 @@ describe("loginUser", () => {
         ).rejects.toMatchObject({ statusCode: 409 });
     });
 });
+describe("completeUserProfile", () => {
+    beforeEach(() => {
+        resetMockState();
+    });
+
+    it("writes the completion flag to the workspace row, not the provider row", async () => {
+        const { completeUserProfile } = await loadAuthService();
+
+        userFindManyMock.mockResolvedValue([
+            PROVIDER_ROW,
+            { ...TENANT_USER, profileCompleted: false }
+        ]);
+        userUpdateMock.mockResolvedValue({ ...TENANT_USER, profileCompleted: true });
+        tenantFindUniqueMock.mockResolvedValue({
+            id: TENANT_ID,
+            settings: { trial: true }
+        });
+        tenantUpdateMock.mockResolvedValue({ id: TENANT_ID });
+
+        const result = await completeUserProfile({
+            email: "Admin@Example.com",
+            companyName: "Acme Support",
+            website: "https://acme.test",
+            timezone: "Africa/Lagos",
+            industry: "Retail & E-commerce",
+            language: "en",
+            companySize: "11-50",
+            tenantId: TENANT_ID
+        });
+
+        expect(userFindManyMock).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { email: "admin@example.com" } })
+        );
+        expect(userUpdateMock).toHaveBeenCalledTimes(1);
+        expect(userUpdateMock).toHaveBeenCalledWith({
+            where: { id: USER_ID },
+            data: {
+                timezone: "Africa/Lagos",
+                industry: "Retail & E-commerce",
+                language: "en",
+                companySize: "11-50",
+                profileCompleted: true
+            }
+        });
+        expect(tenantUpdateMock).toHaveBeenCalledWith({
+            where: { id: TENANT_ID },
+            data: {
+                name: "Acme Support",
+                settings: {
+                    trial: true,
+                    website: "https://acme.test",
+                    industry: "Retail & E-commerce",
+                    timezone: "Africa/Lagos",
+                    language: "en",
+                    companySize: "11-50"
+                }
+            }
+        });
+        expect(result.user.profileCompleted).toBe(true);
+        expect(result.user.passwordHash).toBeUndefined();
+    });
+
+    it("targets the workspace the request came from when the email spans tenants", async () => {
+        const { completeUserProfile } = await loadAuthService();
+
+        userFindManyMock.mockResolvedValue([
+            { ...TENANT_USER, profileCompleted: false },
+            {
+                id: WORKSPACE_B_USER_ID,
+                tenantId: WORKSPACE_B_TENANT_ID,
+                userType: "tenant",
+                email: "admin@example.com",
+                emailVerified: true,
+                profileCompleted: false
+            }
+        ]);
+        userUpdateMock.mockResolvedValue({
+            id: WORKSPACE_B_USER_ID,
+            email: "admin@example.com",
+            profileCompleted: true
+        });
+        tenantFindUniqueMock.mockResolvedValue({
+            id: WORKSPACE_B_TENANT_ID,
+            settings: null
+        });
+        tenantUpdateMock.mockResolvedValue({ id: WORKSPACE_B_TENANT_ID });
+
+        const result = await completeUserProfile({
+            email: "admin@example.com",
+            companyName: "Acme Support",
+            timezone: "Africa/Lagos",
+            industry: "Retail & E-commerce",
+            language: "en",
+            companySize: "11-50",
+            tenantId: WORKSPACE_B_TENANT_ID
+        });
+
+        expect(userUpdateMock).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: WORKSPACE_B_USER_ID } })
+        );
+        expect(tenantUpdateMock).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { id: WORKSPACE_B_TENANT_ID } })
+        );
+        expect(result.user.profileCompleted).toBe(true);
+    });
+
+    it("refuses to complete company details before the email is verified", async () => {
+        const { completeUserProfile } = await loadAuthService();
+
+        userFindManyMock.mockResolvedValue([
+            { ...TENANT_USER, emailVerified: false, profileCompleted: false }
+        ]);
+
+        await expect(
+            completeUserProfile({
+                email: "admin@example.com",
+                companyName: "Acme Support",
+                timezone: "Africa/Lagos",
+                industry: "Retail & E-commerce",
+                language: "en",
+                companySize: "11-50"
+            })
+        ).rejects.toThrow(/Verify your email/);
+
+        expect(userUpdateMock).not.toHaveBeenCalled();
+    });
+});
+
 describe("registerSuperAdmin", () => {
     beforeEach(() => {
         resetMockState();

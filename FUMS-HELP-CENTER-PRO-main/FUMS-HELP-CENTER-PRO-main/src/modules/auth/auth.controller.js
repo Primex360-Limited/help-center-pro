@@ -231,7 +231,10 @@ export async function updateUserPassword(req, res) {
 }
 
 export async function completeProfile(req, res) {
-    const result = await completeUserProfile(req.validatedBody);
+    const result = await completeUserProfile({
+        ...req.validatedBody,
+        tenantId: requestTenantId(req)
+    });
 
     return successResponse(
         res,

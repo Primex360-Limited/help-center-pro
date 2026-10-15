@@ -1,10 +1,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { adminLoginPath, tenantLoginPath } from "../../config/env.js";
-
-function isProviderUser(user) {
-  return Boolean(user?.isSuperAdmin || user?.userType === "provider");
-}
+import { isProviderUser, needsCompanyDetails } from "../../utils/onboarding.js";
 
 export default function ProtectedRoute({
   children,
@@ -38,8 +35,7 @@ export default function ProtectedRoute({
 
   if (
     !providerOnly &&
-    !isProviderUser(user) &&
-    user?.profileCompleted === false &&
+    needsCompanyDetails(user) &&
     location.pathname !== "/profile-setup"
   ) {
     return (

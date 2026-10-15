@@ -329,7 +329,11 @@ export async function acceptInvitation({
                 emailVerified: true,
                 emailVerifiedAt: invitedUser.emailVerifiedAt ?? acceptedAt,
                 status: USER_STATUS.ACTIVE,
-                mustChangePassword: false
+                mustChangePassword: false,
+                // Teammates join a workspace whose company details were already
+                // supplied by the owner, so they must never be sent through the
+                // "Company details" step.
+                profileCompleted: true
             }
         })
     ]);

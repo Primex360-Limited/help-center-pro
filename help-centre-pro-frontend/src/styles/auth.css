@@ -234,6 +234,32 @@
   cursor: not-allowed;
 }
 
+/* Inline busy indicator for sign-in buttons. */
+.auth-btn__spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  animation: auth-spin 0.7s linear infinite;
+}
+
+.auth-btn__spinner--dark {
+  border-color: rgba(52, 64, 84, 0.25);
+  border-top-color: #344054;
+}
+
+.auth-btn[aria-busy="true"]:disabled,
+.signup-google[aria-busy="true"]:disabled {
+  opacity: 1;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .auth-eyebrow {
   display: inline-flex;
   align-items: center;
@@ -895,6 +921,14 @@
   cursor: not-allowed;
 }
 
+.company-cta--loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 1;
+}
+
 /* —— Premium select —— */
 .premium-select {
   position: relative;
@@ -988,4 +1022,86 @@
 .admin-form .premium-select__menu {
   left: 0;
   right: 0;
+}
+
+/* —— Sign-in hand-off (premium transition) —— */
+.auth-handoff {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 34px 34px 30px;
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  animation: auth-handoff-in 0.24s ease-out;
+}
+
+.auth-handoff .auth-brand {
+  margin-bottom: 0;
+}
+
+.auth-handoff__message {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: #d0d5dd;
+}
+
+.auth-handoff__bar {
+  position: relative;
+  width: 168px;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.auth-handoff__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1570ef, #7dd3fc);
+  animation: auth-handoff-slide 1.05s ease-in-out infinite;
+}
+
+@keyframes auth-handoff-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes auth-handoff-slide {
+  from {
+    transform: translateX(-45%);
+  }
+
+  to {
+    transform: translateX(255%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-handoff {
+    animation: none;
+  }
+
+  .auth-handoff__bar::after {
+    animation: none;
+    transform: none;
+    width: 100%;
+  }
 }

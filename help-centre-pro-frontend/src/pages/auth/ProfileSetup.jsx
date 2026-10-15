@@ -20,6 +20,11 @@ import {
   normalizeLanguageCode,
 } from "../../constants/profileOptions.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import {
+  isProviderUser,
+  needsCompanyDetails,
+  rememberOnboardedAccount,
+} from "../../utils/onboarding.js";
 import "../../styles/auth.css";
 
 export default function ProfileSetup() {
@@ -52,7 +57,12 @@ export default function ProfileSetup() {
 
       // Google / already-authenticated users can complete company details directly.
       if (user?.email && user.email === email && user.emailVerified !== false) {
-        if (user.profileCompleted) {
+        if (isProviderUser(user)) {
+          navigate("/admin/overview", { replace: true });
+          return;
+        }
+        if (!needsCompanyDetails(user)) {
+          rememberOnboardedAccount(user.email);
           navigate("/dashboard", { replace: true });
           return;
         }
@@ -80,6 +90,7 @@ export default function ProfileSetup() {
         }
 
         if (data.profileCompleted) {
+          rememberOnboardedAccount(email);
           navigate("/login", {
             replace: true,
             state: { email, verified: true },
@@ -148,6 +159,7 @@ export default function ProfileSetup() {
 
       i18n.changeLanguage(language);
       localStorage.setItem("language", language);
+      rememberOnboardedAccount(email);
 
       if (user) {
         await refreshUser();
@@ -292,8 +304,20 @@ export default function ProfileSetup() {
             </span>
           </div>
 
-          <button className="company-cta" type="submit" disabled={submitting}>
-            {submitting ? t("common.loading") : t("auth.profileSetup.continue")}
+          <button
+            className={`company-cta${submitting ? " company-cta--loading" : ""}`}
+            type="submit"
+            disabled={submitting}
+            aria-busy={submitting}
+          >
+            {submitting ? (
+              <>
+                <span className="auth-btn__spinner" aria-hidden="true" />
+                {t("common.loading")}
+              </>
+            ) : (
+              t("auth.profileSetup.continue")
+            )}
           </button>
         </form>
       </div>
