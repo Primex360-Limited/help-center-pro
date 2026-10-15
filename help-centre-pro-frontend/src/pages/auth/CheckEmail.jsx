@@ -48,11 +48,13 @@ export default function CheckEmail() {
   }, [email, purpose]);
 
   useEffect(() => {
-    if (!email || purpose === "reset") return undefined;
+    if (!email || purpose === "reset" || verified) return undefined;
+
     checkStatus();
-    const interval = setInterval(checkStatus, 2500);
+    // Soft poll — do not hammer the auth rate limiter.
+    const interval = setInterval(checkStatus, 6000);
     return () => clearInterval(interval);
-  }, [email, purpose, checkStatus]);
+  }, [email, purpose, checkStatus, verified]);
 
   async function handleContinue() {
     setHint("");

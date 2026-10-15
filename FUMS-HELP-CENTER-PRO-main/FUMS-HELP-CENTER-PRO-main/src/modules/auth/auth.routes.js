@@ -1,7 +1,10 @@
 import express from "express";
 import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
-import { authRateLimiter } from "../../middleware/rateLimiter.middleware.js";
+import {
+    authFlowRateLimiter,
+    authRateLimiter
+} from "../../middleware/rateLimiter.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import {
     forgotPassword,
@@ -247,7 +250,7 @@ authRoutes.post("/verify-email", validate(verifyEmailSchema), asyncHandler(verif
 
 authRoutes.post(
     "/verification-status",
-    authRateLimiter,
+    authFlowRateLimiter,
     validate(emailOnlySchema),
     asyncHandler(verificationStatus)
 );
@@ -348,7 +351,7 @@ authRoutes.post(
  */
 authRoutes.post(
     "/complete-profile",
-    authRateLimiter,
+    authFlowRateLimiter,
     validate(completeProfileSchema),
     asyncHandler(completeProfile)
 );

@@ -28,6 +28,8 @@ export function createServiceApp({
     const app = express();
 
     app.disable("x-powered-by");
+    // Render / reverse proxies: use real client IP for rate limiting.
+    app.set("trust proxy", 1);
     app.set("serviceName", serviceName || "help-centre-pro");
 
     app.use(
