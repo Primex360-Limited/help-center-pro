@@ -252,13 +252,14 @@ app.get("/api-docs.json", (_req, res) => {
 
 app.use(errorHandler);
 
-const httpServer = app.listen(PORT, () => {
-    console.log(`[gateway] public API on :${PORT}`);
+const HOST = process.env.HOST || "0.0.0.0";
+const httpServer = app.listen(PORT, HOST, () => {
+    console.log(`[gateway] public API on http://${HOST}:${PORT}`);
     console.log(
         `[gateway] routing → auth:${urls.auth} tenant:${urls.tenant} identity:${urls.identity} tickets:${urls.tickets} notify:${urls.notification}`
     );
-    console.log(`[gateway] health: http://localhost:${PORT}/health`);
-    console.log(`[gateway] docs: http://localhost:${PORT}/api-docs`);
+    console.log(`[gateway] health: http://${HOST}:${PORT}/health`);
+    console.log(`[gateway] docs: http://${HOST}:${PORT}/api-docs`);
 });
 
 process.once("SIGINT", () => {

@@ -16,8 +16,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4008"
       - key: SERVICE_NAME
         value: gateway
       - key: FRONTEND_URL
@@ -68,8 +66,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4010"
       - key: SERVICE_NAME
         value: auth-service
       - key: POSTGRES_REQUIRED
@@ -121,8 +117,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4011"
       - key: SERVICE_NAME
         value: tenant-service
       - key: POSTGRES_REQUIRED
@@ -169,8 +163,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4012"
       - key: SERVICE_NAME
         value: identity-service
       - key: POSTGRES_REQUIRED
@@ -223,8 +215,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4013"
       - key: SERVICE_NAME
         value: tickets-service
       - key: POSTGRES_REQUIRED
@@ -293,8 +283,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "4014"
       - key: SERVICE_NAME
         value: notification-service
       - key: EMAIL_ENABLED

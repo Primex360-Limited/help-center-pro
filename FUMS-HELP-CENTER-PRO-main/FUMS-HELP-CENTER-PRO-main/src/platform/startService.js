@@ -5,6 +5,8 @@ import { assertCriticalEnv, env } from "../config/env.js";
 
 /**
  * Shared process lifecycle for every microservice entrypoint.
+ * Bind HTTP first on 0.0.0.0 + process.env.PORT so Render's port scan
+ * succeeds even when DB/Redis startup is slow.
  */
 export async function startService({
     name,
@@ -12,7 +14,7 @@ export async function startService({
     createApp,
     seed,
     useRedis = false,
-    useMongo = true,
+    useMongo = false,
     usePostgres = true,
     requireCriticalEnv = true,
     onListening,
@@ -57,6 +59,26 @@ export async function startService({
             assertCriticalEnv();
         }
 
+        const app = await createApp();
+        const listenPort = Number(port) || Number(process.env.PORT) || env.PORT || 4008;
+        const host = process.env.HOST || "0.0.0.0";
+
+        httpServer = await new Promise((resolve, reject) => {
+            const server = app.listen(listenPort, host, () => {
+                console.log(`[${name}] listening on http://${host}:${listenPort}`);
+                console.log(`[${name}] health: http://${host}:${listenPort}/health`);
+                resolve(server);
+            });
+            server.on("error", reject);
+        });
+
+        process.once("SIGINT", () => {
+            void shutdown("SIGINT");
+        });
+        process.once("SIGTERM", () => {
+            void shutdown("SIGTERM");
+        });
+
         if (useMongo) {
             await connectDB();
         }
@@ -81,24 +103,9 @@ export async function startService({
             }
         }
 
-        const app = await createApp();
-        const listenPort = Number(port) || env.PORT;
-
-        httpServer = app.listen(listenPort, () => {
-            console.log(`[${name}] listening on :${listenPort}`);
-            console.log(`[${name}] health: http://localhost:${listenPort}/health`);
-        });
-
         if (typeof onListening === "function") {
             await onListening(httpServer, app);
         }
-
-        process.once("SIGINT", () => {
-            void shutdown("SIGINT");
-        });
-        process.once("SIGTERM", () => {
-            void shutdown("SIGTERM");
-        });
 
         return httpServer;
     } catch (error) {

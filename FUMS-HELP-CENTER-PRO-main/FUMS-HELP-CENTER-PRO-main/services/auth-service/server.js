@@ -17,6 +17,7 @@ const PORT = Number(process.env.PORT) || 4010;
 await startService({
     name: SERVICE_NAMES.AUTH,
     port: PORT,
+    useMongo: false,
     useRedis: true,
     async seed() {
         await seedSystemRoles();

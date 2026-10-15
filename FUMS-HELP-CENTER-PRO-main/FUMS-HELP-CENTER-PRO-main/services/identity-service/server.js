@@ -11,7 +11,8 @@ const PORT = Number(process.env.PORT) || 4012;
 await startService({
     name: SERVICE_NAMES.IDENTITY,
     port: PORT,
-    useRedis: true,
+    useMongo: false,
+    useRedis: false,
     createApp() {
         return createServiceApp({
             serviceName: SERVICE_NAMES.IDENTITY,

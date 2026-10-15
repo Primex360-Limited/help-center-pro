@@ -14,7 +14,8 @@ const PORT = Number(process.env.PORT) || 4013;
 await startService({
     name: SERVICE_NAMES.TICKETS,
     port: PORT,
-    useRedis: true,
+    useMongo: false,
+    useRedis: false,
     async onListening(httpServer) {
         initializeTicketRealtime(httpServer);
         console.log(`[${SERVICE_NAMES.TICKETS}] realtime socket attached`);

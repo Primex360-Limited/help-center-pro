@@ -9,6 +9,7 @@ const PORT = Number(process.env.PORT) || 4011;
 await startService({
     name: SERVICE_NAMES.TENANT,
     port: PORT,
+    useMongo: false,
     useRedis: false,
     createApp() {
         return createServiceApp({
