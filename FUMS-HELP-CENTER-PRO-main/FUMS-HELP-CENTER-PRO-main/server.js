@@ -58,6 +58,27 @@ async function startServer() {
     try {
         assertCriticalEnv();
 
+        const listenPort = Number(process.env.PORT) || env.PORT || 4008;
+        const host = process.env.HOST || "0.0.0.0";
+
+        // Bind first so Render's port scan succeeds while DB/Redis warm up.
+        httpServer = await new Promise((resolve, reject) => {
+            const server = app.listen(listenPort, host, () => {
+                console.log(`Server running on http://${host}:${listenPort}`);
+                console.log(`Health: http://${host}:${listenPort}/health`);
+                console.log(`API docs: http://${host}:${listenPort}/api-docs`);
+                resolve(server);
+            });
+            server.on("error", reject);
+        });
+
+        process.once("SIGINT", () => {
+            void shutdown("SIGINT");
+        });
+        process.once("SIGTERM", () => {
+            void shutdown("SIGTERM");
+        });
+
         await connectDB();
         await connectPostgres();
         await seedSystemRoles();
@@ -81,11 +102,6 @@ async function startServer() {
             console.warn("Redis unavailable. Continuing without Redis.");
         }
 
-        httpServer = app.listen(env.PORT, () => {
-            console.log(`Server running on port ${env.PORT}`);
-            console.log(`Health: http://localhost:${env.PORT}/health`);
-            console.log(`API docs: http://localhost:${env.PORT}/api-docs`);
-        });
         initializeTicketRealtime(httpServer);
     } catch (error) {
         console.error("Server startup failed:", error.message);
@@ -93,13 +109,5 @@ async function startServer() {
         process.exit(1);
     }
 }
-
-process.once("SIGINT", () => {
-    void shutdown("SIGINT");
-});
-
-process.once("SIGTERM", () => {
-    void shutdown("SIGTERM");
-});
 
 startServer();

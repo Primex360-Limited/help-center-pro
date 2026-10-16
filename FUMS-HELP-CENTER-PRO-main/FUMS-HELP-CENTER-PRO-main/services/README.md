@@ -1,18 +1,11 @@
-# HelpCentre Pro microservices
+# HelpCentre Pro services (optional / legacy)
 
-Public contract stays `/api/v1/*` on the **gateway** (`:4008`).
+The app runs as a **monolith** by default:
 
-| Service | Port | Owns |
-|---------|------|------|
-| gateway | 4008 | Routing, CORS, docs, mesh health |
-| auth-service | 4010 | Signup, login, session, platform status |
-| tenant-service | 4011 | Platform admin / tenants |
-| identity-service | 4012 | Users, roles, invitations |
-| tickets-service | 4013 | Tickets, support email, Socket.IO |
-| notification-service | 4014 | Internal email dispatch (`x-internal-service-key`) |
+- Local: `node server.js` / `docker compose up` → `backend` on `:4008`
+- Render: `helpcentre-pro-api` → `npx prisma migrate deploy && node server.js`
 
-Inter-service calls use `src/platform/serviceClient.js`.
-Auth/identity email templates still live in-process; delivery goes to notification-service when `NOTIFICATION_SERVICE_URL` is set.
+Public API contract stays `/api/v1/*`.
 
-**Local:** `docker compose up --build` from the repo root.
-**Render:** still runs the monolith (`node server.js`) with the same API paths.
+The folders under `services/` are a leftover split (gateway + domain processes).
+They are not started by the default compose or Render blueprint.
