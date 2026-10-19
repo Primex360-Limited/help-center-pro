@@ -13,3 +13,11 @@ export async function updateWorkspaceProfile(payload) {
     body: payload,
   });
 }
+
+/** Generate chat-widget API key (shown once). Customers sync via this key. */
+export async function generateWidgetApiKey() {
+  return apiRequest("/workspace/integrations/widget-api-key", {
+    method: "POST",
+    auth: true,
+  });
+}

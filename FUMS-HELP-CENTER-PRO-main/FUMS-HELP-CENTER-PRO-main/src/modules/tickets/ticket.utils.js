@@ -19,8 +19,9 @@ export function buildActorSnapshotFromRequest(req) {
     return {
         userId,
         name,
-        email: req.currentUser.email
-    }
+        email: req.currentUser.email,
+        tenantId: req.tenantId ?? req.currentUser.tenantId ?? req.user?.tenant_id ?? null
+    };
 }
 
 export function buildUserSnapshot(user) {

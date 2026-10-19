@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { AUDIT_ACTION } from "../../shared/constants/system.js";
@@ -29,6 +30,16 @@ function buildWorkspaceProfile(tenant) {
         seatLimit: tenant.seatLimit ?? null,
         logoUrl: settings.logoUrl || null,
         timezone: settings.timezone || null,
+        /** Tenant-connected mailbox used when agents send email from Help Centre Pro. */
+        supportEmail: settings.supportEmail || null,
+        supportEmailConnected: Boolean(settings.supportEmailConnected),
+        /** Numbers provisioned by Help Centre Pro for this workspace. */
+        callNumbers: Array.isArray(settings.callNumbers) ? settings.callNumbers : [],
+        /** Widget / chat integration — customers appear when the app uses this key. */
+        widgetApiKeyPrefix: settings.widgetApiKeyPrefix || null,
+        widgetApiKeyHint:
+            settings.widgetApiKeyHint ||
+            "Generate an API key and embed it in your app chat (same pattern as a live-agent widget).",
         createdAt: tenant.createdAt,
         updatedAt: tenant.updatedAt
     };
@@ -63,12 +74,17 @@ export async function updateWorkspaceProfile({
     actorId = null
 }) {
     const tenant = await findWorkspaceOrFail(tenantId);
-    const { name, logoUrl, timezone } = payload;
+    const { name, logoUrl, timezone, supportEmail } = payload;
 
     const updatedSettings = {
         ...asSettings(tenant.settings),
         ...(logoUrl !== undefined && { logoUrl: logoUrl.trim() || null }),
-        ...(timezone !== undefined && { timezone: timezone.trim() })
+        ...(timezone !== undefined && { timezone: timezone.trim() }),
+        ...(supportEmail !== undefined && {
+            supportEmail: supportEmail.trim().toLowerCase() || null,
+            supportEmailConnected: Boolean(supportEmail.trim()),
+            supportEmailProvider: supportEmail.trim() ? "connected" : null
+        })
     };
 
     const updatedTenant = await prisma.tenant.update({
@@ -89,7 +105,10 @@ export async function updateWorkspaceProfile({
             changes: {
                 ...(name !== undefined && { name: name.trim() }),
                 ...(timezone !== undefined && { timezone: timezone.trim() }),
-                ...(logoUrl !== undefined && { logoUpdated: true })
+                ...(logoUrl !== undefined && { logoUpdated: true }),
+                ...(supportEmail !== undefined && {
+                    supportEmailConnected: Boolean(String(supportEmail).trim())
+                })
             }
         }
     });
@@ -97,4 +116,50 @@ export async function updateWorkspaceProfile({
     return { workspace: buildWorkspaceProfile(updatedTenant) };
 }
 
-export default { getWorkspaceProfile, updateWorkspaceProfile };
+/**
+ * Generate a widget API key for the tenant's in-app live chat.
+ * Customers created via the widget appear on tickets with customer snapshots.
+ * The raw key is returned once; only a prefix is stored for display.
+ */
+export async function generateWidgetApiKey({ tenantId, actorId = null }) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const rawKey = `hcp_live_${crypto.randomBytes(24).toString("hex")}`;
+    const prefix = `${rawKey.slice(0, 16)}…`;
+    const hash = crypto.createHash("sha256").update(rawKey).digest("hex");
+
+    const updatedSettings = {
+        ...asSettings(tenant.settings),
+        widgetApiKeyPrefix: prefix,
+        widgetApiKeyHash: hash,
+        widgetApiKeyCreatedAt: new Date().toISOString(),
+        widgetApiKeyHint:
+            "Embed this key in your app chat widget. Customer identity flows into Help Centre Pro like a live-agent integration."
+    };
+
+    const updatedTenant = await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { settings: updatedSettings }
+    });
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: actorId,
+        action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+        entity: "Tenant",
+        entityId: tenant.id,
+        metadata: { changes: { widgetApiKeyRotated: true } }
+    });
+
+    return {
+        workspace: buildWorkspaceProfile(updatedTenant),
+        apiKey: rawKey,
+        message:
+            "Store this API key now — it will not be shown again. Use it in your app chat widget so customer details sync into Help Centre Pro."
+    };
+}
+
+export default {
+    getWorkspaceProfile,
+    updateWorkspaceProfile,
+    generateWidgetApiKey
+};

@@ -1,5 +1,6 @@
 import successResponse from "../../shared/utils/apiResponse.js";
 import {
+    generateWidgetApiKey,
     getWorkspaceProfile,
     updateWorkspaceProfile
 } from "./workspace.service.js";
@@ -27,7 +28,7 @@ export async function updateWorkspaceProfileHandler(req, res) {
     const result = await updateWorkspaceProfile({
         tenantId: resolveTenantId(req),
         payload: req.validatedBody,
-        actorId: req.user?.sub
+        actorId: req.user?.sub || req.user?.id
     });
 
     return successResponse(
@@ -35,4 +36,16 @@ export async function updateWorkspaceProfileHandler(req, res) {
         "Workspace profile updated successfully",
         result
     );
+}
+
+export async function generateWidgetApiKeyHandler(req, res) {
+    const result = await generateWidgetApiKey({
+        tenantId: resolveTenantId(req),
+        actorId: req.user?.sub || req.user?.id
+    });
+
+    return successResponse(res, result.message, {
+        workspace: result.workspace,
+        apiKey: result.apiKey
+    });
 }

@@ -3,9 +3,11 @@ import userRoutes from "./modules/users/user.routes.js";
 import roleRoutes from "./modules/roles/role.routes.js";
 import invitationRoutes from "./modules/invitations/invitation.routes.js";
 import supportEmailRoutes from "./modules/tickets/email/support-email.routes.js";
+import voiceRoutes from "./modules/tickets/voice/voice.routes.js";
 import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import tenantRoutes from "./modules/tenants/tenant.routes.js";
 import workspaceRoutes from "./modules/workspace/workspace.routes.js";
+import platformContentRoutes from "./modules/platform/platform-content.routes.js";
 import healthRoutes from "./modules/health/health.routes.js";
 import {
     healthCheck,
@@ -30,8 +32,10 @@ const app = createServiceApp({
         expressApp.use("/api/v1", roleRoutes);
         expressApp.use("/api/v1", invitationRoutes);
         expressApp.use("/api/v1", tenantRoutes);
+        expressApp.use("/api/v1", platformContentRoutes);
         expressApp.use("/api/v1", workspaceRoutes);
         expressApp.use("/api/v1", supportEmailRoutes);
+        expressApp.use("/api/v1", voiceRoutes);
         expressApp.use("/api/v1", ticketRoutes);
     }
 });

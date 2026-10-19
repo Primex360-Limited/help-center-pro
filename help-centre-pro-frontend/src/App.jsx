@@ -17,9 +17,15 @@ import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
 import Agents from "./pages/agents/Agents.jsx";
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
 import PlatformOverview from "./pages/admin/PlatformOverview.jsx";
+import PlatformHowto from "./pages/admin/PlatformHowto.jsx";
 import Tenants from "./pages/admin/Tenants.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
-import NewTicket from "./pages/tickets/NewTicket.jsx";
+import CallsInbox from "./pages/tickets/CallsInbox.jsx";
+import CreateEmailTicket from "./pages/tickets/CreateEmailTicket.jsx";
+import CreateTicketChooser from "./pages/tickets/CreateTicketChooser.jsx";
+import EmailsInbox from "./pages/tickets/EmailsInbox.jsx";
+import LiveChat from "./pages/tickets/LiveChat.jsx";
+import LogPhoneCall from "./pages/tickets/LogPhoneCall.jsx";
 import Tickets from "./pages/tickets/Tickets.jsx";
 import WorkspaceProfile from "./pages/workspace/WorkspaceProfile.jsx";
 
@@ -56,7 +62,12 @@ export default function App() {
         >
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/tickets" element={<Tickets />} />
-          <Route path="/tickets/new" element={<NewTicket />} />
+          <Route path="/tickets/live-chat" element={<LiveChat />} />
+          <Route path="/tickets/emails" element={<EmailsInbox />} />
+          <Route path="/tickets/calls" element={<CallsInbox />} />
+          <Route path="/tickets/new" element={<CreateTicketChooser />} />
+          <Route path="/tickets/new/email" element={<CreateEmailTicket />} />
+          <Route path="/tickets/new/call" element={<LogPhoneCall />} />
           <Route
             path="/agents"
             element={
@@ -112,6 +123,7 @@ export default function App() {
           <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
           <Route path="/admin/overview" element={<PlatformOverview />} />
           <Route path="/admin/tenants" element={<Tenants />} />
+          <Route path="/admin/howto" element={<PlatformHowto />} />
           <Route path="/overview" element={<Navigate to="/admin/overview" replace />} />
           <Route path="/tenants" element={<Navigate to="/admin/tenants" replace />} />
         </Route>
@@ -167,6 +179,7 @@ export default function App() {
         <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
         <Route path="/admin/overview" element={<PlatformOverview />} />
         <Route path="/admin/tenants" element={<Tenants />} />
+        <Route path="/admin/howto" element={<PlatformHowto />} />
       </Route>
 
       <Route
@@ -178,7 +191,12 @@ export default function App() {
       >
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/tickets" element={<Tickets />} />
-        <Route path="/tickets/new" element={<NewTicket />} />
+        <Route path="/tickets/live-chat" element={<LiveChat />} />
+        <Route path="/tickets/emails" element={<EmailsInbox />} />
+        <Route path="/tickets/calls" element={<CallsInbox />} />
+        <Route path="/tickets/new" element={<CreateTicketChooser />} />
+        <Route path="/tickets/new/email" element={<CreateEmailTicket />} />
+        <Route path="/tickets/new/call" element={<LogPhoneCall />} />
         <Route
           path="/agents"
           element={

@@ -59,17 +59,22 @@ export async function getReceivedEmail(emailId) {
 
 export async function sendSupportEmail({
     to,
+    from,
     subject,
     text,
     html,
     headers
 }) {
-    if (!env.SUPPORT_EMAIL_FROM && !env.EMAIL_FROM) {
-        throw new AppError("SUPPORT_EMAIL_FROM / EMAIL_FROM is not configured", 503);
+    const fromAddress = from || env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM;
+    if (!fromAddress) {
+        throw new AppError(
+            "Connect your workspace support email (Settings) or set SUPPORT_EMAIL_FROM / EMAIL_FROM",
+            503
+        );
     }
 
     const result = await getResendClient().emails.send({
-        from: env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM,
+        from: fromAddress,
         to,
         subject,
         ...(html ? { html } : {}),

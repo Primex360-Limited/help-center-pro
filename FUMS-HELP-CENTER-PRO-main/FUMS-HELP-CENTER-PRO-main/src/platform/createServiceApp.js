@@ -38,6 +38,8 @@ export function createServiceApp({
         })
     );
     app.use(express.json({ limit: "100kb" }));
+    // Twilio / form webhooks post as application/x-www-form-urlencoded
+    app.use(express.urlencoded({ extended: false, limit: "100kb" }));
     app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
     const corsOrigin = {

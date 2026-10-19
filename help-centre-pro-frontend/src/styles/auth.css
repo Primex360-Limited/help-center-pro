@@ -43,11 +43,11 @@
 
 .auth-card {
   width: 100%;
-  max-width: 420px;
-  background: var(--color-surface);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: 44px 36px 36px;
+  max-width: 400px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  padding: 36px 32px 28px;
 }
 
 .auth-card--wide {
@@ -74,29 +74,44 @@
 
 .auth-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 32px;
+  margin: 0 auto 20px;
 }
 
 .auth-brand__logo {
   display: block;
-  width: min(280px, 78vw);
+  width: 132px;
   height: auto;
   object-fit: contain;
-  background: transparent;
-  filter: drop-shadow(0 12px 28px rgba(79, 70, 229, 0.16));
+  background: transparent !important;
   user-select: none;
   -webkit-user-drag: none;
 }
 
-.auth-brand--compact {
-  margin-bottom: 24px;
+.auth-brand--sm {
+  margin-bottom: 18px;
 }
 
-.auth-brand--compact .auth-brand__logo {
-  width: min(168px, 58vw);
-  filter: drop-shadow(0 8px 18px rgba(79, 70, 229, 0.12));
+.auth-brand--sm .auth-brand__logo {
+  width: 112px;
+}
+
+.auth-brand--lg .auth-brand__logo {
+  width: 168px;
+}
+
+.auth-brand--light .auth-brand__logo {
+  mix-blend-mode: normal;
+  filter: none;
+}
+
+.auth-brand--tagline .auth-brand__tagline {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #98a2b3;
+  font-weight: 500;
 }
 
 .auth-card--signup .auth-form {
@@ -110,11 +125,11 @@
 
 .auth-title {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1.2;
   font-weight: 700;
-  color: var(--color-text);
-  letter-spacing: -0.02em;
+  color: #101828;
+  letter-spacing: -0.03em;
 }
 
 .auth-title--center {
@@ -249,8 +264,7 @@
   border-top-color: #344054;
 }
 
-.auth-btn[aria-busy="true"]:disabled,
-.signup-google[aria-busy="true"]:disabled {
+.auth-btn[aria-busy="true"]:disabled {
   opacity: 1;
 }
 
@@ -599,19 +613,19 @@
   color: #667085;
 }
 
-/* —— Signup split (Image 1) —— */
+/* —— Signup split (premium, image 5) —— */
 .signup-split {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(360px, 45%) minmax(0, 1fr);
-  background: #eef2f7;
+  grid-template-columns: minmax(380px, 48%) minmax(0, 1fr);
+  background: #f8fafc;
 }
 
 .signup-split__hero {
   position: relative;
   overflow: hidden;
   padding: 0;
-  background: linear-gradient(180deg, #0b2f8f 0%, #1557d0 45%, #1e70e8 100%);
+  background: #155eef;
   min-height: 100vh;
 }
 
@@ -621,7 +635,7 @@
   height: 100%;
   min-height: 100vh;
   object-fit: cover;
-  object-position: center top;
+  object-position: left center;
   user-select: none;
   pointer-events: none;
   -webkit-user-drag: none;
@@ -631,26 +645,34 @@
   display: grid;
   place-items: center;
   padding: 48px 32px;
-  background: #eef2f7;
+  background: #ffffff;
 }
 
 .signup-split__card {
   width: 100%;
   max-width: 420px;
   background: #fff;
-  border-radius: 18px;
-  border: 1px solid rgba(16, 24, 40, 0.06);
-  box-shadow: 0 18px 50px rgba(16, 24, 40, 0.1);
-  padding: 40px 36px 32px;
+  border-radius: 20px;
+  border: 1px solid #eaecf0;
+  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.06);
+  padding: 40px 36px 28px;
 }
 
 .signup-split__card .auth-brand {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+}
+
+.signup-split__card .auth-brand__logo {
+  width: 112px;
+}
+
+.auth-card--signin .auth-brand__logo {
+  width: 112px;
 }
 
 .signup-split__title {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   line-height: 1.2;
   font-weight: 700;
   color: #101828;
@@ -701,58 +723,14 @@
   cursor: pointer;
 }
 
-.signup-or {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 12px;
-  margin: 4px 0;
-  color: #98a2b3;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.signup-or::before,
-.signup-or::after {
-  content: "";
-  height: 1px;
-  background: #eaecf0;
-}
-
-.signup-google {
-  width: 100%;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  border-radius: 8px;
-  border: 1px solid #d0d5dd;
-  background: #fff;
-  color: #344054;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.signup-google:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #98a2b3;
-}
-
-.signup-google:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
 .signup-cta {
   height: 48px;
-  border-radius: 8px;
-  margin-top: 4px;
-  background: #1e70e8;
+  border-radius: 10px;
+  margin-top: 8px;
+  background: #1570ef;
   font-size: 15px;
   font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .signup-cta:hover:not(:disabled) {
@@ -760,10 +738,15 @@
 }
 
 .signup-split__footer {
-  margin: 22px 0 0;
+  margin: 24px auto 0;
+  max-width: fit-content;
+  padding: 10px 16px;
   text-align: center;
   font-size: 14px;
   color: #667085;
+  background: #f9fafb;
+  border: 1px solid #eaecf0;
+  border-radius: 999px;
 }
 
 .signup-split__footer a {

@@ -19,28 +19,33 @@
 }
 
 .admin-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  max-height: 100vh;
   background: var(--admin-sidebar);
   color: #e2e8f0;
-  padding: 22px 14px 16px;
+  padding: 18px 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 14px;
   border-right: 1px solid rgba(255, 255, 255, 0.04);
+  overflow: hidden;
 }
 
 .admin-sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .admin-nav-group__label {
-  margin: 0 0 8px 12px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  margin: 0 0 6px 12px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #94a3b8;
   font-weight: 650;
@@ -49,24 +54,25 @@
 .admin-nav-group__items {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .admin-nav__item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 10px;
   color: #cbd5e1;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
   border: none;
   background: transparent;
   width: 100%;
   text-align: left;
   position: relative;
+  line-height: 1.25;
 }
 
 .admin-nav__item:hover {
@@ -900,5 +906,91 @@
 
   .admin-sidebar {
     display: none;
+  }
+}
+
+/* Super Admin — How it works video editor */
+.howto-admin__form {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 28px;
+  align-items: start;
+  padding: 24px;
+}
+
+.howto-admin__preview {
+  position: sticky;
+  top: 16px;
+}
+
+.howto-admin__preview-card {
+  padding: 16px;
+  border-radius: 12px;
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f9fafb;
+}
+
+.howto-admin__preview-card .app-howto__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.howto-admin__preview-card .app-howto__copy {
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #98a2b3;
+}
+
+.howto-admin__preview-card .app-howto__video {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111827;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.howto-admin__preview-card .app-howto__thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.howto-admin__preview-card .app-howto__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  display: block;
+}
+
+.howto-admin__preview-card .app-howto__play {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0b1220;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+  padding-left: 2px;
+}
+
+@media (max-width: 900px) {
+  .howto-admin__form {
+    grid-template-columns: 1fr;
+  }
+
+  .howto-admin__preview {
+    position: static;
   }
 }

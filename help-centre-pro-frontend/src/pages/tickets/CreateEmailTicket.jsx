@@ -1,0 +1,487 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bold,
+  ChevronDown,
+  Italic,
+  Link2,
+  Mail,
+  Redo2,
+  Send,
+  Underline,
+  Undo2,
+  X,
+} from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  createTicket,
+  listTickets,
+  replyTicketEmail,
+} from "../../api/tickets.api.js";
+import { getWorkspaceProfile } from "../../api/workspace.api.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+import {
+  avatarTone,
+  extractCustomersFromTickets,
+  initialsFromName,
+} from "./channelUtils.js";
+import "../../styles/channels.css";
+
+const DRAFT_KEY = "hcp.emailTicket.draft";
+
+function defaultSignature(userName) {
+  return `---\nBest regards,\n${userName || "Support agent"}\nSupport team`;
+}
+
+function htmlToPlain(html) {
+  const el = document.createElement("div");
+  el.innerHTML = html || "";
+  return (el.innerText || el.textContent || "").trim();
+}
+
+export default function CreateEmailTicket() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const editorRef = useRef(null);
+
+  const userName =
+    user?.name ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+    user?.email ||
+    "Support agent";
+
+  const [fromEmail, setFromEmail] = useState("Support@company.com");
+  const [customers, setCustomers] = useState([]);
+  const [toQuery, setToQuery] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [ccOpen, setCcOpen] = useState(false);
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [subject, setSubject] = useState("");
+  const [signature] = useState(() => defaultSignature(userName));
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await getWorkspaceProfile();
+        const profile = result?.data?.workspace || result?.data?.profile || result?.data;
+        const candidate =
+          profile?.supportEmail ||
+          (profile?.supportEmailConnected ? profile?.supportEmail : null) ||
+          import.meta.env.VITE_SUPPORT_EMAIL;
+        if (!cancelled && candidate) {
+          setFromEmail(String(candidate));
+        } else if (!cancelled) {
+          setFromEmail("Connect your email in Settings");
+        }
+      } catch {
+        const envEmail = import.meta.env.VITE_SUPPORT_EMAIL;
+        if (!cancelled && envEmail) setFromEmail(String(envEmail));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await listTickets({ page: 1, limit: 100 });
+        if (cancelled) return;
+        setCustomers(extractCustomersFromTickets(result?.data?.tickets || []));
+      } catch {
+        if (!cancelled) setCustomers([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft.subject) setSubject(draft.subject);
+      if (draft.cc) setCc(draft.cc);
+      if (draft.bcc) setBcc(draft.bcc);
+      if (draft.toQuery) setToQuery(draft.toQuery);
+      if (draft.selectedCustomer) setSelectedCustomer(draft.selectedCustomer);
+      if (draft.ccOpen) setCcOpen(true);
+      if (draft.bodyHtml && editorRef.current) {
+        editorRef.current.innerHTML = draft.bodyHtml;
+      }
+      setNotice("Draft restored from this browser.");
+    } catch {
+      /* ignore corrupt draft */
+    }
+  }, []);
+
+  const filteredCustomers = useMemo(() => {
+    const q = toQuery.trim().toLowerCase();
+    if (!q) return customers.slice(0, 8);
+    return customers
+      .filter((c) => {
+        const hay = `${c.name} ${c.email}`.toLowerCase();
+        return hay.includes(q);
+      })
+      .slice(0, 8);
+  }, [customers, toQuery]);
+
+  const exec = useCallback((command, value = null) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, value);
+  }, []);
+
+  function handleLink() {
+    const url = window.prompt("Enter link URL");
+    if (!url) return;
+    exec("createLink", url);
+  }
+
+  function saveDraft() {
+    const bodyHtml = editorRef.current?.innerHTML || "";
+    const payload = {
+      subject,
+      cc,
+      bcc,
+      toQuery,
+      selectedCustomer,
+      ccOpen,
+      bodyHtml,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+    setNotice("Draft saved locally.");
+    setError("");
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+
+    const bodyText = htmlToPlain(editorRef.current?.innerHTML || "");
+    const fullBody = [bodyText, signature].filter(Boolean).join("\n\n");
+    const email = selectedCustomer?.email || toQuery.trim();
+    const name = selectedCustomer?.name || "";
+
+    if (!subject.trim()) {
+      setError("Subject is required.");
+      return;
+    }
+    if (!bodyText) {
+      setError("Message is required.");
+      return;
+    }
+    if (!email || !email.includes("@")) {
+      setError("Select or enter a valid customer email.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        title: subject.trim(),
+        description: fullBody,
+        priority: "MEDIUM",
+        channel: "EMAIL",
+        customerName: name || email,
+        customerEmail: email,
+        email: {
+          subject: subject.trim(),
+          body: fullBody,
+          fromEmail,
+          toEmail: email,
+          senderType: "AGENT",
+        },
+      };
+
+      const result = await createTicket(payload);
+      const ticket = result?.data?.ticket;
+      const ticketId = ticket?.ticketId || ticket?.id;
+
+      if (ticketId) {
+        try {
+          await replyTicketEmail(ticketId, {
+            body: fullBody,
+            toEmail: email,
+            subject: subject.trim(),
+          });
+        } catch {
+          /* ticket created; outbound send may be unavailable */
+        }
+      }
+
+      localStorage.removeItem(DRAFT_KEY);
+      navigate(
+        ticketId
+          ? `/tickets/emails?ticket=${encodeURIComponent(ticketId)}`
+          : "/tickets/emails",
+        {
+          replace: true,
+          state: {
+            notice: ticketId
+              ? `Email ticket ${ticketId} created`
+              : "Email ticket created",
+          },
+        }
+      );
+    } catch (err) {
+      setError(err.message || "Unable to send email ticket");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="ch-page ch-form-page">
+      <header className="ch-form-hero">
+        <div className="ch-form-hero__icon" aria-hidden="true">
+          <Mail size={28} strokeWidth={1.75} />
+        </div>
+        <h1>Create email ticket</h1>
+        <p>Send an email to create a new support ticket</p>
+      </header>
+
+      <form className="ch-panel" onSubmit={handleSubmit}>
+        {error ? <p className="ch-alert ch-alert--error">{error}</p> : null}
+        {notice ? <p className="ch-alert ch-alert--info">{notice}</p> : null}
+
+        <div className="ch-field">
+          <label htmlFor="email-from">From</label>
+          <input
+            id="email-from"
+            className="ch-input"
+            value={fromEmail}
+            readOnly
+          />
+        </div>
+
+        <div className="ch-field">
+          <div className="ch-field__label-row">
+            <label htmlFor="email-to">To</label>
+            <Link to="/tickets" className="ch-link">
+              View all customers →
+            </Link>
+          </div>
+          <input
+            id="email-to"
+            className="ch-input"
+            value={selectedCustomer ? "" : toQuery}
+            onChange={(e) => {
+              setSelectedCustomer(null);
+              setToQuery(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            placeholder="Search Customers by name or email..."
+            autoComplete="off"
+            disabled={Boolean(selectedCustomer)}
+          />
+          {selectedCustomer ? (
+            <div className="ch-customer-card">
+              <div
+                className={`ch-avatar ch-avatar--${avatarTone(
+                  selectedCustomer.email || selectedCustomer.name
+                )}`}
+              >
+                {initialsFromName(selectedCustomer.name)}
+              </div>
+              <div>
+                <strong>{selectedCustomer.name}</strong>
+                <span>{selectedCustomer.email}</span>
+              </div>
+              <button
+                type="button"
+                className="ch-customer-card__clear"
+                aria-label="Clear customer"
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setToQuery("");
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : null}
+          {showSuggestions && !selectedCustomer && filteredCustomers.length ? (
+            <ul className="ch-suggest">
+              {filteredCustomers.map((customer) => (
+                <li key={customer.key}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCustomer(customer);
+                      setToQuery(customer.email || customer.name);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <div
+                      className={`ch-avatar ch-avatar--sm ch-avatar--${avatarTone(
+                        customer.email || customer.name
+                      )}`}
+                    >
+                      {initialsFromName(customer.name)}
+                    </div>
+                    <div>
+                      <strong>{customer.name}</strong>
+                      <span>{customer.email || "No email"}</span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        <div className="ch-collapse">
+          <button
+            type="button"
+            className="ch-collapse__toggle"
+            onClick={() => setCcOpen((v) => !v)}
+            aria-expanded={ccOpen}
+          >
+            CC/BCC(Optional)
+            <ChevronDown
+              size={18}
+              style={{
+                transform: ccOpen ? "rotate(180deg)" : "none",
+                transition: "transform 0.15s ease",
+              }}
+            />
+          </button>
+          {ccOpen ? (
+            <div className="ch-collapse__body">
+              <div className="ch-field">
+                <label htmlFor="email-cc">CC</label>
+                <input
+                  id="email-cc"
+                  className="ch-input"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  placeholder="Add additional recipients..."
+                />
+              </div>
+              <div className="ch-field">
+                <label htmlFor="email-bcc">BCC</label>
+                <input
+                  id="email-bcc"
+                  className="ch-input"
+                  value={bcc}
+                  onChange={(e) => setBcc(e.target.value)}
+                  placeholder="Add hidden recipients..."
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="ch-field">
+          <label htmlFor="email-subject">
+            Subject<span className="ch-req">*</span>
+          </label>
+          <input
+            id="email-subject"
+            className="ch-input"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            placeholder="Brief description of the issue."
+            required
+          />
+        </div>
+
+        <div className="ch-field">
+          <label>
+            Message<span className="ch-req">*</span>
+          </label>
+          <div className="ch-editor-shell">
+            <div className="ch-toolbar" role="toolbar" aria-label="Formatting">
+              <button type="button" onClick={() => exec("bold")} title="Bold">
+                <Bold size={15} />
+              </button>
+              <button type="button" onClick={() => exec("italic")} title="Italic">
+                <Italic size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() => exec("underline")}
+                title="Underline"
+              >
+                <Underline size={15} />
+              </button>
+              <button type="button" onClick={handleLink} title="Link">
+                <Link2 size={15} />
+              </button>
+              <select
+                aria-label="Paragraph style"
+                defaultValue="p"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "p") exec("formatBlock", "p");
+                  else exec("formatBlock", value);
+                }}
+              >
+                <option value="p">Paragraph</option>
+                <option value="h2">Heading</option>
+                <option value="h3">Subheading</option>
+              </select>
+              <button type="button" onClick={() => exec("undo")} title="Undo">
+                <Undo2 size={15} />
+              </button>
+              <button type="button" onClick={() => exec("redo")} title="Redo">
+                <Redo2 size={15} />
+              </button>
+            </div>
+            <div
+              ref={editorRef}
+              className="ch-editor"
+              contentEditable
+              role="textbox"
+              aria-multiline="true"
+              data-placeholder="Write your message here..."
+              suppressContentEditableWarning
+            />
+            <pre className="ch-signature">{signature}</pre>
+          </div>
+        </div>
+
+        <div className="ch-footer-bar">
+          <div className="ch-footer-bar__left">
+            <button
+              type="button"
+              className="ch-btn ch-btn--ghost"
+              onClick={saveDraft}
+            >
+              Save as draft
+            </button>
+            <button
+              type="button"
+              className="ch-btn ch-btn--ghost"
+              onClick={() => navigate(-1)}
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="ch-footer-bar__right">
+            <button
+              type="submit"
+              className="ch-btn ch-btn--primary"
+              disabled={submitting}
+            >
+              <Send size={16} aria-hidden="true" />
+              {submitting ? "Sending..." : "Send Email"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}

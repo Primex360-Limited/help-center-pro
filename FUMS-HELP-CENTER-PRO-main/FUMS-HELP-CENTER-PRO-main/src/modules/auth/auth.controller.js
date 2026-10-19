@@ -2,7 +2,6 @@ import successResponse from "../../shared/utils/apiResponse.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import {
     changePassword,
-    authenticateWithFirebaseGoogle,
     completeUserProfile,
     getCurrentUser,
     getEmailVerificationStatus,
@@ -108,33 +107,6 @@ export async function login(req, res) {
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
     });
-}
-
-export async function googleAuth(req, res) {
-    const result = await authenticateWithFirebaseGoogle({
-        idToken: req.validatedBody.idToken,
-        deviceInfo: req.headers["user-agent"] || "unknown",
-        ipAddress: req.ip
-    });
-
-    setAuthCookies(res, {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken
-    });
-
-    return successResponse(
-        res,
-        result.isNewUser ? "Google account created" : "Google sign-in successful",
-        {
-            user: result.user,
-            accessToken: result.accessToken,
-            refreshToken: result.refreshToken,
-            isNewUser: Boolean(result.isNewUser),
-            needsProfileSetup: Boolean(result.needsProfileSetup),
-            workspace: result.workspace || null
-        },
-        result.isNewUser ? 201 : 200
-    );
 }
 
 export async function refresh(req, res) {

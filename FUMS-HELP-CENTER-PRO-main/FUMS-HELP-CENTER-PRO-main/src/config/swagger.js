@@ -23,6 +23,11 @@ const options = {
                 description:
                     "Provider super-admin platform — overview metrics, tenant provisioning, activate/deactivate/delete, CSV export"
             },
+            {
+                name: "Platform",
+                description:
+                    "Platform-wide content (How it works video) — Super Admin write, all tenants read"
+            },
             { name: "Tickets", description: "Universal inbox ticketing" },
         ],
         servers: [
@@ -35,7 +40,7 @@ const options = {
                 description: "Local root (health probes)",
             },
             {
-                url: "https://user-management-system-centralized.onrender.com/api/v1",
+                url: "https://helpcentre-pro-api.onrender.com/api/v1",
                 description: "Production",
             },
         ],
@@ -88,6 +93,43 @@ const options = {
                             additionalProperties: true,
                             example: {},
                         },
+                    },
+                },
+
+                HowtoContent: {
+                    type: "object",
+                    properties: {
+                        title: { type: "string", example: "How it works" },
+                        body: {
+                            type: "string",
+                            example: "Check out the new dashboard view. Pages now load faster.",
+                        },
+                        videoUrl: {
+                            type: "string",
+                            example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        },
+                        posterUrl: {
+                            type: "string",
+                            example: "/howto-video-poster.jpg",
+                        },
+                        whatsNewUrl: {
+                            type: "string",
+                            example: "https://helpcentrepro.com",
+                        },
+                    },
+                },
+
+                HowtoContentUpdate: {
+                    type: "object",
+                    properties: {
+                        title: { type: "string" },
+                        body: { type: "string" },
+                        videoUrl: {
+                            type: "string",
+                            description: "YouTube, Vimeo, or direct MP4 URL",
+                        },
+                        posterUrl: { type: "string" },
+                        whatsNewUrl: { type: "string" },
                     },
                 },
 

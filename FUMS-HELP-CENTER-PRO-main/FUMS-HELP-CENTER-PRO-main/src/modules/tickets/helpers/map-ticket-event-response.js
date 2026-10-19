@@ -26,7 +26,15 @@ function getEventContent(event) {
         return {
             duration: event.call.duration,
             recordingUrl: event.call.recordingUrl,
-            logs: (event.call.logs || []).map(mapCallLog)
+            logs: (event.call.logs || []).map(mapCallLog),
+            transcript: Array.isArray(event.metadata?.transcript)
+                ? event.metadata.transcript
+                : [],
+            quality:
+                event.metadata?.quality && typeof event.metadata.quality === "object"
+                    ? event.metadata.quality
+                    : null,
+            callStatus: event.metadata?.callStatus || null
         };
     }
 

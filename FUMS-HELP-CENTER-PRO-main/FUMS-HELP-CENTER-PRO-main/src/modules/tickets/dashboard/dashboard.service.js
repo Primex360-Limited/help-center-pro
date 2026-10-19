@@ -88,7 +88,8 @@ export async function getDashboardOverview() {
         emailCustomerGroups,
         idOnlyCustomerGroups,
         ticketsCreatedToday,
-        recentTickets
+        recentTickets,
+        activeAgentGroups
     ] = await Promise.all([
         prisma.ticket.count({
             where: { status: { in: [TICKET_STATUS.OPEN, TICKET_STATUS.QUEUED] } }
@@ -142,6 +143,21 @@ export async function getDashboardOverview() {
                 assignedToName: true,
                 createdByName: true
             }
+        }),
+        prisma.ticket.groupBy({
+            by: ["assignedToUserId"],
+            where: {
+                assignedToUserId: { not: null },
+                status: {
+                    in: [
+                        TICKET_STATUS.OPEN,
+                        TICKET_STATUS.QUEUED,
+                        TICKET_STATUS.PENDING,
+                        TICKET_STATUS.WAITING_FOR_REPLY
+                    ]
+                }
+            },
+            _count: { _all: true }
         })
     ]);
 
@@ -255,6 +271,11 @@ export async function getDashboardOverview() {
                 value: uniqueCustomers.size,
                 label: "Total Customers",
                 periodLabel: "All time"
+            },
+            activeAgents: {
+                value: activeAgentGroups.length,
+                label: "Active agents",
+                periodLabel: "Live"
             }
         },
         ticketsByChannel: {

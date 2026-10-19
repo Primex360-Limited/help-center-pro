@@ -33,6 +33,16 @@ export const env = {
     EMAIL_FROM: process.env.EMAIL_FROM,
     SUPPORT_EMAIL_FROM: process.env.SUPPORT_EMAIL_FROM || process.env.EMAIL_FROM,
     EMAIL_ENABLED: bool(process.env.EMAIL_ENABLED, true),
+    /** Public API origin for Twilio/Resend webhooks (no trailing slash). */
+    PUBLIC_API_URL: process.env.PUBLIC_API_URL || "",
+    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || "",
+    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || "",
+    TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER || "",
+    TWILIO_API_KEY_SID: process.env.TWILIO_API_KEY_SID || "",
+    TWILIO_API_KEY_SECRET: process.env.TWILIO_API_KEY_SECRET || "",
+    TWILIO_TWIML_APP_SID: process.env.TWILIO_TWIML_APP_SID || "",
+    /** Optional fallback if the agent has no phoneNumber on their profile. */
+    TWILIO_AGENT_FALLBACK_NUMBER: process.env.TWILIO_AGENT_FALLBACK_NUMBER || "",
     REDIS_URL: process.env.REDIS_URL,
     REDIS_REQUIRED: bool(process.env.REDIS_REQUIRED, false),
     SEED_TEST_USER: bool(process.env.SEED_TEST_USER, true),

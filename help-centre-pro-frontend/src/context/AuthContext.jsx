@@ -10,7 +10,6 @@ import * as authApi from "../api/auth.api.js";
 import { getStoredToken, setStoredToken } from "../api/client.js";
 import { normalizeLanguageCode } from "../constants/profileOptions.js";
 import i18n from "../i18n/config.js";
-import { signInWithGooglePopup, signOutFirebase } from "../lib/firebase.js";
 import { rememberOnboardedAccount } from "../utils/onboarding.js";
 
 const AuthContext = createContext(null);
@@ -89,23 +88,8 @@ export function AuthProvider({ children }) {
     return nextUser;
   }, []);
 
-  const loginWithGoogle = useCallback(async () => {
-    const google = await signInWithGooglePopup();
-    const result = await authApi.googleAuth(google.idToken);
-    const nextUser = normalizeUser(result?.data?.user);
-    if (result?.data?.needsProfileSetup) {
-      nextUser.profileCompleted = false;
-    } else {
-      rememberOnboardingState(nextUser);
-    }
-    setUser(nextUser);
-    applyUserLanguage(nextUser);
-    return nextUser;
-  }, []);
-
   const logout = useCallback(async () => {
     await authApi.logout();
-    await signOutFirebase();
     setUser(null);
   }, []);
 
@@ -124,7 +108,6 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: Boolean(user),
       login,
-      loginWithGoogle,
       logout,
       refreshUser,
       hasPermission,
@@ -134,7 +117,7 @@ export function AuthProvider({ children }) {
       canManageSettings:
         hasPermission("settings:read") || hasPermission("settings:write"),
     }),
-    [user, loading, login, loginWithGoogle, logout, refreshUser, hasPermission]
+    [user, loading, login, logout, refreshUser, hasPermission]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

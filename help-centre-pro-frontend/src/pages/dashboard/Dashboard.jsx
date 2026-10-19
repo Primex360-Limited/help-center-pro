@@ -1,17 +1,22 @@
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
 import {
   Briefcase,
   Clock3,
   CheckCircle2,
   Users,
+  UserRound,
   ChevronDown,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getDashboardOverview } from "../../api/tickets.api.js";
 import ChannelBarChart from "../../components/dashboard/ChannelBarChart.jsx";
-import { formatNumber, priorityLabel, statusLabel } from "../../utils/format.js";
+import {
+  formatNumber,
+  formatTicketId,
+  priorityLabel,
+  statusLabel,
+} from "../../utils/format.js";
 import "../../styles/app.css";
 import "../../styles/dashboard.css";
 
@@ -19,10 +24,11 @@ const AGENT_TONES = ["tone-blue", "tone-green", "tone-orange", "tone-violet"];
 
 const EMPTY_OVERVIEW = {
   summary: {
-    openTickets: { value: 0, label: "dashboard.openTickets", periodLabel: "Live" },
-    pending: { value: 0, label: "tickets.pending", periodLabel: "Live" },
-    resolvedToday: { value: 0, label: "dashboard.resolvedTickets", periodLabel: "Today" },
+    openTickets: { value: 0, label: "Open Tickets", periodLabel: "Live" },
+    pending: { value: 0, label: "Pending", periodLabel: "Live" },
+    resolvedToday: { value: 0, label: "Resolved Today", periodLabel: "Today" },
     totalCustomers: { value: 0, label: "Total Customers", periodLabel: "All time" },
+    activeAgents: { value: 0, label: "Active agents", periodLabel: "Live" },
   },
   ticketsByChannel: {
     title: "Tickets by Channel",
@@ -45,18 +51,16 @@ function MetricCard({ title, value, periodLabel, icon: Icon, tone }) {
   return (
     <article className={`metric-card metric-card--${tone}`}>
       <div className="metric-card__top">
-        <div>
-          <p className="metric-card__label">{title}</p>
-          <button type="button" className="metric-card__period" disabled>
-            {periodLabel}
-            <ChevronDown size={14} />
-          </button>
-        </div>
+        <p className="metric-card__label">{title}</p>
         <div className={`metric-card__icon metric-card__icon--${tone}`}>
           <Icon size={18} strokeWidth={2.2} />
         </div>
       </div>
       <div className="metric-card__value">{formatNumber(value)}</div>
+      <button type="button" className="metric-card__period" disabled>
+        {periodLabel || "Today"}
+        <ChevronDown size={14} />
+      </button>
     </article>
   );
 }
@@ -83,7 +87,6 @@ function priorityTone(priority) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { t } = useTranslation();
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -115,7 +118,7 @@ export default function Dashboard() {
   }, []);
 
   const firstName = user?.firstName || "there";
-  const summary = overview.summary || EMPTY_OVERVIEW.summary;
+  const summary = { ...EMPTY_OVERVIEW.summary, ...(overview.summary || {}) };
   const agents = overview.topAgentsToday?.agents || [];
   const recent = overview.recentTickets || [];
 
@@ -123,30 +126,32 @@ export default function Dashboard() {
     <div className="dashboard">
       <header className="dashboard__hero">
         <div>
-          <h1>{t("dashboard.welcome")} {firstName}</h1>
-          <p>Here&apos;s what your workspace support desk looks like today</p>
+          <h1>
+            Welcome Back {firstName}
+          </h1>
+          <p>Here&apos;s what your support desk looks like today</p>
         </div>
       </header>
 
       {error ? <p className="dashboard__error">{error}</p> : null}
 
-      <section className="dashboard__metrics" aria-label="Support metrics">
+      <section className="dashboard__metrics dashboard__metrics--five" aria-label="Support metrics">
         <MetricCard
-          title={t(summary.openTickets.label)}
+          title={summary.openTickets.label}
           value={summary.openTickets.value}
           periodLabel={summary.openTickets.periodLabel}
           icon={Briefcase}
           tone="orange"
         />
         <MetricCard
-          title={t(summary.pending.label)}
+          title={summary.pending.label}
           value={summary.pending.value}
           periodLabel={summary.pending.periodLabel}
           icon={Clock3}
           tone="amber"
         />
         <MetricCard
-          title={t(summary.resolvedToday.label)}
+          title={summary.resolvedToday.label}
           value={summary.resolvedToday.value}
           periodLabel={summary.resolvedToday.periodLabel}
           icon={CheckCircle2}
@@ -158,6 +163,13 @@ export default function Dashboard() {
           periodLabel={summary.totalCustomers.periodLabel}
           icon={Users}
           tone="violet"
+        />
+        <MetricCard
+          title={summary.activeAgents.label}
+          value={summary.activeAgents.value}
+          periodLabel={summary.activeAgents.periodLabel}
+          icon={UserRound}
+          tone="blue"
         />
       </section>
 
@@ -220,10 +232,10 @@ export default function Dashboard() {
               <li key={ticket.id} className="recent-tickets__row">
                 <div className="recent-tickets__main">
                   <div className="recent-tickets__meta">
-                    <span className="recent-tickets__id">{ticket.ticketId}</span>
-                    <span
-                      className={`chip chip--channel-${channelTone(ticket.channel)}`}
-                    >
+                    <span className="recent-tickets__id">
+                      {formatTicketId(ticket.ticketId)}
+                    </span>
+                    <span className={`chip chip--channel-${channelTone(ticket.channel)}`}>
                       {ticket.channelLabel}
                     </span>
                   </div>

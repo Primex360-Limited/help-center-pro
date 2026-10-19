@@ -3,6 +3,7 @@ import {
   Bell,
   Building2,
   CreditCard,
+  Film,
   Flag,
   LayoutDashboard,
   LogOut,
@@ -37,6 +38,7 @@ const OPERATIONS_NAV = [
   { to: "/admin/audit", label: "Audit log", icon: ScrollText, ready: false },
   { to: "/admin/announcements", label: "Announcement", icon: Megaphone, ready: false },
   { to: "/admin/flags", label: "Feature flags", icon: Flag, ready: false },
+  { to: "/admin/howto", label: "How it works video", icon: Film, ready: true },
   { to: "/admin/settings", label: "Platform setting", icon: Settings, ready: false },
 ];
 

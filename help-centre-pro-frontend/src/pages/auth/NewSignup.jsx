@@ -4,8 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import { registerWorkspace } from "../../api/auth.api.js";
-import { useAuth } from "../../context/AuthContext.jsx";
-import { isFirebaseConfigured } from "../../lib/firebase.js";
 import { needsCompanyDetails } from "../../utils/onboarding.js";
 import signupHero from "../../assets/signup-hero.png";
 import "../../styles/auth.css";
@@ -13,7 +11,6 @@ import "../../styles/auth.css";
 export default function NewSignup() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { loginWithGoogle } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +19,6 @@ export default function NewSignup() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -66,35 +62,6 @@ export default function NewSignup() {
     }
   }
 
-  async function handleGoogle() {
-    setError("");
-    if (!isFirebaseConfigured()) {
-      setError(t("auth.signup.googleNotConfigured"));
-      return;
-    }
-
-    setGoogleBusy(true);
-    try {
-      const nextUser = await loginWithGoogle();
-      if (needsCompanyDetails(nextUser)) {
-        navigate("/profile-setup", {
-          replace: true,
-          state: { email: nextUser.email, verified: true },
-        });
-        return;
-      }
-      navigate("/dashboard", { replace: true });
-    } catch (err) {
-      if (err?.code === "auth/popup-closed-by-user") {
-        setError("");
-        return;
-      }
-      setError(err.message || t("common.error"));
-    } finally {
-      setGoogleBusy(false);
-    }
-  }
-
   return (
     <div className="signup-split">
       <aside className="signup-split__hero" aria-label="HelpCentre Pro">
@@ -108,7 +75,7 @@ export default function NewSignup() {
 
       <main className="signup-split__panel">
         <div className="signup-split__card">
-          <BrandLogo compact showTagline />
+          <BrandLogo size="sm" />
 
           <h1 className="signup-split__title">{t("auth.signup.title")}</h1>
           <p className="signup-split__subtitle">{t("auth.signup.subtitle")}</p>
@@ -201,24 +168,10 @@ export default function NewSignup() {
               </div>
             </div>
 
-            <div className="signup-or">
-              <span>{t("auth.signup.or")}</span>
-            </div>
-
-            <button
-              type="button"
-              className="signup-google"
-              onClick={handleGoogle}
-              disabled={googleBusy || submitting}
-            >
-              <GoogleMark />
-              {googleBusy ? t("common.loading") : t("auth.signup.continueGoogle")}
-            </button>
-
             <button
               className="auth-btn signup-cta"
               type="submit"
-              disabled={submitting || googleBusy}
+              disabled={submitting}
             >
               {submitting ? (
                 t("common.loading")
@@ -238,28 +191,5 @@ export default function NewSignup() {
         </div>
       </main>
     </div>
-  );
-}
-
-function GoogleMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"
-      />
-      <path
-        fill="#34A853"
-        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z"
-      />
-    </svg>
   );
 }

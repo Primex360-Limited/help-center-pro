@@ -34,7 +34,7 @@ export function renderPremiumEmail({
     ctaLabel,
     ctaHref,
     footerNote,
-    eyebrow = "HelpCentre Pro · Secure",
+    eyebrow = "Help Center Pro · Secure",
     showLinkFallback = true
 }) {
     const year = new Date().getFullYear();
@@ -78,12 +78,12 @@ export function renderPremiumEmail({
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;border-radius:24px;overflow:hidden;border:1px solid #E2E8F0;box-shadow:0 24px 60px rgba(15,23,42,0.08);background:#FFFFFF;">
           <tr>
             <td align="center" style="background:#FFFFFF;padding:36px 28px 8px;border-bottom:1px solid #F1F5F9;">
-              <img src="cid:${LOGO_CONTENT_ID}" alt="HelpCentre Pro — Unified Support. Happier Customers." width="320" style="display:block;margin:0 auto;width:320px;max-width:88%;height:auto;border:0;outline:none;text-decoration:none;" />
+              <img src="cid:${LOGO_CONTENT_ID}" alt="Help Center Pro" width="220" style="display:block;margin:0 auto;width:220px;max-width:72%;height:auto;border:0;outline:none;text-decoration:none;" />
             </td>
           </tr>
           <tr>
             <td style="background:#FFFFFF;padding:28px 36px 32px;">
-              <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:linear-gradient(135deg,#EFF6FF,#F8FAFC);color:#1D4ED8;font-size:11px;font-weight:750;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">
+              <div style="display:inline-block;padding:7px 12px;border-radius:999px;background:linear-gradient(135deg,#EFF6FF,#F8FAFC);color:#1570EF;font-size:11px;font-weight:750;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px;">
                 ${eyebrow}
               </div>
               <h1 style="margin:0 0 14px;font-size:28px;line-height:1.2;letter-spacing:-0.03em;color:#0B1220;font-weight:800;">
@@ -101,7 +101,7 @@ export function renderPremiumEmail({
           </tr>
           <tr>
             <td style="background:#0B1220;padding:22px 32px;text-align:center;">
-              <p style="margin:0;font-size:14px;font-weight:750;letter-spacing:-0.02em;color:#F8FAFC;">HelpCentre Pro</p>
+              <p style="margin:0;font-size:14px;font-weight:750;letter-spacing:-0.02em;color:#F8FAFC;">Help Center <span style="color:#2E90FA;">Pro</span></p>
               <p style="margin:6px 0 0;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#94A3B8;">
                 Unified Support. Happier Customers.
               </p>

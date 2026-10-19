@@ -5,6 +5,7 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import { bindTenantToUser } from "../tenants/tenant.middleware.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
+    generateWidgetApiKeyHandler,
     getWorkspaceProfileHandler,
     updateWorkspaceProfileHandler
 } from "./workspace.controller.js";
@@ -93,6 +94,34 @@ workspaceRoutes.patch(
     requirePermission("settings:write"),
     validate(updateWorkspaceProfileSchema),
     asyncHandler(updateWorkspaceProfileHandler)
+);
+
+/**
+ * @openapi
+ * /workspace/integrations/widget-api-key:
+ *   post:
+ *     tags: [Workspace]
+ *     summary: Generate a chat widget API key
+ *     description: |
+ *       Creates a new API key for embedding Help Centre Pro chat in the tenant's app.
+ *       Customer details from the widget appear on tickets. The raw key is returned once.
+ *       Help Centre Pro provisions call numbers separately; tenants connect their own email
+ *       via PATCH /workspace/profile { supportEmail }.
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: API key generated (shown once)
+ *       403:
+ *         description: Forbidden
+ */
+workspaceRoutes.post(
+    "/workspace/integrations/widget-api-key",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission("settings:write"),
+    asyncHandler(generateWidgetApiKeyHandler)
 );
 
 export default workspaceRoutes;

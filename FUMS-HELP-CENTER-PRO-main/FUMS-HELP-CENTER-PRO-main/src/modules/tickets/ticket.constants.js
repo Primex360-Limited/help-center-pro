@@ -71,6 +71,7 @@ export const TICKET_PERMISSIONS = TICKET_PERMISSION;
 export const DEFAULT_TICKET_PAGE = 1;
 export const DEFAULT_TICKET_LIMIT = 20;
 export const MAX_TICKET_LIMIT = 100;
-export const TICKET_ID_PREFIX = "TCKT";
+/** Public ticket IDs: TK-00001, TK-00002, … (matches product UI). */
+export const TICKET_ID_PREFIX = "TK";
 export const DEFAULT_TICKET_RESOLUTION_HOURS = 24;
 export const ONLINE_AGENT_WINDOW_MINUTES = 15;

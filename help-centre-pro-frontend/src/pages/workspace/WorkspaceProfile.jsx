@@ -7,8 +7,11 @@ import {
   CreditCard,
   Globe2,
   Hash,
+  KeyRound,
   Link2,
   Loader2,
+  Mail,
+  Phone,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -17,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import {
+  generateWidgetApiKey,
   getWorkspaceProfile,
   updateWorkspaceProfile,
 } from "../../api/workspace.api.js";
@@ -94,6 +98,7 @@ function snapshotOf(profile) {
     name: profile?.name || "",
     timezone: profile?.timezone || "",
     logoUrl: profile?.logoUrl || "",
+    supportEmail: profile?.supportEmail || "",
   };
 }
 
@@ -102,15 +107,23 @@ export default function WorkspaceProfile() {
   const canWrite = hasPermission("settings:write");
 
   const [profile, setProfile] = useState(null);
-  const [saved, setSaved] = useState({ name: "", timezone: "", logoUrl: "" });
+  const [saved, setSaved] = useState({
+    name: "",
+    timezone: "",
+    logoUrl: "",
+    supportEmail: "",
+  });
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [logoError, setLogoError] = useState("");
   const [banner, setBanner] = useState("");
+  const [apiKeyBusy, setApiKeyBusy] = useState(false);
+  const [revealedApiKey, setRevealedApiKey] = useState("");
   const fileRef = useRef(null);
 
   const loadProfile = useCallback(async () => {
@@ -125,6 +138,7 @@ export default function WorkspaceProfile() {
       setName(snap.name);
       setTimezone(snap.timezone);
       setLogoUrl(snap.logoUrl);
+      setSupportEmail(snap.supportEmail);
     } catch (err) {
       setError(err.message || "Failed to load workspace settings");
     } finally {
@@ -152,8 +166,9 @@ export default function WorkspaceProfile() {
     () =>
       name.trim() !== saved.name ||
       timezone.trim() !== saved.timezone ||
-      logoUrl.trim() !== saved.logoUrl,
-    [name, timezone, logoUrl, saved]
+      logoUrl.trim() !== saved.logoUrl ||
+      supportEmail.trim() !== saved.supportEmail,
+    [name, timezone, logoUrl, supportEmail, saved]
   );
 
   const initials = initialsFrom(name || profile?.name);
@@ -164,9 +179,34 @@ export default function WorkspaceProfile() {
     setName(saved.name);
     setTimezone(saved.timezone);
     setLogoUrl(saved.logoUrl);
+    setSupportEmail(saved.supportEmail);
     setLogoError("");
     setBanner("");
     setError("");
+  }
+
+  async function handleGenerateApiKey() {
+    if (!canWrite || apiKeyBusy) return;
+    setApiKeyBusy(true);
+    setError("");
+    setBanner("");
+    setRevealedApiKey("");
+    try {
+      const res = await generateWidgetApiKey();
+      const key = res?.data?.apiKey || "";
+      setRevealedApiKey(key);
+      setBanner(
+        res?.message ||
+          "API key generated. Copy it now — it will not be shown again."
+      );
+      if (res?.data?.workspace) {
+        setProfile(res.data.workspace);
+      }
+    } catch (err) {
+      setError(err.message || "Unable to generate API key");
+    } finally {
+      setApiKeyBusy(false);
+    }
   }
 
   async function handleLogoPick(event) {
@@ -229,6 +269,9 @@ export default function WorkspaceProfile() {
     if (trimmedName !== saved.name) payload.name = trimmedName;
     if (trimmedTimezone !== saved.timezone) payload.timezone = trimmedTimezone;
     if (trimmedLogo !== saved.logoUrl) payload.logoUrl = trimmedLogo;
+    if (supportEmail.trim() !== saved.supportEmail) {
+      payload.supportEmail = supportEmail.trim();
+    }
 
     if (!Object.keys(payload).length) {
       setBanner("Everything is already up to date.");
@@ -246,6 +289,7 @@ export default function WorkspaceProfile() {
         setName(snap.name);
         setTimezone(snap.timezone);
         setLogoUrl(snap.logoUrl);
+        setSupportEmail(snap.supportEmail);
       }
       setBanner("Workspace settings saved.");
     } catch (err) {
@@ -470,6 +514,89 @@ export default function WorkspaceProfile() {
         </section>
       </div>
 
+
+      <section className="admin-card workspace-card">
+        <div className="admin-card__header">
+          <h2>Channels &amp; integrations</h2>
+          <p>
+            Connect your mailbox for outbound email. Help Centre Pro provisions
+            call numbers. Generate an API key for your in-app chat widget so
+            customer details sync into tickets.
+          </p>
+        </div>
+
+        <div className="workspace-field" style={{ marginBottom: 18 }}>
+          <label htmlFor="ws-support-email">
+            <Mail size={14} aria-hidden="true" /> Connected support email
+          </label>
+          <input
+            id="ws-support-email"
+            type="email"
+            value={supportEmail}
+            disabled={!canWrite}
+            placeholder="support@yourcompany.com"
+            onChange={(e) => {
+              setSupportEmail(e.target.value);
+              setBanner("");
+            }}
+          />
+          <p className="workspace-field__hint">
+            Agents send email tickets from this address via Help Centre Pro.
+          </p>
+        </div>
+
+        <div className="workspace-field" style={{ marginBottom: 18 }}>
+          <label>
+            <Phone size={14} aria-hidden="true" /> Provisioned call numbers
+          </label>
+          {(profile?.callNumbers || []).length ? (
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+              {profile.callNumbers.map((num) => (
+                <li key={num.id || num.e164}>
+                  <strong>{num.e164}</strong>
+                  {num.label ? ` — ${num.label}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="workspace-field__hint">
+              No numbers yet. Help Centre Pro assigns lines to your workspace.
+            </p>
+          )}
+        </div>
+
+        <div className="workspace-field">
+          <label>
+            <KeyRound size={14} aria-hidden="true" /> Chat widget API key
+          </label>
+          <p className="workspace-field__hint">
+            {profile?.widgetApiKeyPrefix
+              ? `Active key prefix: ${profile.widgetApiKeyPrefix}`
+              : "No key yet. Generate one to embed in your app chat."}
+          </p>
+          {revealedApiKey ? (
+            <p
+              className="agents-banner"
+              role="status"
+              style={{ wordBreak: "break-all", marginTop: 8 }}
+            >
+              {revealedApiKey}
+            </p>
+          ) : null}
+          {canWrite ? (
+            <button
+              type="button"
+              className="admin-btn admin-btn--ghost"
+              style={{ marginTop: 10 }}
+              disabled={apiKeyBusy}
+              onClick={handleGenerateApiKey}
+            >
+              <KeyRound size={16} />
+              {apiKeyBusy ? "Generating…" : "Generate API key"}
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       <section className="admin-card workspace-card workspace-card--meta">
         <div className="admin-card__header">

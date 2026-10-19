@@ -496,3 +496,12 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
 }
+
+/// Platform-wide content (provider Super Admin only). Keyed settings bag.
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

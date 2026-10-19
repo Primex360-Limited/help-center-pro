@@ -1,4 +1,5 @@
 import prisma from "../../database/prisma/client.js";
+import { allocateUniqueTicketIdInTx } from "./helpers/ticket-id-generator.js";
 
 function buildTicketInclude({
     includeMessages = false,
@@ -236,9 +237,18 @@ export async function createTicketWithTimeline({
     assignmentHistoryData,
     initialEvent
 }) {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(
+        async (tx) => {
+        // Allocate public ID under the same lock as the insert so concurrent
+        // creates can never collide on ticketId.
+        const ticketId =
+            ticketData.ticketId || (await allocateUniqueTicketIdInTx(tx));
+
         const ticket = await tx.ticket.create({
-            data: ticketData
+            data: {
+                ...ticketData,
+                ticketId
+            }
         });
 
         await tx.ticketStatusHistory.create({
@@ -271,7 +281,12 @@ export async function createTicketWithTimeline({
         return tx.ticket.findUnique({
             where: { id: ticket.id }
         });
-    });
+        },
+        {
+            maxWait: 10000,
+            timeout: 20000
+        }
+    );
 }
 
 export async function listTickets({ where, skip, take, orderBy }) {
@@ -279,7 +294,14 @@ export async function listTickets({ where, skip, take, orderBy }) {
         where,
         skip,
         take,
-        orderBy
+        orderBy,
+        include: {
+            events: {
+                orderBy: { createdAt: "asc" },
+                take: 1,
+                select: { channel: true }
+            }
+        }
     });
 }
 

@@ -34,10 +34,6 @@ export const loginSchema = z.object({
     password: z.string().min(1, "Password is required")
 });
 
-export const googleAuthSchema = z.object({
-    idToken: z.string().min(20, "Firebase ID token is required")
-});
-
 export const verifyEmailSchema = z.object({
     token: z.string().min(1),
 });

@@ -1,6 +1,7 @@
 import mark from "../../assets/helpcentre-pro-mark.png";
 import { APP_NAME } from "../../config/env.js";
 
+/** Tenant sidebar lockup — matches dashboard mock. */
 export default function SidebarBrand() {
   return (
     <div className="sidebar-brand" title={APP_NAME}>
@@ -8,15 +9,12 @@ export default function SidebarBrand() {
         className="sidebar-brand__mark"
         src={mark}
         alt=""
-        width={40}
-        height={40}
+        width={36}
+        height={36}
         draggable="false"
       />
       <div className="sidebar-brand__copy">
-        <div className="sidebar-brand__name">
-          HelpCentre <span>Pro</span>
-        </div>
-        <div className="sidebar-brand__tag">Unified Support</div>
+        <div className="sidebar-brand__name">Help Center Pro</div>
       </div>
     </div>
   );

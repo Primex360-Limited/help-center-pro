@@ -25,6 +25,12 @@ function mapCustomerReference(ticket) {
 }
 
 export function mapTicketResponse(ticket) {
+    const channel =
+        ticket.channel ||
+        ticket.sourceChannel ||
+        ticket.events?.[0]?.channel ||
+        null;
+
     return {
         id: ticket.id,
         ticketId: ticket.ticketId,
@@ -32,6 +38,8 @@ export function mapTicketResponse(ticket) {
         description: ticket.description,
         status: ticket.status,
         priority: ticket.priority,
+        channel: channel || "MANUAL",
+        sourceChannel: channel || "MANUAL",
         assignedTo: mapUserReference(
             ticket.assignedToUserId,
             ticket.assignedToName,

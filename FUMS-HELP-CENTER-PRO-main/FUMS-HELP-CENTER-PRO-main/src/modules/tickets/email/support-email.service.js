@@ -1,4 +1,5 @@
 import { env } from "../../../config/env.js";
+import prisma from "../../../database/prisma/client.js";
 import { AppError } from "../../../shared/errors/AppError.js";
 import {
     findLatestActiveTicketByCustomerEmail,
@@ -70,7 +71,11 @@ function parseAddress(value) {
 }
 
 function extractTicketId(value = "") {
-    return value.match(/\bTCKT-\d{8}-[A-F0-9]{6}\b/i)?.[0]?.toUpperCase() || null;
+    return (
+        value.match(/\bTK-\d{1,8}\b/i)?.[0]?.toUpperCase() ||
+        value.match(/\bTCKT-\d{8}-[A-F0-9]{6}\b/i)?.[0]?.toUpperCase() ||
+        null
+    );
 }
 
 function getHeader(headers, key) {
@@ -262,6 +267,29 @@ export async function processResendInboundEmailWebhook(req) {
     };
 }
 
+async function resolveTenantOutboundFrom(actor) {
+    const tenantId = actor?.tenantId || actor?.tenant_id || null;
+    if (!tenantId) {
+        return env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM;
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { settings: true }
+    });
+    const settings =
+        tenant?.settings && typeof tenant.settings === "object" && !Array.isArray(tenant.settings)
+            ? tenant.settings
+            : {};
+
+    return (
+        settings.supportEmail ||
+        env.SUPPORT_EMAIL_FROM ||
+        env.EMAIL_FROM ||
+        "support@example.com"
+    );
+}
+
 export async function replyToTicketByEmail(ticketId, data, actor) {
     const ticket = await findTicketByPublicId(ticketId);
 
@@ -275,6 +303,8 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
         throw new AppError("Ticket does not have a customer email address", 400);
     }
 
+    const fromEmail = await resolveTenantOutboundFrom(actor);
+
     const events = await listTicketEvents(ticket.id);
     const latestEmailEvent = [...events].reverse().find(
         (event) => event.type === "EMAIL" && event.metadata?.email?.messageId
@@ -285,6 +315,7 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
     const body = data.body.trim();
     const outboundEmail = await sendSupportEmail({
         to: toEmail,
+        from: fromEmail,
         subject,
         text: body,
         html: data.html,
@@ -300,7 +331,7 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
             email: {
                 subject,
                 body,
-                fromEmail: env.SUPPORT_EMAIL_FROM,
+                fromEmail,
                 toEmail,
                 senderType: SENDER_TYPE.AGENT
             },

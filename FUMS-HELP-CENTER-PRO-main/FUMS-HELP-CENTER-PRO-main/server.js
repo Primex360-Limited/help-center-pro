@@ -7,6 +7,7 @@ import {
     ensureDefaultSuperAdmin,
     seedTestUser
 } from "./src/modules/auth/seedTestUser.js";
+import { seedDemoTickets } from "./src/modules/tickets/seedDemoTickets.js";
 import { assertCriticalEnv, env } from "./src/config/env.js";
 import {
     closeTicketRealtime,
@@ -88,6 +89,7 @@ async function startServer() {
 
         if (env.SEED_TEST_USER && env.NODE_ENV !== "production") {
             await seedTestUser();
+            await seedDemoTickets();
         }
 
         try {

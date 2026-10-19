@@ -8,7 +8,6 @@ import {
 import { requireAuth } from "../middleware/auth.middleware.js";
 import {
     forgotPassword,
-    googleAuth,
     login,
     logout,
     me,
@@ -27,7 +26,6 @@ import {
     completeProfileSchema,
     emailOnlySchema,
     forgotPasswordSchema,
-    googleAuthSchema,
     loginSchema,
     registerSchema,
     resetPasswordSchema,
@@ -93,20 +91,6 @@ authRoutes.post(
     authRateLimiter,
     validate(workspaceSignupSchema),
     asyncHandler(registerWorkspace)
-);
-
-/**
- * @openapi
- * /auth/google:
- *   post:
- *     tags: [Auth]
- *     summary: Sign in or register with a Firebase Google ID token
- */
-authRoutes.post(
-    "/google",
-    authRateLimiter,
-    validate(googleAuthSchema),
-    asyncHandler(googleAuth)
 );
 
 /**

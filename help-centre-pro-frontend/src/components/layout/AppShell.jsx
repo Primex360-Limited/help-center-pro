@@ -4,48 +4,53 @@ import {
   LayoutDashboard,
   Ticket,
   MessageSquare,
+  Mail,
   Phone,
   Users,
   BarChart3,
   UserRound,
   FileText,
   Zap,
-  Settings,
   Bell,
   Plus,
   Search,
   LogOut,
+  CreditCard,
+  PieChart,
 } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
+import HowItWorksCard from "./HowItWorksCard.jsx";
 import SidebarBrand from "./SidebarBrand.jsx";
 import "../../styles/app.css";
 
-const PRIMARY_NAV = [
-  { to: "/dashboard", label: "nav.dashboard", icon: LayoutDashboard, end: true, ready: true },
-  { to: "/tickets", label: "nav.tickets", icon: Ticket, ready: true },
-  { to: "/live-chat", label: "Live Chat", icon: MessageSquare, ready: false },
-  { to: "/calls", label: "Calls", icon: Phone, ready: false },
+/** Exact sidebar order from the tenant dashboard mock. */
+const TENANT_NAV = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true, ready: true },
+  { to: "/tickets", label: "Tickets", icon: Ticket, end: true, ready: true },
+  { to: "/tickets/live-chat", label: "Live Chat", icon: MessageSquare, ready: true },
+  { to: "/tickets/emails", label: "Emails", icon: Mail, ready: true },
+  { to: "/tickets/calls", label: "Calls", icon: Phone, ready: true },
   { to: "/customers", label: "Customers", icon: Users, ready: false },
-  { to: "/analytics", label: "Analytics", icon: BarChart3, ready: false },
-];
-
-const SECONDARY_NAV = [
-  { to: "/agents", label: "nav.agents", icon: UserRound, ready: true },
+  { to: "/agents", label: "Agents", icon: UserRound, ready: true, needsUsers: true },
+  { to: "/analytics", label: "Analytics", icon: PieChart, ready: false },
+  { to: "/reports", label: "Reports", icon: BarChart3, ready: false },
   { to: "/templates", label: "Templates", icon: FileText, ready: false },
   { to: "/automations", label: "Automations", icon: Zap, ready: false },
-  { to: "/workspace/profile", label: "nav.settings", icon: Settings, ready: true },
+  { to: "/billing", label: "Billing", icon: CreditCard, ready: false },
+  // User management + Settings hidden for now (Agents covers team access)
 ];
 
 function tenantRoleLabel(roleName) {
   if (!roleName) return "Team member";
-  if (roleName === "Super Admin") return "Administrator";
+  if (roleName === "Super Admin" || roleName === "Tenant Admin" || roleName === "Admin") {
+    return "Administrator";
+  }
   return roleName;
 }
 
 function NavItem({ item }) {
   const Icon = item.icon;
-  const { t } = useTranslation();
   return (
     <NavLink
       to={item.to}
@@ -54,25 +59,24 @@ function NavItem({ item }) {
         `app-nav__item${isActive ? " is-active" : ""}`
       }
     >
-      <Icon size={18} strokeWidth={1.9} />
-      <span>{t(item.label)}</span>
+      <Icon size={18} strokeWidth={1.75} />
+      <span>{item.label}</span>
     </NavLink>
   );
 }
 
 function ComingSoonNav({ item }) {
   const Icon = item.icon;
-  const { t } = useTranslation();
   return (
     <button type="button" className="app-nav__item app-nav__item--soon" disabled>
-      <Icon size={18} strokeWidth={1.9} />
-      <span>{t(item.label)}</span>
+      <Icon size={18} strokeWidth={1.75} />
+      <span>{item.label}</span>
     </button>
   );
 }
 
 export default function AppShell() {
-  const { user, logout, canManageUsers, canManageSettings } = useAuth();
+  const { user, logout, canManageUsers } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [howtoDismissed, setHowtoDismissed] = useState(false);
@@ -114,58 +118,26 @@ export default function AppShell() {
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
-        <div className="app-sidebar__top">
+        <div className="app-sidebar__scroll">
           <SidebarBrand />
 
-          <nav className="app-nav" aria-label="Primary">
-            {PRIMARY_NAV.map((item) =>
-              item.ready ? (
-                <NavItem key={item.to} item={item} />
-              ) : (
-                <ComingSoonNav key={item.to} item={item} />
-              )
-            )}
-          </nav>
-
-          <nav className="app-nav app-nav--secondary" aria-label="Workspace">
-            {SECONDARY_NAV.map((item) => {
-              const allowed =
-                item.to === "/agents"
-                  ? canManageUsers
-                  : item.to === "/workspace/profile"
-                    ? canManageSettings
-                    : true;
-
-              if (item.ready && allowed) {
-                return <NavItem key={item.to} item={item} />;
+          <nav className="app-nav" aria-label="Workspace">
+            {TENANT_NAV.map((item) => {
+              const key = item.key || item.to + item.label;
+              if (item.needsUsers && !canManageUsers) {
+                return <ComingSoonNav key={key} item={item} />;
               }
-              return <ComingSoonNav key={item.to} item={item} />;
+              return item.ready ? (
+                <NavItem key={key} item={item} />
+              ) : (
+                <ComingSoonNav key={key} item={item} />
+              );
             })}
           </nav>
         </div>
 
         <div className="app-sidebar__bottom">
-          {!howtoDismissed ? (
-            <div className="app-howto">
-              <div className="app-howto__media" aria-hidden="true">
-                <span className="app-howto__play">▶</span>
-              </div>
-              <div className="app-howto__body">
-                <p className="app-howto__title">How it works?</p>
-                <a
-                  className="app-howto__link"
-                  href="https://helpcentrepro.com"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  What&apos;s new?
-                </a>
-                <button type="button" className="app-howto__dismiss" onClick={dismissHowto}>
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          ) : null}
+          {!howtoDismissed ? <HowItWorksCard onDismiss={dismissHowto} /> : null}
 
           <div className="app-sidebar__profile">
             <div className="app-sidebar__avatar" aria-hidden="true">
@@ -207,6 +179,7 @@ export default function AppShell() {
           <div className="app-topbar__actions">
             <button type="button" className="app-icon-btn" aria-label="Notifications">
               <Bell size={18} />
+              <span className="app-icon-btn__dot" aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -214,7 +187,7 @@ export default function AppShell() {
               onClick={() => navigate("/tickets/new")}
             >
               <Plus size={16} strokeWidth={2.5} />
-              {t("nav.newTicket")}
+              New Ticket
             </button>
           </div>
         </header>

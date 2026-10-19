@@ -414,7 +414,7 @@ export default function Agents() {
 
   return (
     <div className="agents-page">
-      <div className="admin-page-header">
+      <div className="admin-page-header agents-header">
         <div>
           <h1 className="admin-page-title" style={{ marginBottom: 4 }}>
             Agent Management
@@ -433,6 +433,9 @@ export default function Agents() {
           >
             <Download size={16} />
             Export CSV
+          </button>
+          <button type="button" className="admin-btn admin-btn--ghost agents-admin-view">
+            Admin view
           </button>
           {canInvite ? (
             <button
@@ -479,7 +482,7 @@ export default function Agents() {
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search name or email..."
+            placeholder="Search agent..."
             aria-label="Search agents"
           />
         </div>
@@ -578,8 +581,20 @@ export default function Agents() {
                       </span>
                     </td>
                     <td>
-                      <span className={`admin-status admin-status--${meta.tone}`}>
-                        {meta.label}
+                      <span
+                        className={`agent-status-pill agent-status-pill--${
+                          status === "active"
+                            ? "active"
+                            : status === "pending"
+                              ? "pending"
+                              : "inactive"
+                        }`}
+                      >
+                        {status === "active"
+                          ? "+Active"
+                          : status === "pending"
+                            ? "Pending"
+                            : "+Inactive"}
                       </span>
                       {status === "pending" ? (
                         <p className="agents-table__hint">
@@ -588,23 +603,55 @@ export default function Agents() {
                       ) : null}
                     </td>
                     <td>{Number(stats.assigned || 0)}</td>
-                    <td>{Number(stats.open || 0)}</td>
-                    <td>{Number(stats.resolved || 0)}</td>
+                    <td className="agents-stat agents-stat--open">
+                      {Number(stats.open || 0)}
+                    </td>
+                    <td className="agents-stat agents-stat--resolved">
+                      {Number(stats.resolved || 0)}
+                    </td>
                     <td onClick={(event) => event.stopPropagation()}>
-                      <div className="admin-row-actions">
-                        <button
-                          type="button"
-                          className="admin-row-actions__btn"
-                          aria-label={`Actions for ${displayName(user)}`}
-                          aria-expanded={menuFor === key}
-                          ref={(node) => {
-                            if (node) triggerRefs.current[key] = node;
-                            else delete triggerRefs.current[key];
-                          }}
-                          onClick={() => openActions(key)}
-                        >
-                          <ChevronRight size={18} />
-                        </button>
+                      <div className="agent-actions">
+                        {canDeactivate && status !== "pending" ? (
+                          status === "active" ? (
+                            <button
+                              type="button"
+                              className="agent-action-btn agent-action-btn--deactivate"
+                              disabled={actionBusy === key}
+                              onClick={() =>
+                                requestStatusChange(user, "inactive")
+                              }
+                            >
+                              <Ban size={14} />
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="agent-action-btn agent-action-btn--activate"
+                              disabled={actionBusy === key}
+                              onClick={() =>
+                                requestStatusChange(user, "active")
+                              }
+                            >
+                              <UserPlus size={14} />
+                              Activate
+                            </button>
+                          )
+                        ) : (
+                          <button
+                            type="button"
+                            className="admin-row-actions__btn"
+                            aria-label={`Actions for ${displayName(user)}`}
+                            aria-expanded={menuFor === key}
+                            ref={(node) => {
+                              if (node) triggerRefs.current[key] = node;
+                              else delete triggerRefs.current[key];
+                            }}
+                            onClick={() => openActions(key)}
+                          >
+                            <ChevronRight size={18} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

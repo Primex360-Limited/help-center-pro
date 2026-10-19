@@ -58,6 +58,12 @@ export const listTicketsQuerySchema = z.object({
     status: z.enum(ticketStatusValues).optional(),
     priority: z.enum(ticketPriorityValues).optional(),
     assignedToUserId: uuidSchema.optional(),
+    channel: z
+        .enum([...ticketChannelValues, "MANUAL"])
+        .optional(),
+    q: z.string().trim().max(200).optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
     page: z.coerce.number().int().min(1).default(DEFAULT_TICKET_PAGE),
     limit: z.coerce.number().int().min(1).max(MAX_TICKET_LIMIT).default(DEFAULT_TICKET_LIMIT)
 });

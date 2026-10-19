@@ -2,17 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Mail, ShieldCheck, UserPlus, X } from "lucide-react";
 import PremiumSelect from "../auth/PremiumSelect.jsx";
 
-/** Mirrors the assignable roles provisioned per workspace. */
-const ASSIGNABLE_ROLES = [
-  "Tenant Admin",
-  "Tenant Supervisor",
-  "Tenant Agent",
-  "Admin",
-  "Agent",
-];
-
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Friendly labels for known system role names; custom roles keep their name. */
 export function roleDisplayLabel(name = "") {
   if (name === "Tenant Admin" || name === "Admin") return "Admin";
   if (name === "Tenant Supervisor" || name === "Supervisor") return "Supervisor";
@@ -20,18 +12,21 @@ export function roleDisplayLabel(name = "") {
   return name || "Agent";
 }
 
-const ROLE_HINTS = {
-  admin: "Full workspace control, including billing, roles and settings.",
-  supervisor:
-    "Leads the queue: can reassign tickets, supervise agents and review reports.",
-  agent: "Handles assigned tickets and can pick work from the shared queue.",
-};
+function isProviderRole(role = {}) {
+  const name = String(role.name || "");
+  return (
+    role.scope === "provider" ||
+    name.includes("Provider") ||
+    name === "Super Admin"
+  );
+}
 
-function roleHint(name = "") {
-  const label = roleDisplayLabel(name).toLowerCase();
-  if (label === "admin") return ROLE_HINTS.admin;
-  if (label === "supervisor") return ROLE_HINTS.supervisor;
-  return ROLE_HINTS.agent;
+/**
+ * Roles the tenant may assign: every workspace role from the API except
+ * platform/provider operators. Custom roles created by admins appear here.
+ */
+function assignableFrom(roles = []) {
+  return roles.filter((role) => role?.id && !isProviderRole(role));
 }
 
 export default function AddAgentModal({
@@ -41,14 +36,15 @@ export default function AddAgentModal({
   onClose,
   onSubmit,
 }) {
-  const assignableRoles = useMemo(
-    () => roles.filter((role) => ASSIGNABLE_ROLES.includes(role.name)),
-    [roles]
-  );
+  const assignableRoles = useMemo(() => assignableFrom(roles), [roles]);
 
   const defaultRoleId =
-    assignableRoles.find((role) => role.name === "Tenant Agent" || role.name === "Agent")
-      ?.id ||
+    assignableRoles.find(
+      (role) =>
+        role.name === "Tenant Agent" ||
+        role.name === "Agent" ||
+        roleDisplayLabel(role.name).toLowerCase() === "agent"
+    )?.id ||
     assignableRoles[0]?.id ||
     "";
 
@@ -94,7 +90,12 @@ export default function AddAgentModal({
   const message = fieldError || error;
 
   return (
-    <div className="admin-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-agent-title">
+    <div
+      className="admin-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-agent-title"
+    >
       <div className="admin-modal admin-modal--agent">
         <button
           type="button"
@@ -176,15 +177,17 @@ export default function AddAgentModal({
                 label: roleDisplayLabel(role.name),
               }))}
               placeholder={
-                assignableRoles.length ? "Select a role" : "No roles available"
+                assignableRoles.length
+                  ? "Select a role"
+                  : "No roles available yet"
               }
               disabled={submitting || !assignableRoles.length}
             />
             <p className="add-agent__hint">
               <ShieldCheck size={14} aria-hidden="true" />
               {selectedRole
-                ? roleHint(selectedRole.name)
-                : "Roles control what this teammate can see and do."}
+                ? `Assigns the “${roleDisplayLabel(selectedRole.name)}” role from your workspace.`
+                : "Roles come from your workspace — including any custom roles your admin created."}
             </p>
           </div>
 
@@ -202,7 +205,7 @@ export default function AddAgentModal({
               className="admin-btn admin-btn--primary"
               disabled={submitting || !assignableRoles.length}
             >
-              {submitting ? "Creating..." : "Create Agent"}
+              {submitting ? "Sending invite…" : "Create Agent"}
             </button>
           </div>
         </form>

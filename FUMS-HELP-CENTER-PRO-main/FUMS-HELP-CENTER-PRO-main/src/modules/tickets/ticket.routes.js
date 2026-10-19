@@ -16,8 +16,14 @@ import {
     ticketIdParamSchema
 } from "./ticket.validation.js";
 import { TICKET_PERMISSIONS } from "./ticket.constants.js";
-import { updateTicketStatusHandler } from "./status/status.contoller.js";
-import { updateTicketStatusSchema } from "./status/status.validation.js";
+import {
+    updateTicketPriorityHandler,
+    updateTicketStatusHandler
+} from "./status/status.contoller.js";
+import {
+    updateTicketPrioritySchema,
+    updateTicketStatusSchema
+} from "./status/status.validation.js";
 import {
     assignTicketHandler,
     listOnlineAssignableAgentsHandler,
@@ -158,6 +164,26 @@ ticketRoutes.post(
  *         name: assignedToUserId
  *         schema:
  *           type: string
+ *       - in: query
+ *         name: channel
+ *         schema:
+ *           type: string
+ *           enum: [EMAIL, CHAT, PHONE, MANUAL]
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search ticket id, subject, description, or customer
+ *       - in: query
+ *         name: from
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: to
+ *         schema:
+ *           type: string
+ *           format: date
  *       - in: query
  *         name: page
  *         schema:
@@ -390,6 +416,44 @@ ticketRoutes.patch(
     validate(ticketIdParamSchema, "params"),
     validate(updateTicketStatusSchema),
     asyncHandler(updateTicketStatusHandler)
+);
+
+/**
+ * @openapi
+ * /tickets/{ticketId}/priority:
+ *   patch:
+ *     tags: [Tickets]
+ *     summary: Update ticket priority
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: ticketId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [priority]
+ *             properties:
+ *               priority:
+ *                 type: string
+ *                 enum: [LOW, MEDIUM, HIGH]
+ *     responses:
+ *       200:
+ *         description: Ticket priority updated successfully
+ */
+ticketRoutes.patch(
+    "/tickets/:ticketId/priority",
+    requirePermission(TICKET_PERMISSIONS.UPDATE_STATUS),
+    validate(ticketIdParamSchema, "params"),
+    validate(updateTicketPrioritySchema),
+    asyncHandler(updateTicketPriorityHandler)
 );
 
 /**

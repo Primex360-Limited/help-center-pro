@@ -94,16 +94,3 @@ export async function completeProfile(payload) {
     body: payload,
   });
 }
-
-export async function googleAuth(idToken) {
-  const result = await apiRequest("/auth/google", {
-    method: "POST",
-    body: { idToken },
-  });
-
-  if (result?.data?.accessToken) {
-    setStoredToken(result.data.accessToken);
-  }
-
-  return result;
-}

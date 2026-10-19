@@ -1,3 +1,4 @@
+import prisma from "../../../database/prisma/client.js";
 import { AppError } from "../../../shared/errors/AppError.js";
 import { TICKET_STATUS } from "../ticket.constants.js";
 import { findTicketByPublicId, updateTicketStatusWithHistory } from "../ticket.repository.js";
@@ -9,6 +10,10 @@ export async function updateTicketStatus(ticketId, status, actor) {
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
+    }
+
+    if (ticket.status === status) {
+        return mapTicketResponse(ticket);
     }
 
     if (!isValidStatusTransition(ticket.status, status)) {
@@ -35,4 +40,28 @@ export async function updateTicketStatus(ticketId, status, actor) {
     });
 
     return mapTicketResponse(updatedTicket);
+}
+
+export async function updateTicketPriority(ticketId, priority, actor) {
+    const ticket = await findTicketByPublicId(ticketId);
+
+    if (!ticket) {
+        throw new AppError("Ticket not found", 404);
+    }
+
+    if (ticket.priority === priority) {
+        return mapTicketResponse(ticket);
+    }
+
+    const updated = await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+            priority,
+            updatedByUserId: actor.userId,
+            updatedByName: actor.name,
+            updatedByEmail: actor.email
+        }
+    });
+
+    return mapTicketResponse(updated);
 }

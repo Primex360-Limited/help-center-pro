@@ -41,6 +41,10 @@ export const updateWorkspaceProfileSchema = z
             .trim()
             .min(1, "Timezone is required")
             .max(64, "Timezone is too long")
+            .optional(),
+        /** Tenant mailbox used when agents send email from Help Centre Pro. */
+        supportEmail: z
+            .union([z.literal(""), z.string().trim().email().max(254)])
             .optional()
     })
     .refine((data) => Object.keys(data).length > 0, {

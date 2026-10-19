@@ -19,8 +19,54 @@
 }
 
 .agent-role-badge--admin {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: #fce7f6;
+  color: #c11574;
+}
+
+.agent-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.agent-status-pill--active {
+  color: #039855;
+}
+
+.agent-status-pill--active::before,
+.agent-status-pill--inactive::before,
+.agent-status-pill--pending::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.agent-status-pill--inactive {
+  color: #98a2b3;
+}
+
+.agent-status-pill--pending {
+  color: #dc6803;
+}
+
+.agents-stat--open {
+  color: #1570ef;
+  font-weight: 600;
+}
+
+.agents-stat--resolved {
+  color: #039855;
+  font-weight: 600;
+}
+
+.agents-admin-view {
+  border-color: #b2ddff !important;
+  color: #175cd3 !important;
+  background: #eff8ff !important;
 }
 
 /* Agent Action Buttons */
