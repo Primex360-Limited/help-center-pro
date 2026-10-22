@@ -17,6 +17,7 @@ import {
     createVoiceAccessToken,
     getTwilioClient,
     getTwilioPhoneNumber,
+    isBrowserVoiceConfigured,
     isTwilioConfigured
 } from "./twilio.client.js";
 import { isLikelyMobileE164, toE164 } from "./phone.utils.js";
@@ -47,15 +48,38 @@ async function resolveTenantFromNumber(actor) {
             tenant?.settings && typeof tenant.settings === "object"
                 ? tenant.settings
                 : {};
+        const calling =
+            settings.calling && typeof settings.calling === "object"
+                ? settings.calling
+                : {};
+
+        // Tenant's existing number wins when selected (HCP line paused).
+        if (calling.mode === "own" && calling.ownNumber) {
+            const own = toE164(String(calling.ownNumber));
+            if (own) return own;
+        }
+
         const numbers = Array.isArray(settings.callNumbers)
             ? settings.callNumbers
             : [];
-        const active = numbers.find((n) => n?.e164 && n?.status !== "inactive");
-        const fromWorkspace = toE164(String(active?.e164 || numbers[0]?.e164 || ""));
-        if (fromWorkspace) return fromWorkspace;
+        // Skip fictional demo placeholders (e.g. +1 555-01xx) — Twilio rejects them.
+        const usable = numbers.filter(
+            (n) =>
+                n?.e164 &&
+                n?.status !== "inactive" &&
+                !/^\+155501\d{2}$/.test(String(n.e164).replace(/[\s()-]/g, ""))
+        );
+
+        if (!calling.hcpPaused) {
+            const fromWorkspace = toE164(String(usable[0]?.e164 || ""));
+            if (fromWorkspace) return fromWorkspace;
+        } else if (calling.ownNumber) {
+            const own = toE164(String(calling.ownNumber));
+            if (own) return own;
+        }
     }
 
-    return getTwilioPhoneNumber();
+    return toE164(getTwilioPhoneNumber() || "") || getTwilioPhoneNumber();
 }
 
 /**
@@ -150,21 +174,17 @@ export async function placeOutboundCall({
     }
 
     const statusCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/status`;
-    const recordingCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/recording`;
     const agentNumber = await resolveAgentPhone(actor);
 
-    // Prefer agent-first bridge when a handset is on file; otherwise dial customer directly.
-    let call;
-    let callMode;
-
+    // 1) Agent handset on profile → ring agent first, then dial customer (any carrier).
     if (agentNumber && agentNumber !== customerNumber) {
-        callMode = "pstn_bridge";
         const connectUrl =
             `${publicApiBase()}/api/v1/tickets/voice/twiml/connect-customer` +
             `?to=${encodeURIComponent(customerNumber)}` +
-            `&ticketId=${encodeURIComponent(ticket.ticketId)}`;
+            `&ticketId=${encodeURIComponent(ticket.ticketId)}` +
+            `&from=${encodeURIComponent(fromNumber)}`;
 
-        call = await getTwilioClient().calls.create({
+        const call = await getTwilioClient().calls.create({
             to: agentNumber,
             from: fromNumber,
             url: connectUrl,
@@ -173,24 +193,54 @@ export async function placeOutboundCall({
             statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
             statusCallbackMethod: "POST"
         });
-    } else {
-        callMode = "pstn_direct";
-        const twimlUrl =
-            `${publicApiBase()}/api/v1/tickets/voice/twiml/outbound-customer` +
-            `?ticketId=${encodeURIComponent(ticket.ticketId)}`;
 
-        call = await getTwilioClient().calls.create({
-            to: customerNumber,
+        await addEventToTicket(
+            ticket.ticketId,
+            {
+                channel: TICKET_CHANNEL.PHONE,
+                customerName: customerName || ticket.customerName,
+                customerEmail: customerEmail || ticket.customerEmail,
+                customerPhone: customerNumber,
+                call: {
+                    direction: CALL_DIRECTION.OUTBOUND,
+                    duration: 0
+                },
+                eventMetadata: {
+                    provider: "twilio",
+                    callMode: "pstn_bridge",
+                    callSid: call.sid,
+                    callStatus: call.status,
+                    from: fromNumber,
+                    agentPhone: agentNumber,
+                    to: customerNumber,
+                    direction: CALL_DIRECTION.OUTBOUND,
+                    note: "Agent handset rings first; customer dialed on answer."
+                }
+            },
+            agentActor(actor)
+        );
+
+        return {
+            ticketId: ticket.ticketId,
+            callSid: call.sid,
+            status: call.status,
+            mode: "pstn_bridge",
             from: fromNumber,
-            url: twimlUrl,
-            method: "POST",
-            record: "record-from-answer",
-            recordingStatusCallback: recordingCallback,
-            recordingStatusCallbackMethod: "POST",
-            statusCallback,
-            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-            statusCallbackMethod: "POST"
-        });
+            agentPhone: agentNumber,
+            to: customerNumber,
+            message:
+                "Your phone will ring first — answer to talk to the customer."
+        };
+    }
+
+    // 2) No agent number → agent talks from the browser via the HCP Twilio line.
+    //    The PSTN leg is created by the Voice SDK when the agent connects;
+    //    TwiML (browser-outbound) dials the customer with the HCP caller ID.
+    if (!isBrowserVoiceConfigured()) {
+        throw new AppError(
+            "Add your agent phone number in your profile to call from your handset, or configure browser voice (TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_TWIML_APP_SID) to call from this device.",
+            503
+        );
     }
 
     await addEventToTicket(
@@ -206,17 +256,14 @@ export async function placeOutboundCall({
             },
             eventMetadata: {
                 provider: "twilio",
-                callMode,
-                callSid: call.sid,
-                callStatus: call.status,
+                callMode: "browser_pstn",
+                callSid: null,
+                callStatus: "initiated_browser",
                 from: fromNumber,
-                agentPhone: agentNumber || null,
+                agentPhone: null,
                 to: customerNumber,
                 direction: CALL_DIRECTION.OUTBOUND,
-                note:
-                    callMode === "pstn_bridge"
-                        ? "Outbound via HelpCentre Pro line (agent bridge)."
-                        : "Outbound via HelpCentre Pro line to customer."
+                note: "Browser voice via HelpCentre Pro line (no agent handset)."
             }
         },
         agentActor(actor)
@@ -224,19 +271,67 @@ export async function placeOutboundCall({
 
     return {
         ticketId: ticket.ticketId,
-        callSid: call.sid,
-        status: call.status,
-        mode: callMode,
+        callSid: null,
+        status: "initiated_browser",
+        mode: "browser_pstn",
         from: fromNumber,
         to: customerNumber,
-        message: "Calling customer from your HelpCentre Pro line…"
+        message: "Connecting you from this device via your HelpCentre Pro line…"
     };
+}
+
+/**
+ * TwiML for browser softphone calls — dials the customer PSTN number
+ * with the workspace HelpCentre Pro line as caller ID. Recorded both ways.
+ * Invoked via the TwiML App Voice URL when the agent connects from the browser.
+ */
+export function buildBrowserOutboundTwiml({ to, ticketId, from }) {
+    const customerNumber = toE164(to, { defaultRegion: "NG" });
+    const response = new twilio.twiml.VoiceResponse();
+
+    if (!customerNumber) {
+        response.say(
+            { voice: "alice" },
+            "Sorry, that number is invalid. Goodbye."
+        );
+        response.hangup();
+        return response.toString();
+    }
+
+    const callerId = toE164(from || "") || getTwilioPhoneNumber();
+    const recordingCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/recording`;
+    const statusCallback =
+        `${publicApiBase()}/api/v1/tickets/voice/webhooks/status` +
+        (ticketId ? `?ticketId=${encodeURIComponent(ticketId)}` : "");
+    const recordingCallbackWithTicket =
+        recordingCallback +
+        (ticketId ? `?ticketId=${encodeURIComponent(ticketId)}` : "");
+
+    const dial = response.dial({
+        callerId,
+        record: "record-from-answer-dual",
+        recordingStatusCallback: recordingCallbackWithTicket,
+        recordingStatusCallbackMethod: "POST",
+        timeout: 60,
+        answerOnBridge: true
+    });
+
+    dial.number(
+        {
+            statusCallback,
+            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
+            statusCallbackMethod: "POST"
+        },
+        customerNumber
+    );
+
+    return response.toString();
 }
 
 /**
  * TwiML when agent answers — dials the customer on the PSTN.
  */
-export function buildConnectCustomerTwiml({ to, ticketId }) {
+export function buildConnectCustomerTwiml({ to, ticketId, from }) {
     const customerNumber = toE164(to, { defaultRegion: "NG" });
     const response = new twilio.twiml.VoiceResponse();
 
@@ -249,7 +344,7 @@ export function buildConnectCustomerTwiml({ to, ticketId }) {
         return response.toString();
     }
 
-    const fromNumber = getTwilioPhoneNumber();
+    const fromNumber = toE164(from || "") || getTwilioPhoneNumber();
     const recordingCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/recording`;
 
     response.say(
@@ -373,15 +468,61 @@ export async function streamTicketRecording(ticketId, res) {
     return { streamed: true, ticketId: ticket.ticketId };
 }
 
-export function getAgentVoiceToken(actor) {
+export async function getAgentVoiceToken(actor) {
     const identity = `agent_${actor.userId || "user"}`;
     const token = createVoiceAccessToken({ identity });
+    const fromNumber = await resolveTenantFromNumber(actor);
     return {
         identity,
         token,
         configured: isTwilioConfigured(),
-        pstnEnabled: isTwilioConfigured()
+        browserConfigured: isBrowserVoiceConfigured(),
+        pstnEnabled: isTwilioConfigured(),
+        from: fromNumber,
+        twimlAppVoiceUrl: `${publicApiBase()}/api/v1/tickets/voice/twiml/browser-outbound`
     };
+}
+
+async function findCallEventForWebhook({ callSid, parentCallSid, ticketId }) {
+    const event = await prisma.ticketEvent.findFirst({
+        where: {
+            channel: TICKET_CHANNEL.PHONE,
+            OR: [
+                { metadata: { path: ["callSid"], equals: callSid } },
+                {
+                    metadata: {
+                        path: ["callSid"],
+                        equals: parentCallSid || ""
+                    }
+                }
+            ]
+        },
+        include: {
+            call: true,
+            ticket: true
+        }
+    });
+    if (event) return event;
+
+    // Browser calls: match by ticketId carried on the callback URL.
+    if (ticketId) {
+        const ticket = await findTicketByPublicId(ticketId);
+        if (ticket) {
+            return prisma.ticketEvent.findFirst({
+                where: {
+                    ticketRefId: ticket.id,
+                    channel: TICKET_CHANNEL.PHONE
+                },
+                include: {
+                    call: true,
+                    ticket: true
+                },
+                orderBy: { createdAt: "desc" }
+            });
+        }
+    }
+
+    return null;
 }
 
 export async function handleTwilioStatusWebhook(body = {}) {
@@ -393,18 +534,10 @@ export async function handleTwilioStatusWebhook(body = {}) {
     const duration = body.CallDuration ? Number(body.CallDuration) : null;
     const status = body.CallStatus || null;
 
-    const event = await prisma.ticketEvent.findFirst({
-        where: {
-            channel: TICKET_CHANNEL.PHONE,
-            OR: [
-                { metadata: { path: ["callSid"], equals: callSid } },
-                { metadata: { path: ["callSid"], equals: body.ParentCallSid || "" } }
-            ]
-        },
-        include: {
-            call: true,
-            ticket: true
-        }
+    const event = await findCallEventForWebhook({
+        callSid,
+        parentCallSid: body.ParentCallSid,
+        ticketId: body.ticketId
     });
 
     if (!event) {
@@ -468,18 +601,10 @@ export async function handleTwilioRecordingWebhook(body = {}) {
         return { ignored: true };
     }
 
-    const event = await prisma.ticketEvent.findFirst({
-        where: {
-            channel: TICKET_CHANNEL.PHONE,
-            OR: [
-                { metadata: { path: ["callSid"], equals: callSid } },
-                { metadata: { path: ["callSid"], equals: body.ParentCallSid || "" } }
-            ]
-        },
-        include: {
-            call: true,
-            ticket: true
-        }
+    const event = await findCallEventForWebhook({
+        callSid,
+        parentCallSid: body.ParentCallSid,
+        ticketId: body.ticketId
     });
 
     if (!event?.call?.id) {
@@ -524,6 +649,7 @@ export async function handleTwilioRecordingWebhook(body = {}) {
 export default {
     placeOutboundCall,
     buildConnectCustomerTwiml,
+    buildBrowserOutboundTwiml,
     buildOutboundCustomerTwiml,
     buildOutboundTwiml,
     getAgentVoiceToken,

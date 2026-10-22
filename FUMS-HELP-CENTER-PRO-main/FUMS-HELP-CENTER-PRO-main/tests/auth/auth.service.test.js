@@ -5,6 +5,7 @@ const userFindManyMock = jest.fn();
 const userFindUniqueMock = jest.fn();
 const userCreateMock = jest.fn();
 const userUpdateMock = jest.fn();
+const userUpdateManyMock = jest.fn();
 
 const sessionCreateMock = jest.fn();
 const sessionFindFirstMock = jest.fn();
@@ -16,6 +17,8 @@ const roleCreateMock = jest.fn();
 
 const tenantFindUniqueMock = jest.fn();
 const tenantFindFirstMock = jest.fn();
+const tenantCreateMock = jest.fn();
+const tenantCountMock = jest.fn();
 const tenantUpdateMock = jest.fn();
 
 const verificationTokenCreateMock = jest.fn();
@@ -43,6 +46,7 @@ const getEffectivePermissionsFromUserMock = jest.fn();
 const isSuperAdminUserMock = jest.fn();
 const recordAuditLogMock = jest.fn();
 const seedSystemRolesMock = jest.fn();
+const provisionTenantRolesMock = jest.fn();
 
 const prismaMock = {
     user: {
@@ -50,7 +54,8 @@ const prismaMock = {
         findMany: userFindManyMock,
         findUnique: userFindUniqueMock,
         create: userCreateMock,
-        update: userUpdateMock
+        update: userUpdateMock,
+        updateMany: userUpdateManyMock
     },
     session: {
         create: sessionCreateMock,
@@ -65,6 +70,8 @@ const prismaMock = {
     tenant: {
         findUnique: tenantFindUniqueMock,
         findFirst: tenantFindFirstMock,
+        create: tenantCreateMock,
+        count: tenantCountMock,
         update: tenantUpdateMock
     },
     verificationToken: {
@@ -114,9 +121,11 @@ const PROVIDER_ROW = {
 
 const ALL_MOCKS = [
     userFindFirstMock, userFindManyMock, userFindUniqueMock, userCreateMock,
-    userUpdateMock, sessionCreateMock, sessionFindFirstMock, sessionUpdateMock,
+    userUpdateMock, userUpdateManyMock, sessionCreateMock, sessionFindFirstMock,
+    sessionUpdateMock,
     sessionUpdateManyMock, roleFindFirstMock, roleCreateMock,
-    tenantFindUniqueMock, tenantFindFirstMock, tenantUpdateMock,
+    tenantFindUniqueMock, tenantFindFirstMock, tenantCreateMock, tenantCountMock,
+    tenantUpdateMock,
     verificationTokenCreateMock,
     verificationTokenFindFirstMock, verificationTokenUpdateMock,
     passwordResetTokenCreateMock, passwordResetTokenFindFirstMock,
@@ -125,7 +134,8 @@ const ALL_MOCKS = [
     comparePasswordMock, generateAccessTokenMock, generateRefreshTokenMock,
     hashPasswordMock, verifyRefreshTokenMock, buildUserAccessProfileMock,
     findUserWithRoleMock, getEffectivePermissionsFromUserMock,
-    isSuperAdminUserMock, recordAuditLogMock, seedSystemRolesMock
+    isSuperAdminUserMock, recordAuditLogMock, seedSystemRolesMock,
+    provisionTenantRolesMock
 ];
 /**
  * Reset every mock and install the happy-path defaults. `unstable_mockModule`
@@ -137,6 +147,7 @@ function resetMockState() {
 
     sessionCreateMock.mockResolvedValue({ id: "session-id" });
     sessionUpdateManyMock.mockResolvedValue({ count: 0 });
+    userUpdateManyMock.mockResolvedValue({ count: 0 });
     sendVerificationEmailMock.mockResolvedValue({});
     sendWelcomeEmailMock.mockResolvedValue({});
     sendPasswordResetEmailMock.mockResolvedValue({});
@@ -159,6 +170,7 @@ function resetMockState() {
     isSuperAdminUserMock.mockReturnValue(false);
     recordAuditLogMock.mockResolvedValue(undefined);
     seedSystemRolesMock.mockResolvedValue([]);
+    provisionTenantRolesMock.mockResolvedValue({});
 }
 
 async function loadAuthService(nodeEnv = "development") {
@@ -204,7 +216,7 @@ async function loadAuthService(nodeEnv = "development") {
 
     jest.unstable_mockModule("../../src/modules/roles/seedSystemRoles.js", () => ({
         seedSystemRoles: seedSystemRolesMock,
-        provisionTenantRoles: jest.fn().mockResolvedValue({}),
+        provisionTenantRoles: provisionTenantRolesMock,
         default: seedSystemRolesMock
     }));
 
@@ -894,6 +906,57 @@ describe("verifyEmailToken", () => {
         });
         expect(userUpdateMock).not.toHaveBeenCalled();
     });
+
+    it("unlocks the platform owner's provider seat in the same step", async () => {
+        const { verifyEmailToken } = await loadAuthService("development");
+
+        verificationTokenFindFirstMock.mockResolvedValue({
+            id: "55555555-5555-4555-8555-555555555555",
+            userId: USER_ID,
+            expiresAt: new Date(Date.now() + 60_000)
+        });
+        userFindUniqueMock.mockResolvedValue({
+            ...TENANT_USER,
+            emailVerified: false,
+            emailVerifiedAt: null,
+            mustChangePassword: false
+        });
+
+        await verifyEmailToken({ token: "raw-token" });
+
+        expect(userUpdateManyMock).toHaveBeenCalledWith({
+            where: {
+                email: TENANT_USER.email,
+                tenantId: null,
+                emailVerified: false
+            },
+            data: { emailVerified: true, emailVerifiedAt: expect.any(Date) }
+        });
+    });
+
+    it("leaves provider rows alone when a provider verifies its own email", async () => {
+        const { verifyEmailToken } = await loadAuthService("development");
+
+        verificationTokenFindFirstMock.mockResolvedValue({
+            id: "55555555-5555-4555-8555-555555555555",
+            userId: USER_ID,
+            expiresAt: new Date(Date.now() + 60_000)
+        });
+        userFindUniqueMock.mockResolvedValue({
+            ...PROVIDER_ROW,
+            emailVerified: false,
+            emailVerifiedAt: null,
+            mustChangePassword: false
+        });
+
+        await verifyEmailToken({ token: "raw-token" });
+
+        expect(userUpdateMock).toHaveBeenCalledWith({
+            where: { id: PROVIDER_ROW.id },
+            data: expect.objectContaining({ emailVerified: true })
+        });
+        expect(userUpdateManyMock).not.toHaveBeenCalled();
+    });
 });
 describe("resetPassword", () => {
     beforeEach(() => {
@@ -1051,6 +1114,153 @@ describe("refresh and logout", () => {
             data: expect.objectContaining({ isOnline: false })
         });
         expect(result).toBe(true);
+    });
+});
+
+describe("registerWorkspaceAccount", () => {
+    const SIGNUP_EMAIL = "founder@acme.com";
+    const WORKSPACE_ID = "99999999-9999-4999-8999-999999999999";
+    const SIGNUP_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const OWNER_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+    const SIGNUP_USER = {
+        id: SIGNUP_USER_ID,
+        tenantId: WORKSPACE_ID,
+        email: SIGNUP_EMAIL,
+        firstName: "Ada",
+        lastName: "Lovelace"
+    };
+
+    beforeEach(() => {
+        resetMockState();
+        provisionTenantRolesMock.mockResolvedValue({
+            "Tenant Admin": { id: ROLE_ID }
+        });
+    });
+
+    /**
+     * Signs up the first workspace with a clean slate. `bootstrapped` simulates a
+     * platform that already has a provider super admin, `otherWorkspaces` a
+     * platform that already has more than this brand-new workspace.
+     */
+    function primeSignup({ bootstrapped = false, otherWorkspaces = 0 } = {}) {
+        userFindManyMock.mockResolvedValue([]);
+        tenantFindFirstMock.mockResolvedValue(null);
+        tenantCreateMock.mockResolvedValue({
+            id: WORKSPACE_ID,
+            name: "Acme",
+            slug: "acme"
+        });
+        tenantCountMock.mockResolvedValue(otherWorkspaces);
+        userCreateMock
+            .mockResolvedValueOnce(SIGNUP_USER)
+            .mockResolvedValueOnce({ id: OWNER_ID, email: SIGNUP_EMAIL });
+        verificationTokenCreateMock.mockResolvedValue({});
+        roleFindFirstMock.mockResolvedValue(null);
+        roleCreateMock.mockResolvedValue({
+            id: ROLE_ID,
+            name: "Provider Super Admin",
+            tenantId: null
+        });
+        userFindFirstMock
+            .mockResolvedValueOnce(bootstrapped ? { id: OWNER_ID } : null)
+            .mockResolvedValueOnce(null);
+    }
+
+    it("gives the first workspace signup the provider super-admin seat", async () => {
+        const { registerWorkspaceAccount } = await loadAuthService();
+
+        primeSignup();
+
+        const result = await registerWorkspaceAccount({
+            fullName: "Ada Lovelace",
+            email: "Founder@Acme.com",
+            password: "Secret123!"
+        });
+
+        expect(result.platformOwner).toBe(true);
+        expect(userCreateMock).toHaveBeenCalledTimes(2);
+
+        const providerData = userCreateMock.mock.calls[1][0].data;
+
+        expect(providerData).toEqual(
+            expect.objectContaining({
+                tenantId: null,
+                userType: "provider",
+                email: SIGNUP_EMAIL,
+                passwordHash: "hashed-password",
+                firstName: "Ada",
+                lastName: "Lovelace",
+                roleId: ROLE_ID,
+                emailVerified: false,
+                emailVerifiedAt: null,
+                profileCompleted: true
+            })
+        );
+
+        expect(recordAuditLogMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                tenantId: null,
+                userId: OWNER_ID,
+                metadata: expect.objectContaining({
+                    registrationType: "platform_bootstrap_signup",
+                    workspaceId: WORKSPACE_ID
+                })
+            })
+        );
+    });
+
+    it("keeps the seat when the platform already has a provider super admin", async () => {
+        const { registerWorkspaceAccount } = await loadAuthService();
+
+        primeSignup({ bootstrapped: true });
+
+        const result = await registerWorkspaceAccount({
+            fullName: "Ada Lovelace",
+            email: SIGNUP_EMAIL,
+            password: "Secret123!"
+        });
+
+        expect(result.platformOwner).toBe(false);
+        expect(userCreateMock).toHaveBeenCalledTimes(1);
+        expect(tenantCountMock).not.toHaveBeenCalled();
+    });
+
+    it("never promotes a signup once other workspaces exist", async () => {
+        const { registerWorkspaceAccount } = await loadAuthService();
+
+        primeSignup({ otherWorkspaces: 2 });
+
+        const result = await registerWorkspaceAccount({
+            fullName: "Ada Lovelace",
+            email: SIGNUP_EMAIL,
+            password: "Secret123!"
+        });
+
+        expect(result.platformOwner).toBe(false);
+        expect(userCreateMock).toHaveBeenCalledTimes(1);
+        expect(tenantCountMock).toHaveBeenCalledWith({
+            where: { id: { not: WORKSPACE_ID } }
+        });
+    });
+
+    it("does not duplicate a provider account that already owns the address", async () => {
+        const { registerWorkspaceAccount } = await loadAuthService();
+
+        primeSignup();
+        userFindFirstMock.mockReset();
+        userFindFirstMock
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({ id: OWNER_ID });
+
+        const result = await registerWorkspaceAccount({
+            fullName: "Ada Lovelace",
+            email: SIGNUP_EMAIL,
+            password: "Secret123!"
+        });
+
+        expect(result.platformOwner).toBe(false);
+        expect(userCreateMock).toHaveBeenCalledTimes(1);
     });
 });
 

@@ -26,6 +26,16 @@ const logoUrlSchema = z
         "Logo must be an uploaded PNG/JPG/WEBP/GIF/SVG image or an https URL"
     );
 
+export const updateCallingSettingsSchema = z.object({
+    mode: z.enum(["hcp", "own"]).optional(),
+    hcpPaused: z.boolean().optional(),
+    ownNumber: z
+        .union([z.literal(""), z.string().trim().min(5).max(32)])
+        .nullable()
+        .optional()
+        .transform((v) => (v ? v : null))
+});
+
 export const updateWorkspaceProfileSchema = z
     .object({
         name: z

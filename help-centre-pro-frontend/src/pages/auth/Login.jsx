@@ -144,7 +144,9 @@ export default function Login() {
     setSubmitting(true);
 
     try {
-      const nextUser = await login(email.trim(), password);
+      const nextUser = await login(email.trim(), password, {
+        portal: "tenant",
+      });
       const destination = await routeSignedInUser(nextUser);
       if (destination !== "provider-blocked") {
         setSubmitting(false);

@@ -4,18 +4,25 @@ import { AppError } from "../../../shared/errors/AppError.js";
 
 let client = null;
 
+/** REST calling needs account credentials; caller ID is resolved per tenant. */
 export function isTwilioConfigured() {
+    return Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN);
+}
+
+/** Browser softphone (Voice JS SDK) additionally needs API keys + a TwiML App. */
+export function isBrowserVoiceConfigured() {
     return Boolean(
         env.TWILIO_ACCOUNT_SID &&
-            env.TWILIO_AUTH_TOKEN &&
-            env.TWILIO_PHONE_NUMBER
+            env.TWILIO_API_KEY_SID &&
+            env.TWILIO_API_KEY_SECRET &&
+            env.TWILIO_TWIML_APP_SID
     );
 }
 
 export function getTwilioClient() {
     if (!isTwilioConfigured()) {
         throw new AppError(
-            "Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.",
+            "Twilio is not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN (and provision a HelpCentre Pro call number).",
             503
         );
     }
@@ -36,14 +43,9 @@ export function getTwilioPhoneNumber() {
  * Requires TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET + TWILIO_TWIML_APP_SID.
  */
 export function createVoiceAccessToken({ identity }) {
-    if (
-        !env.TWILIO_ACCOUNT_SID ||
-        !env.TWILIO_API_KEY_SID ||
-        !env.TWILIO_API_KEY_SECRET ||
-        !env.TWILIO_TWIML_APP_SID
-    ) {
+    if (!isBrowserVoiceConfigured()) {
         throw new AppError(
-            "Twilio Voice client credentials are incomplete. Set TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, and TWILIO_TWIML_APP_SID.",
+            "Browser voice is not configured. Set TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, and TWILIO_TWIML_APP_SID, or add an agent phone number to use handset calling.",
             503
         );
     }
@@ -69,6 +71,7 @@ export function createVoiceAccessToken({ identity }) {
 
 export default {
     isTwilioConfigured,
+    isBrowserVoiceConfigured,
     getTwilioClient,
     getTwilioPhoneNumber,
     createVoiceAccessToken

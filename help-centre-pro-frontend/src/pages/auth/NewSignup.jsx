@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import { registerWorkspace } from "../../api/auth.api.js";
-import { needsCompanyDetails } from "../../utils/onboarding.js";
 import signupHero from "../../assets/signup-hero.png";
 import "../../styles/auth.css";
 
@@ -53,7 +52,11 @@ export default function NewSignup() {
 
       navigate("/check-email", {
         replace: true,
-        state: { email: registeredEmail, purpose: "verify" },
+        state: {
+          email: registeredEmail,
+          purpose: "verify",
+          platformOwner: Boolean(result?.data?.platformOwner),
+        },
       });
     } catch (err) {
       setError(err.message || t("common.error"));

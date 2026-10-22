@@ -319,6 +319,117 @@ button.app-nav__item:hover:not(:disabled) {
   color: #98a2b3;
 }
 
+.app-sidebar__profile-btn {
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  min-width: 0;
+}
+
+.app-profile-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(7, 12, 24, 0.64);
+  backdrop-filter: blur(8px);
+}
+
+.app-profile-modal__panel {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.35);
+}
+
+.app-profile-modal__panel h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 750;
+  color: #101828;
+}
+
+.app-profile-modal__sub {
+  margin: 6px 0 18px;
+  font-size: 13px;
+  color: #667085;
+}
+
+.app-profile-modal__panel label {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+  color: #344054;
+  margin-bottom: 8px;
+}
+
+.app-profile-modal__panel input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.app-profile-modal__panel input:focus {
+  outline: none;
+  border-color: #1570ef;
+  box-shadow: 0 0 0 3px rgba(21, 112, 239, 0.14);
+}
+
+.app-profile-modal__hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #667085;
+}
+
+.app-profile-modal__msg {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #027a48;
+}
+
+.app-profile-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.app-profile-modal__ghost {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.app-profile-modal__primary {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: none;
+  background: #1570ef;
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.app-profile-modal__primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .app-sidebar__logout {
   width: 32px;
   height: 32px;

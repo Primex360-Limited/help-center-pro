@@ -37,7 +37,8 @@
 
 .agent-status-pill--active::before,
 .agent-status-pill--inactive::before,
-.agent-status-pill--pending::before {
+.agent-status-pill--pending::before,
+.agent-status-pill--suspended::before {
   content: "";
   width: 8px;
   height: 8px;
@@ -53,6 +54,10 @@
   color: #dc6803;
 }
 
+.agent-status-pill--suspended {
+  color: #d92d20;
+}
+
 .agents-stat--open {
   color: #1570ef;
   font-weight: 600;
@@ -63,57 +68,131 @@
   font-weight: 600;
 }
 
-.agents-admin-view {
-  border-color: #b2ddff !important;
-  color: #175cd3 !important;
-  background: #eff8ff !important;
+/* Agent row actions — single "..." trigger opening the Manage Member menu */
+.agents-table__actions-head {
+  text-align: right;
 }
 
-/* Agent Action Buttons */
-.agent-actions {
-  display: flex;
-  gap: 8px;
+.agents-table__actions {
+  text-align: right;
+  width: 76px;
 }
 
-.agent-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 14px;
+.agents-table__menu-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  border: 1.5px solid;
+  background: transparent;
+  color: #98a2b3;
   cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.agent-action-btn:disabled {
+.agents-table__menu-btn:hover,
+.agents-table__menu-btn[aria-expanded="true"] {
+  background: #f2f4f7;
+  border-color: #eaecf0;
+  color: #344054;
+}
+
+.agents-table__menu-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.agent-action-btn--activate {
+.agents-table__menu-btn:focus-visible {
+  outline: 2px solid #7a5af8;
+  outline-offset: 2px;
+}
+
+/* Portal-rendered "Manage Member" dropdown */
+.agent-menu {
+  position: fixed;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgba(16, 24, 40, 0.16);
+  animation: admin-menu-in 120ms ease-out;
+}
+
+.agent-menu.is-up {
+  animation-name: admin-menu-in-up;
+}
+
+.agent-menu__header {
+  margin: 0 0 4px;
+  padding: 4px 10px 10px;
+  border-bottom: 1px solid #f2f4f7;
+  color: #101828;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.agent-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 9px;
   background: transparent;
-  border-color: #10b981;
-  color: #10b981;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  color: #344054;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.agent-action-btn--activate:hover:not(:disabled) {
-  background: #10b981;
-  color: #fff;
+.agent-menu__item svg {
+  flex-shrink: 0;
 }
 
-.agent-action-btn--deactivate {
-  background: transparent;
-  border-color: #ef4444;
-  color: #ef4444;
+.agent-menu__item:focus-visible {
+  outline: 2px solid #7a5af8;
+  outline-offset: -2px;
 }
 
-.agent-action-btn--deactivate:hover:not(:disabled) {
-  background: #ef4444;
-  color: #fff;
+.agent-menu__item:disabled {
+  color: #c3c8d1;
+  cursor: not-allowed;
+}
+
+.agent-menu__item--activate:hover:not(:disabled) {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.agent-menu__item--deactivate:hover:not(:disabled) {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.agent-menu__item--suspend {
+  color: #b42318;
+}
+
+.agent-menu__item--suspend:hover:not(:disabled) {
+  background: #fef3f2;
+}
+
+.agent-menu__divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #f2f4f7;
 }
 
 /* Status indicator for inactive */

@@ -20,10 +20,16 @@ export async function registerWorkspace(payload) {
   });
 }
 
-export async function login(payload) {
+/**
+ * `portal` ("admin" | "tenant") pins which identity scope wins when one email
+ * exists in both scopes - platform owners keep a workspace row *and* a provider
+ * row. The API reads this from the `X-Portal` header (`resolvePreferScope`).
+ */
+export async function login(payload, { portal } = {}) {
   const result = await apiRequest("/auth/login", {
     method: "POST",
     body: payload,
+    ...(portal ? { headers: { "X-Portal": portal } } : {}),
   });
 
   if (result?.data?.accessToken) {
@@ -43,6 +49,24 @@ export async function logout() {
 
 export async function getMe() {
   return apiRequest("/auth/me", { auth: true });
+}
+
+/** Save the signed-in agent's handset number for outbound call bridging. */
+export async function updateMyPhone(phoneNumber) {
+  return apiRequest("/auth/me/phone", {
+    method: "PATCH",
+    auth: true,
+    body: { phoneNumber: phoneNumber || null },
+  });
+}
+
+/** Save the signed-in agent's sender email for outbound customer emails. */
+export async function updateMySenderEmail(senderEmail) {
+  return apiRequest("/auth/me/sender-email", {
+    method: "PATCH",
+    auth: true,
+    body: { senderEmail: senderEmail || null },
+  });
 }
 
 export async function verifyEmail(token) {

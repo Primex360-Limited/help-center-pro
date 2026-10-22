@@ -17,6 +17,8 @@ import {
     registerWorkspace,
     resendVerification,
     resetUserPassword,
+    updateMyPhone,
+    updateMySenderEmail,
     updateUserPassword,
     verificationStatus,
     verifyEmail,
@@ -29,6 +31,8 @@ import {
     loginSchema,
     registerSchema,
     resetPasswordSchema,
+    updateMyPhoneSchema,
+    updateMySenderEmailSchema,
     updatePasswordSchema,
     verifyEmailSchema,
     workspaceSignupSchema,
@@ -174,6 +178,20 @@ authRoutes.post("/logout", asyncHandler(logout));
  *               $ref: '#/components/schemas/UserResponse'
  */
 authRoutes.get("/me", requireAuth, asyncHandler(me));
+
+authRoutes.patch(
+    "/me/phone",
+    requireAuth,
+    validate(updateMyPhoneSchema),
+    asyncHandler(updateMyPhone)
+);
+
+authRoutes.patch(
+    "/me/sender-email",
+    requireAuth,
+    validate(updateMySenderEmailSchema),
+    asyncHandler(updateMySenderEmail)
+);
 
 /**
  * @openapi

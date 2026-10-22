@@ -15,6 +15,8 @@ import ProfileSetup from "./pages/auth/ProfileSetup.jsx";
 import ResetPassword from "./pages/auth/ResetPassword.jsx";
 import VerifyEmail from "./pages/auth/VerifyEmail.jsx";
 import Agents from "./pages/agents/Agents.jsx";
+import AutomationRuleForm from "./pages/automations/AutomationRuleForm.jsx";
+import Automations from "./pages/automations/Automations.jsx";
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
 import PlatformOverview from "./pages/admin/PlatformOverview.jsx";
 import PlatformHowto from "./pages/admin/PlatformHowto.jsx";
@@ -27,7 +29,13 @@ import EmailsInbox from "./pages/tickets/EmailsInbox.jsx";
 import LiveChat from "./pages/tickets/LiveChat.jsx";
 import LogPhoneCall from "./pages/tickets/LogPhoneCall.jsx";
 import Tickets from "./pages/tickets/Tickets.jsx";
+import Customers from "./pages/customers/Customers.jsx";
+import CustomerProfile from "./pages/customers/CustomerProfile.jsx";
+import Templates from "./pages/templates/Templates.jsx";
+import UserManagement from "./pages/workspace/UserManagement.jsx";
 import WorkspaceProfile from "./pages/workspace/WorkspaceProfile.jsx";
+import EmailSettings from "./pages/workspace/EmailSettings.jsx";
+import EmailOAuthCallback from "./pages/workspace/EmailOAuthCallback.jsx";
 
 export default function App() {
   // Tenant host: never expose admin signup/login/shell (and never leak admin URL).
@@ -68,6 +76,40 @@ export default function App() {
           <Route path="/tickets/new" element={<CreateTicketChooser />} />
           <Route path="/tickets/new/email" element={<CreateEmailTicket />} />
           <Route path="/tickets/new/call" element={<LogPhoneCall />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/customers/:customerKey" element={<CustomerProfile />} />
+          <Route
+            path="/templates"
+            element={
+              <ProtectedRoute permission="template:read" tenantOnly>
+                <Templates />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/automations"
+            element={
+              <ProtectedRoute permission="ticket:transfer" tenantOnly>
+                <Automations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/automations/new"
+            element={
+              <ProtectedRoute permission="ticket:assign" tenantOnly>
+                <Automations />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/automations/:ruleId/edit"
+            element={
+              <ProtectedRoute permission="ticket:transfer" tenantOnly>
+                <AutomationRuleForm />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/agents"
             element={
@@ -81,6 +123,30 @@ export default function App() {
             element={
               <ProtectedRoute permission="settings:read" tenantOnly>
                 <WorkspaceProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/user-management"
+            element={
+              <ProtectedRoute permission="user_management:read" tenantOnly>
+                <UserManagement />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/email-settings"
+            element={
+              <ProtectedRoute permission="settings:read" tenantOnly>
+                <EmailSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/email/callback/:provider"
+            element={
+              <ProtectedRoute tenantOnly>
+                <EmailOAuthCallback />
               </ProtectedRoute>
             }
           />
@@ -139,6 +205,7 @@ export default function App() {
         />
         <Route path="/tickets/*" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="/agents" element={<PortalAccessDenied title="Workspace portal only" />} />
+        <Route path="/automations/*" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -197,6 +264,40 @@ export default function App() {
         <Route path="/tickets/new" element={<CreateTicketChooser />} />
         <Route path="/tickets/new/email" element={<CreateEmailTicket />} />
         <Route path="/tickets/new/call" element={<LogPhoneCall />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/customers/:customerKey" element={<CustomerProfile />} />
+        <Route
+          path="/templates"
+          element={
+            <ProtectedRoute permission="template:read" tenantOnly>
+              <Templates />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/automations"
+          element={
+            <ProtectedRoute permission="ticket:transfer" tenantOnly>
+              <Automations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/automations/new"
+          element={
+            <ProtectedRoute permission="ticket:assign" tenantOnly>
+              <Automations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/automations/:ruleId/edit"
+          element={
+            <ProtectedRoute permission="ticket:transfer" tenantOnly>
+              <AutomationRuleForm />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/agents"
           element={
@@ -210,6 +311,23 @@ export default function App() {
           element={
             <ProtectedRoute permission="settings:read" tenantOnly>
               <WorkspaceProfile />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/workspace/user-management" element={<UserManagement />} />
+        <Route
+          path="/workspace/email-settings"
+          element={
+            <ProtectedRoute permission="settings:read" tenantOnly>
+              <EmailSettings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings/email/callback/:provider"
+          element={
+            <ProtectedRoute tenantOnly>
+              <EmailOAuthCallback />
             </ProtectedRoute>
           }
         />

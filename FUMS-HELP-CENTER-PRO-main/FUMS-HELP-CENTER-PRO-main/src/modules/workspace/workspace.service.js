@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import prisma from "../../database/prisma/client.js";
+import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { AUDIT_ACTION } from "../../shared/constants/system.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
@@ -35,6 +36,12 @@ function buildWorkspaceProfile(tenant) {
         supportEmailConnected: Boolean(settings.supportEmailConnected),
         /** Numbers provisioned by Help Centre Pro for this workspace. */
         callNumbers: Array.isArray(settings.callNumbers) ? settings.callNumbers : [],
+        /** Calling line preference: HelpCentre Pro number vs tenant's own number. */
+        calling: {
+            mode: settings.calling?.mode === "own" ? "own" : "hcp",
+            hcpPaused: Boolean(settings.calling?.hcpPaused),
+            ownNumber: settings.calling?.ownNumber || null
+        },
         /** Widget / chat integration — customers appear when the app uses this key. */
         widgetApiKeyPrefix: settings.widgetApiKeyPrefix || null,
         widgetApiKeyHint:
@@ -158,8 +165,155 @@ export async function generateWidgetApiKey({ tenantId, actorId = null }) {
     };
 }
 
+function isDemoPlaceholderNumber(e164) {
+    return /^\+155501\d{2}$/.test(String(e164 || "").replace(/[\s()-]/g, ""));
+}
+
+/**
+ * Generate (allocate) a HelpCentre Pro number for this workspace from the
+ * platform Twilio pool. Idempotent — returns the existing active line.
+ */
+export async function generateCallNumber({ tenantId, actorId = null }) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const settings = asSettings(tenant.settings);
+    const existing = (Array.isArray(settings.callNumbers)
+        ? settings.callNumbers
+        : []
+    ).filter((n) => n?.e164 && !isDemoPlaceholderNumber(n.e164));
+
+    const active = existing.find((n) => n.status !== "inactive");
+    if (active) {
+        return {
+            workspace: buildWorkspaceProfile(tenant),
+            number: active,
+            message: "Your HelpCentre Pro number is already active."
+        };
+    }
+
+    const poolNumber = String(env.TWILIO_PHONE_NUMBER || "").trim();
+    if (!poolNumber || isDemoPlaceholderNumber(poolNumber)) {
+        throw new AppError(
+            "HelpCentre Pro number pool is empty. Set TWILIO_PHONE_NUMBER to a Twilio-owned number so workspaces can be provisioned.",
+            503
+        );
+    }
+
+    const number = {
+        id: `num_${crypto.randomBytes(6).toString("hex")}`,
+        e164: poolNumber,
+        label: "Main support line",
+        provisionedBy: "helpcentre_pro",
+        status: "active",
+        generatedAt: new Date().toISOString()
+    };
+
+    const updatedSettings = {
+        ...settings,
+        callNumbers: [...existing, number],
+        calling: {
+            mode: "hcp",
+            hcpPaused: false,
+            ownNumber: settings.calling?.ownNumber || null
+        }
+    };
+
+    const updatedTenant = await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { settings: updatedSettings }
+    });
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: actorId,
+        action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+        entity: "Tenant",
+        entityId: tenant.id,
+        metadata: { changes: { callNumberGenerated: true } }
+    });
+
+    return {
+        workspace: buildWorkspaceProfile(updatedTenant),
+        number,
+        message: "HelpCentre Pro number generated and active for outbound calls."
+    };
+}
+
+/**
+ * Pause/resume the HelpCentre Pro number, or switch to the tenant's
+ * existing number as the outbound calling line.
+ */
+export async function updateCallingSettings({
+    tenantId,
+    payload = {},
+    actorId = null
+}) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const settings = asSettings(tenant.settings);
+    const current = settings.calling || {};
+
+    const calling = {
+        mode:
+            payload.mode !== undefined
+                ? payload.mode
+                : current.mode === "own"
+                  ? "own"
+                  : "hcp",
+        hcpPaused:
+            payload.hcpPaused !== undefined
+                ? Boolean(payload.hcpPaused)
+                : Boolean(current.hcpPaused),
+        ownNumber:
+            payload.ownNumber !== undefined
+                ? payload.ownNumber
+                  ? String(payload.ownNumber).trim()
+                  : null
+                : current.ownNumber || null
+    };
+
+    if (calling.mode === "own" && !calling.ownNumber) {
+        throw new AppError(
+            "Enter your existing phone number to use it as your calling line.",
+            400
+        );
+    }
+    if (calling.mode === "own") {
+        calling.hcpPaused = true;
+    }
+
+    const updatedTenant = await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: {
+            settings: {
+                ...settings,
+                calling
+            }
+        }
+    });
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: actorId,
+        action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+        entity: "Tenant",
+        entityId: tenant.id,
+        metadata: { changes: { calling } }
+    });
+
+    return {
+        workspace: buildWorkspaceProfile(updatedTenant),
+        message:
+            calling.mode === "own"
+                ? "Your existing number is now your calling line. HelpCentre Pro number paused."
+                : calling.hcpPaused
+                  ? "HelpCentre Pro number paused."
+                  : "HelpCentre Pro number is your calling line."
+    };
+}
+
 export default {
     getWorkspaceProfile,
     updateWorkspaceProfile,
-    generateWidgetApiKey
+    generateWidgetApiKey,
+    generateCallNumber,
+    updateCallingSettings
 };

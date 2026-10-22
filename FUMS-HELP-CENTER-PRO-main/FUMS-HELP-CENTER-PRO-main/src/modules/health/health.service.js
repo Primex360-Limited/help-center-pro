@@ -79,13 +79,14 @@ function checkEmailConfig() {
     if (hasKey && hasFrom) {
         return serviceResult("resend_email", "configured", {
             required: false,
-            from: env.EMAIL_FROM
+            from: env.EMAIL_FROM,
+            scope: "platform transactional email (verification, invites, resets)"
         });
     }
 
     return serviceResult("resend_email", "misconfigured", {
         required: false,
-        message: "Set a valid RESEND_API_KEY and EMAIL_FROM"
+        message: "Set a valid RESEND_API_KEY and EMAIL_FROM for platform transactional email"
     });
 }
 

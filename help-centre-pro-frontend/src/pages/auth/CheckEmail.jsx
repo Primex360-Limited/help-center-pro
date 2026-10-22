@@ -15,6 +15,7 @@ export default function CheckEmail() {
 
   const email = location.state?.email || "";
   const purpose = location.state?.purpose || "verify";
+  const platformOwner = Boolean(location.state?.platformOwner);
   const [verified, setVerified] = useState(Boolean(location.state?.verified));
   const [profileCompleted, setProfileCompleted] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
@@ -117,6 +118,14 @@ export default function CheckEmail() {
           {busy ? t("common.loading") : t("auth.checkEmail.continue")}
         </button>
         {hint ? <p className="verify-hint">{hint}</p> : null}
+        {platformOwner ? (
+          <p className="verify-hint">
+            {t("auth.checkEmail.platformOwner", {
+              defaultValue:
+                "You're the platform owner: once this email is verified, the same credentials also open the Admin Portal.",
+            })}
+          </p>
+        ) : null}
         {verified && purpose !== "reset" ? (
           <p className="verify-ready">{t("auth.checkEmail.ready")}</p>
         ) : null}

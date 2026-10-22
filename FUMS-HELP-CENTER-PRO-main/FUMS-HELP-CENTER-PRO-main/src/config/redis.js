@@ -13,7 +13,15 @@ export async function connectRedis() {
     }
 
     const client = createClient({
-        url: env.REDIS_URL
+        url: env.REDIS_URL,
+        socket: {
+            connectTimeout: 5000,
+            // Fail fast after a few attempts instead of retrying forever —
+            // otherwise an absent Redis silently blocks server startup
+            // (including the email sync worker) when REDIS_REQUIRED=false.
+            reconnectStrategy: (retries) =>
+                retries > 3 ? false : Math.min(retries * 500, 2000)
+        }
     });
 
     client.on("error", (error) => {

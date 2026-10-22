@@ -40,7 +40,7 @@ import { provisionTenantRoles, seedSystemRoles } from "../roles/seedSystemRoles.
  *  - Email lookups are tenant-aware: `User.email` is unique per workspace only
  *    (`@@unique([tenantId, email])`), because Postgres treats NULLs as
  *    distinct. Whenever a caller knows the workspace it MUST pass `tenantId`
- *    so the right row is selected; without it the provider-scope row wins and
+ *    so the right row is selected; without it the oldest workspace row wins and
  *    an email that exists in several workspaces is rejected as ambiguous.
  *  - Access tokens carry the PRD claim set
  *    (`sub`, `user_id`, `tenant_id`, `role_id`, `user_type`, `permissions`)
@@ -289,6 +289,9 @@ async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName
         }
     });
 
+    /** A pre-verification retry can change the password: keep the seat in step. */
+    await syncPlatformOwnerPassword(user, { passwordHash });
+
     if (existingUser.tenantId && !needsEmailVerification) {
         await prisma.agentInvitation.updateMany({
             where: {
@@ -349,6 +352,147 @@ async function claimExistingWorkspaceAccount(existingUser, { firstName, lastName
 }
 
 /**
+ * Keep the platform owner's provider identity on the same password.
+ *
+ * The bootstrap signup gives the founder a second, provider-scope row for the
+ * same address (see `grantPlatformOwnershipToFirstSignup`), and "the same
+ * credentials open /admin" only holds while both rows carry the same hash.
+ * Workspace-side password writes are therefore replayed onto that sibling row,
+ * and its live Admin Portal sessions are revoked with it.
+ *
+ * The sync is deliberately one-way: one address may be an unrelated admin in a
+ * different workspace, so provider writes never cascade into tenant rows.
+ */
+async function syncPlatformOwnerPassword(user, { passwordHash, emailVerifiedAt = null }) {
+    if (!user?.tenantId || !user.email) {
+        return false;
+    }
+
+    const platformOwner = await prisma.user.findFirst({
+        where: {
+            email: user.email,
+            tenantId: null,
+            userType: USER_TYPE.PROVIDER
+        },
+        select: { id: true }
+    });
+
+    if (!platformOwner) {
+        return false;
+    }
+
+    await prisma.user.update({
+        where: { id: platformOwner.id },
+        data: {
+            passwordHash,
+            ...(emailVerifiedAt
+                ? { emailVerified: true, emailVerifiedAt }
+                : {})
+        }
+    });
+
+    await revokeUserSessions(platformOwner.id);
+
+    return true;
+}
+
+/**
+ * Give the very first self-serve signup the platform super-admin seat.
+ *
+ * A brand-new platform has no provider operator yet, so the person who creates
+ * the first workspace also owns HelpCentre Pro. A second, provider-scope
+ * identity is created for the same email/password on purpose:
+ *  - `requireProviderScope` fail-closes on any workspace binding, so the tenant
+ *    row can never open the Admin Portal;
+ *  - `User.email` is unique per workspace only (`@@unique([tenantId, email])`),
+ *    so one address can exist in both scopes;
+ *  - `resolveLoginUser` already prefers the provider row for Admin Portal
+ *    sign-ins (`x-portal: admin`) and the workspace row inside a workspace.
+ *
+ * Returns the created provider account, or `null` when the platform is already
+ * bootstrapped (there is a provider super admin) or this is not the first
+ * workspace - signup then behaves exactly as before.
+ */
+async function grantPlatformOwnershipToFirstSignup({
+    tenant,
+    email,
+    passwordHash,
+    firstName,
+    lastName
+}) {
+    const superAdminRole = await ensureSuperAdminRole();
+
+    const existingSuperAdmin = await prisma.user.findFirst({
+        where: { roleId: superAdminRole.id, userType: USER_TYPE.PROVIDER },
+        select: { id: true }
+    });
+
+    if (existingSuperAdmin) {
+        return null;
+    }
+
+    /** Only the workspace that opened the platform may claim the seat. */
+    const otherWorkspaces = await prisma.tenant.count({
+        where: { id: { not: tenant.id } }
+    });
+
+    if (otherWorkspaces > 0) {
+        return null;
+    }
+
+    const existingProviderAccount = await prisma.user.findFirst({
+        where: { email, tenantId: null },
+        select: { id: true }
+    });
+
+    if (existingProviderAccount) {
+        return null;
+    }
+
+    const platformOwner = await prisma.user.create({
+        data: {
+            tenantId: null,
+            userType: USER_TYPE.PROVIDER,
+            email,
+            passwordHash,
+            firstName,
+            lastName,
+            roleId: superAdminRole.id,
+            status: USER_STATUS.ACTIVE,
+            /**
+             * Mirrors the workspace row: the seat is reserved at signup but stays
+             * locked until the address is proven. `verifyEmailToken` flips both
+             * rows together, so `loginUser`'s "verify your email" gate still
+             * protects the Admin Portal.
+             */
+            emailVerified: false,
+            emailVerifiedAt: null,
+            mustChangePassword: false,
+            profileCompleted: true,
+            deniedPermissions: []
+        },
+        select: { id: true, email: true }
+    });
+
+    await recordAuditLog({
+        tenantId: null,
+        userId: platformOwner.id,
+        action: AUDIT_ACTION.ROLE_ASSIGNED,
+        entity: "User",
+        entityId: platformOwner.id,
+        metadata: {
+            roleId: superAdminRole.id,
+            email,
+            registrationType: "platform_bootstrap_signup",
+            workspaceId: tenant.id,
+            workspaceSlug: tenant.slug
+        }
+    });
+
+    return platformOwner;
+}
+
+/**
  * Public self-serve signup:
  * 1) Create workspace + tenant admin (emailVerified=false)
  * 2) Send verification email
@@ -362,7 +506,7 @@ export async function registerWorkspaceAccount({ fullName, email, password }) {
         throw new AppError("Password must be at least 8 characters", 400);
     }
 
-    const existingUser = await prisma.user.findFirst({
+    const matchingUsers = await prisma.user.findMany({
         where: { email: normalizedEmail },
         select: {
             id: true,
@@ -375,8 +519,20 @@ export async function registerWorkspaceAccount({ fullName, email, password }) {
             lastLoginAt: true,
             mustChangePassword: true,
             firstName: true
-        }
+        },
+        orderBy: { createdAt: "asc" }
     });
+
+    /**
+     * One address can exist twice - once per scope - because the platform owner
+     * keeps a workspace row plus a provider row. Workspace rows win here so the
+     * founder sees the normal "account already exists" answer instead of the
+     * Admin-Portal-reserved error.
+     */
+    const existingUser =
+        matchingUsers.find((candidate) => candidate.tenantId !== null) ||
+        matchingUsers[0] ||
+        null;
 
     if (existingUser) {
         if (existingUser.userType === USER_TYPE.PROVIDER || existingUser.tenantId === null) {
@@ -464,6 +620,18 @@ export async function registerWorkspaceAccount({ fullName, email, password }) {
 
     const issued = await issueAndSendVerification(user);
 
+    /**
+     * A brand-new platform is owned by whoever creates its first workspace, so
+     * the founder can open the Admin Portal with the same credentials.
+     */
+    const platformOwner = await grantPlatformOwnershipToFirstSignup({
+        tenant,
+        email: normalizedEmail,
+        passwordHash,
+        firstName,
+        lastName
+    });
+
     await recordAuditLog({
         tenantId: tenant.id,
         userId: user.id,
@@ -489,6 +657,7 @@ export async function registerWorkspaceAccount({ fullName, email, password }) {
     return {
         emailSent: issued.emailSent,
         claimed: false,
+        platformOwner: Boolean(platformOwner),
         email: user.email,
         ...(issued.verificationToken
             ? { verificationToken: issued.verificationToken }
@@ -656,16 +825,16 @@ export async function registerSuperAdmin({
         data: {
             tenantId: null,
             userType: USER_TYPE.PROVIDER,
-            email: normalizedEmail,
-            passwordHash,
-            firstName,
-            lastName,
+        email: normalizedEmail,
+        passwordHash,
+        firstName,
+        lastName,
             roleId: superAdminRole.id,
-            status: USER_STATUS.ACTIVE,
+        status: USER_STATUS.ACTIVE,
             emailVerified: true,
             emailVerifiedAt: verifiedAt,
-            mustChangePassword: false,
-            deniedPermissions: []
+        mustChangePassword: false,
+        deniedPermissions: []
         },
         include: { role: { include: { permissions: { include: { permission: true } } } } }
     });
@@ -673,7 +842,7 @@ export async function registerSuperAdmin({
     const emailSent = await safeSendEmail(
         () =>
             sendWelcomeEmail({
-                to: user.email,
+        to: user.email,
                 firstName: user.firstName
             }),
         "welcome email"
@@ -865,11 +1034,11 @@ export async function loginUser({
     }
 
     if (!user.passwordHash) {
-        throw new AppError(
+            throw new AppError(
             "Finish creating your account on the Sign up page, then sign in.",
-            403
-        );
-    }
+                403
+            );
+        }
 
     const isPasswordValid = await comparePassword(password, user.passwordHash);
 
@@ -896,7 +1065,7 @@ export async function loginUser({
             tenantId: user.tenantId ?? null,
             deviceInfo: deviceInfo ?? null,
             ipAddress: ipAddress ?? null,
-            refreshTokenHash,
+        refreshTokenHash,
             expiresAt: new Date(Date.now() + SEVEN_DAYS_IN_MS)
         }
     });
@@ -1170,7 +1339,7 @@ async function loadRefreshSessionUser({ refreshToken }) {
 
     const session = await prisma.session.findFirst({
         where: {
-            userId: decoded.sub,
+        userId: decoded.sub,
             refreshTokenHash: hashToken(refreshToken),
             isRevoked: false
         }
@@ -1256,9 +1425,11 @@ export async function logoutUser({ refreshToken }) {
 /**
  * Tenant-aware email lookup for the unauthenticated flows.
  *
- * The workspace row wins when `tenantId` is known, then the provider row (for
- * `tenantId IS NULL` semantics), and finally any row so a tenant user is still
- * found when the request carried no resolvable host.
+ * The workspace row wins when `tenantId` is known. Without one, a workspace row
+ * is still preferred over the provider row: the self-serve flows (verification,
+ * password reset) must act on the identity the workspace app signs in with, and
+ * `syncPlatformOwnerPassword` mirrors those writes onto the platform owner's
+ * provider row. Provider rows stay reachable for Admin-Portal-only accounts.
  */
 async function findUserByEmail(email, tenantId = null) {
     const normalizedEmail = normalizeEmail(email);
@@ -1271,6 +1442,15 @@ async function findUserByEmail(email, tenantId = null) {
         if (scopedUser) {
             return scopedUser;
         }
+    }
+
+    const workspaceUser = await prisma.user.findFirst({
+        where: { email: normalizedEmail, tenantId: { not: null } },
+        orderBy: { createdAt: "asc" }
+    });
+
+    if (workspaceUser) {
+        return workspaceUser;
     }
 
     const providerUser = await prisma.user.findFirst({
@@ -1317,6 +1497,42 @@ export async function revokeTenantSessions(tenantId, client = prisma) {
 
 /** Current user with its resolved role/permissions (used by `GET /auth/me`). */
 export async function getCurrentUser(userId) {
+    return attachAccessProfile(userId);
+}
+
+/** Save the agent's handset number used for outbound call bridging. */
+export async function updateCurrentUserPhone(userId, phoneNumber) {
+    const trimmed = phoneNumber ? String(phoneNumber).trim() : null;
+    await prisma.user.update({
+        where: { id: userId },
+        data: { phoneNumber: trimmed || null }
+    });
+    return attachAccessProfile(userId);
+}
+
+/** Save the agent's sender email used for outbound customer emails (Resend). */
+export async function updateCurrentUserSenderEmail(userId, senderEmail) {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { metadata: true }
+    });
+    const metadata =
+        user?.metadata && typeof user.metadata === "object" && !Array.isArray(user.metadata)
+            ? user.metadata
+            : {};
+    const normalized = senderEmail
+        ? String(senderEmail).trim().toLowerCase()
+        : null;
+
+    await prisma.user.update({
+        where: { id: userId },
+        data: {
+            metadata: {
+                ...metadata,
+                senderEmail: normalized
+            }
+        }
+    });
     return attachAccessProfile(userId);
 }
 
@@ -1410,6 +1626,18 @@ export async function verifyEmailToken({ token }) {
         }
     });
 
+    /**
+     * The platform owner keeps a second, provider-scope row for the same address
+     * (see `grantPlatformOwnershipToFirstSignup`). Verifying the workspace row
+     * proves the address, so unlock the Admin Portal seat in the same step.
+     */
+    if (user.tenantId) {
+        await prisma.user.updateMany({
+            where: { email: user.email, tenantId: null, emailVerified: false },
+            data: { emailVerified: true, emailVerifiedAt: now }
+        });
+    }
+
     await prisma.verificationToken.update({
         where: { id: verificationRecord.id },
         data: { usedAt: now }
@@ -1460,7 +1688,7 @@ export async function requestPasswordReset({ email, tenantId = null }) {
 
     const emailSent = await safeSendEmail(
         () => sendPasswordResetEmail({
-            to: user.email,
+        to: user.email,
             firstName: user.firstName,
             token: rawToken
         }),
@@ -1516,6 +1744,11 @@ export async function resetPassword({ token, password, confirmPassword }) {
             emailVerified: true,
             emailVerifiedAt: user.emailVerifiedAt ?? now
         }
+    });
+
+    await syncPlatformOwnerPassword(user, {
+        passwordHash,
+        emailVerifiedAt: user.emailVerifiedAt ?? now
     });
 
     await prisma.passwordResetToken.update({
@@ -1586,6 +1819,8 @@ export async function changePassword({
             passwordChangedAt: new Date()
         }
     });
+
+    await syncPlatformOwnerPassword(user, { passwordHash });
 
     await revokeUserSessions(user.id);
 

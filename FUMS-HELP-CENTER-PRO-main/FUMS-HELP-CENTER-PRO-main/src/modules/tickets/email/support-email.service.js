@@ -14,26 +14,23 @@ import {
     TICKET_CHANNEL,
     TICKET_PRIORITY
 } from "../ticket.constants.js";
-import { mapTicketEventResponse } from "../helpers/map-ticket-event-response.js";
-import {
-    getReceivedEmail,
-    sendSupportEmail,
-    verifyResendWebhook
-} from "./support-email.provider.js";
+import { sendPlatformEmail, isPlatformSmtpConfigured } from "../../../shared/mail/platform-mailer.js";
 import {
     broadcastInboundEmail,
     broadcastTicketEvent
 } from "../realtime/ticket-socket.service.js";
 import { mapTicketResponse } from "../helpers/map-ticket-response.js";
+import { getDefaultEmailAccount } from "../../email/email-account.service.js";
+import { sendReplyEmail } from "../../email/smtp/smtp.service.js";
 
 const SYSTEM_EMAIL_ACTOR = Object.freeze({
-    userId: "system:resend",
-    name: "Resend Email Webhook",
-    email: env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM || "support@example.com"
+    userId: "system:mailbox-sync",
+    name: "Mailbox Sync",
+    email: env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM || "support@helpcentre-pro.local"
 });
 
-function stripHtml(html = "") {
-    return html
+export function stripEmailHtml(html = "") {
+    return String(html)
         .replace(/<style[\s\S]*?<\/style>/gi, "")
         .replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<[^>]+>/g, " ")
@@ -41,255 +38,300 @@ function stripHtml(html = "") {
         .trim();
 }
 
-function normalizeEmail(email) {
+export function normalizeEmailAddress(email) {
     return email?.trim().toLowerCase() || null;
 }
 
-function parseAddress(value) {
-    const raw = Array.isArray(value) ? value[0] : value;
-
-    if (!raw) {
-        return {
-            email: null,
-            name: null
-        };
-    }
-
-    const match = raw.match(/^(.*?)<([^>]+)>$/);
-
-    if (!match) {
-        return {
-            email: normalizeEmail(raw),
-            name: null
-        };
-    }
-
-    return {
-        name: match[1].replace(/"/g, "").trim() || null,
-        email: normalizeEmail(match[2])
-    };
-}
-
-function extractTicketId(value = "") {
+export function extractTicketPublicId(value = "") {
     return (
-        value.match(/\bTK-\d{1,8}\b/i)?.[0]?.toUpperCase() ||
-        value.match(/\bTCKT-\d{8}-[A-F0-9]{6}\b/i)?.[0]?.toUpperCase() ||
+        String(value).match(/\bTK-\d{1,8}\b/i)?.[0]?.toUpperCase() ||
+        String(value).match(/\bTCKT-\d{8}-[A-F0-9]{6}\b/i)?.[0]?.toUpperCase() ||
         null
     );
 }
 
-function getHeader(headers, key) {
-    if (!headers) {
-        return null;
-    }
-
-    const match = Object.entries(headers).find(
-        ([headerKey]) => headerKey.toLowerCase() === key.toLowerCase()
-    );
-
-    return match?.[1] || null;
-}
-
-function buildEmailMetadata({
+/** Shared email metadata stored on ticket events (used for dedupe/threading). */
+export function buildEmailMetadata({
     direction,
-    receivedEmail,
-    webhookData,
-    outboundEmail,
-    inReplyTo,
-    references
+    provider = "smtp",
+    mailboxAccountId = null,
+    messageId = null,
+    inReplyTo = null,
+    references = null,
+    receivedAt = null,
+    to = null,
+    cc = null,
+    attachments = null,
+    hasHtml = false
 }) {
     return {
         email: {
-            provider: "resend",
+            provider,
             direction,
-            resendEmailId: receivedEmail?.id || webhookData?.email_id || outboundEmail?.id,
-            messageId: receivedEmail?.message_id || webhookData?.message_id,
-            inReplyTo,
-            references,
-            receivedAt: receivedEmail?.created_at || webhookData?.created_at,
-            to: receivedEmail?.to || webhookData?.to,
-            cc: receivedEmail?.cc || webhookData?.cc,
-            bcc: receivedEmail?.bcc || webhookData?.bcc,
-            attachments: receivedEmail?.attachments || webhookData?.attachments,
-            hasHtml: Boolean(receivedEmail?.html)
+            mailboxAccountId,
+            messageId: messageId || null,
+            inReplyTo: inReplyTo || null,
+            references: references || null,
+            receivedAt: receivedAt || null,
+            to: to || null,
+            cc: cc || null,
+            attachments: attachments || null,
+            hasHtml: Boolean(hasHtml)
         }
     };
 }
 
-function buildInboundEmailData(webhookData, receivedEmail) {
-    const from = parseAddress(receivedEmail?.from || webhookData.from);
-    const to = receivedEmail?.to || webhookData.to || [];
-    const subject = receivedEmail?.subject || webhookData.subject || "New support email";
-    const text = receivedEmail?.text || stripHtml(receivedEmail?.html || "") || webhookData.text || "";
-    const body = text || "Customer sent an email with no text body.";
-    const headers = receivedEmail?.headers || {};
-
-    return {
-        subject,
-        body,
-        html: receivedEmail?.html,
-        fromEmail: from.email,
-        fromName: from.name,
-        toEmail: parseAddress(to).email || env.SUPPORT_EMAIL_FROM,
-        inReplyTo: getHeader(headers, "in-reply-to"),
-        references: getHeader(headers, "references")
-    };
+async function findEventByMessageId(messageId) {
+    if (!messageId) return null;
+    const variants = [
+        messageId,
+        String(messageId).replace(/^<|>$/g, ""),
+        `<${String(messageId).replace(/^<|>$/g, "")}>`
+    ];
+    for (const variant of [...new Set(variants)]) {
+        const found = await findTicketEventByEmailMetadata({ messageId: variant });
+        if (found) return found;
+    }
+    return null;
 }
 
-async function resolveEmailTicket({ subject, fromEmail, inReplyTo, references }) {
-    const ticketId = extractTicketId(subject) || extractTicketId(inReplyTo) || extractTicketId(references);
-
+async function resolveThreadTicket({ subject, customerEmail, inReplyTo, references }) {
+    const ticketId =
+        extractTicketPublicId(subject) ||
+        extractTicketPublicId(inReplyTo || "") ||
+        extractTicketPublicId(references || "");
     if (ticketId) {
-        return findTicketByPublicId(ticketId);
+        const byPublicId = await findTicketByPublicId(ticketId);
+        if (byPublicId) return byPublicId;
     }
 
-    const threadEvent = await findTicketEventByEmailMetadata({
-        messageId: inReplyTo || references
-    });
-
-    if (threadEvent?.ticket) {
-        return threadEvent.ticket;
+    for (const ref of [inReplyTo, references]) {
+        if (!ref) continue;
+        for (const token of String(ref).split(/\s+/).filter(Boolean)) {
+            const threadEvent = await findEventByMessageId(token);
+            if (threadEvent?.ticket) return threadEvent.ticket;
+        }
     }
 
-    return findLatestActiveTicketByCustomerEmail(fromEmail);
+    if (customerEmail) {
+        return findLatestActiveTicketByCustomerEmail(customerEmail);
+    }
+    return null;
 }
 
-export async function processResendInboundEmailWebhook(req) {
-    const event = verifyResendWebhook(req);
+/**
+ * Ingest one message from a connected mailbox (IMAP sync).
+ *
+ * INBOUND  — customer wrote to the agent's mailbox: creates a ticket or
+ *            appends to the matching thread.
+ * OUTBOUND — the agent wrote to a customer directly from their own mail
+ *            app (found in the Sent folder): appended to the matching
+ *            ticket so HelpCentre Pro shows the full conversation.
+ *
+ * Messages are deduped by Message-ID, so mail sent from HelpCentre Pro
+ * (which is filed into Sent by SMTP) is never imported twice.
+ */
+export async function ingestMailboxEmail({
+    account,
+    direction,
+    fromEmail,
+    fromName = null,
+    toEmail,
+    subject = "New support email",
+    body = "",
+    html = null,
+    messageId = null,
+    inReplyTo = null,
+    references = null,
+    receivedAt = null,
+    attachments = null
+}) {
+    const from = normalizeEmailAddress(fromEmail);
+    const to = normalizeEmailAddress(toEmail);
+    const accountEmail = normalizeEmailAddress(account?.email);
+    const text = body || stripEmailHtml(html || "") || "Customer sent an email with no text body.";
 
-    if (event.type !== "email.received") {
-        return {
-            ignored: true,
-            type: event.type
-        };
+    if (!from) return { skipped: true, reason: "missing_sender" };
+    if (direction === "INBOUND" && accountEmail && from === accountEmail) {
+        return { skipped: true, reason: "own_message" };
     }
 
-    const webhookData = event.data || {};
-    const duplicateEvent = await findTicketEventByEmailMetadata({
-        resendEmailId: webhookData.email_id,
-        messageId: webhookData.message_id
+    const duplicate = await findEventByMessageId(messageId);
+    if (duplicate) {
+        return { duplicate: true, ticketId: duplicate.ticket?.ticketId || null };
+    }
+
+    const isOutbound = direction === "OUTBOUND";
+    const customerEmail = isOutbound ? to : from;
+    const ticket = await resolveThreadTicket({
+        subject,
+        customerEmail,
+        inReplyTo,
+        references
     });
 
-    if (duplicateEvent) {
-        return {
-            duplicate: true,
-            ticket: duplicateEvent.ticket,
-            event: mapTicketEventResponse(duplicateEvent)
-        };
-    }
-
-    const receivedEmail = await getReceivedEmail(webhookData.email_id);
-    const inboundEmail = buildInboundEmailData(webhookData, receivedEmail);
-
-    if (!inboundEmail.fromEmail) {
-        throw new AppError("Inbound support email is missing a sender address", 400);
-    }
-
-    const existingTicket = await resolveEmailTicket({
-        subject: inboundEmail.subject,
-        fromEmail: inboundEmail.fromEmail,
-        inReplyTo: inboundEmail.inReplyTo,
-        references: inboundEmail.references
-    });
     const eventMetadata = buildEmailMetadata({
-        direction: "INBOUND",
-        receivedEmail,
-        webhookData,
-        inReplyTo: inboundEmail.inReplyTo,
-        references: inboundEmail.references
+        direction,
+        provider: account?.provider || "smtp",
+        mailboxAccountId: account?.id || null,
+        messageId,
+        inReplyTo,
+        references,
+        receivedAt,
+        to: to ? [to] : null,
+        attachments,
+        hasHtml: Boolean(html)
     });
 
-    if (existingTicket) {
-        const eventResponse = await addEventToTicket(
-            existingTicket.ticketId,
+    const mailboxActor = account?.userId
+        ? {
+              userId: account.userId,
+              name: account.displayName || account.email,
+              email: account.email
+          }
+        : SYSTEM_EMAIL_ACTOR;
+
+    if (ticket) {
+        const event = await addEventToTicket(
+            ticket.ticketId,
             {
                 channel: TICKET_CHANNEL.EMAIL,
-                customerName: inboundEmail.fromName || existingTicket.customerName,
-                customerEmail: inboundEmail.fromEmail,
+                customerName: isOutbound ? ticket.customerName : fromName || ticket.customerName,
+                customerEmail: customerEmail || ticket.customerEmail,
                 email: {
-                    subject: inboundEmail.subject,
-                    body: inboundEmail.body,
-                    fromEmail: inboundEmail.fromEmail,
-                    toEmail: inboundEmail.toEmail,
-                    senderType: SENDER_TYPE.CUSTOMER
+                    subject,
+                    body: text,
+                    fromEmail: from,
+                    toEmail: to,
+                    senderType: isOutbound ? SENDER_TYPE.AGENT : SENDER_TYPE.CUSTOMER
                 },
                 eventMetadata
             },
-            SYSTEM_EMAIL_ACTOR
+            isOutbound ? mailboxActor : SYSTEM_EMAIL_ACTOR
         );
-        const ticketResponse = mapTicketResponse(existingTicket);
 
-        broadcastInboundEmail({
-            ticket: ticketResponse,
-            event: eventResponse,
-            created: false
+        broadcastTicketEvent(ticket.ticketId, event, {
+            source: "EMAIL",
+            direction
         });
 
-        return {
-            created: false,
-            ticket: ticketResponse,
-            event: eventResponse
-        };
+        return { processed: true, action: "added_to_ticket", ticketId: ticket.ticketId, event };
     }
 
-    const ticket = await createTicket(
+    if (isOutbound) {
+        // Agent emailed someone who has no matching ticket — not support mail.
+        return { skipped: true, reason: "no_matching_ticket" };
+    }
+
+    const newTicket = await createTicket(
         {
-            title: inboundEmail.subject,
-            description: inboundEmail.body,
+            title: subject,
+            description: text,
             priority: TICKET_PRIORITY.MEDIUM,
-            customerName: inboundEmail.fromName || inboundEmail.fromEmail,
-            customerEmail: inboundEmail.fromEmail,
+            customerName: fromName || from,
+            customerEmail: from,
             channel: TICKET_CHANNEL.EMAIL,
             email: {
-                subject: inboundEmail.subject,
-                body: inboundEmail.body,
-                fromEmail: inboundEmail.fromEmail,
-                toEmail: inboundEmail.toEmail,
+                subject,
+                body: text,
+                fromEmail: from,
+                toEmail: to,
                 senderType: SENDER_TYPE.CUSTOMER
             },
             initialEventMetadata: eventMetadata
         },
         SYSTEM_EMAIL_ACTOR
     );
-    const thread = await getTicketThread(ticket.ticketId);
+    const thread = await getTicketThread(newTicket.ticketId);
     const initialEvent = thread[thread.length - 1] || null;
 
-    broadcastInboundEmail({
-        ticket,
-        event: initialEvent,
-        created: true
-    });
+    broadcastInboundEmail({ ticket: newTicket, event: initialEvent, created: true });
 
+    return { processed: true, action: "created_ticket", ticketId: newTicket.ticketId, event: initialEvent };
+}
+
+function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function formatFromAddress(email, name) {
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    const cleanName = String(name || "").replace(/["<>]/g, "").trim();
+    if (!cleanName) return cleanEmail;
+    return `"${cleanName}" <${cleanEmail}>`;
+}
+
+/**
+ * Preferred display sender for outbound customer email:
+ * 1) Agent sender email (My profile)  2) Tenant support email (Settings)
+ * 3) Platform EMAIL_FROM. Actual delivery goes through the agent's
+ * connected mailbox whenever one exists (the mailbox address is then the
+ * real From), otherwise through platform SMTP.
+ */
+async function resolveOutboundSender(actor) {
+    const tenantId = actor?.tenantId || actor?.tenant_id || null;
+
+    let agentEmail = null;
+    let agentName = actor?.name || null;
+    if (actor?.userId) {
+        const user = await prisma.user.findUnique({
+            where: { id: actor.userId },
+            select: { firstName: true, lastName: true, email: true, metadata: true }
+        });
+        const meta =
+            user?.metadata && typeof user.metadata === "object" && !Array.isArray(user.metadata)
+                ? user.metadata
+                : {};
+        if (isValidEmail(meta.senderEmail)) {
+            agentEmail = String(meta.senderEmail).trim().toLowerCase();
+        }
+        agentName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || agentName;
+    }
+
+    let tenantEmail = null;
+    let tenantName = null;
+    if (tenantId) {
+        const tenant = await prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { name: true, settings: true }
+        });
+        const settings =
+            tenant?.settings && typeof tenant.settings === "object" && !Array.isArray(tenant.settings)
+                ? tenant.settings
+                : {};
+        if (isValidEmail(settings.supportEmail)) {
+            tenantEmail = String(settings.supportEmail).trim().toLowerCase();
+        }
+        tenantName = tenant?.name || null;
+    }
+
+    const platformEmail = normalizeEmailAddress(
+        String(env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM || "").match(/<([^>]+)>/)?.[1] ||
+            env.SUPPORT_EMAIL_FROM ||
+            env.EMAIL_FROM ||
+            ""
+    );
+
+    if (agentEmail) {
+        return { email: agentEmail, name: agentName || tenantName || "Support", source: "agent", platformEmail };
+    }
+    if (tenantEmail) {
+        return { email: tenantEmail, name: tenantName || agentName || "Support", source: "tenant", platformEmail };
+    }
     return {
-        created: true,
-        ticket,
-        event: initialEvent
+        email: platformEmail || "support@helpcentre-pro.local",
+        name: tenantName || agentName || "HelpCentre Pro Support",
+        source: "platform",
+        platformEmail
     };
 }
 
-async function resolveTenantOutboundFrom(actor) {
-    const tenantId = actor?.tenantId || actor?.tenant_id || null;
-    if (!tenantId) {
-        return env.SUPPORT_EMAIL_FROM || env.EMAIL_FROM;
-    }
-
-    const tenant = await prisma.tenant.findUnique({
-        where: { id: tenantId },
-        select: { settings: true }
-    });
-    const settings =
-        tenant?.settings && typeof tenant.settings === "object" && !Array.isArray(tenant.settings)
-            ? tenant.settings
-            : {};
-
-    return (
-        settings.supportEmail ||
-        env.SUPPORT_EMAIL_FROM ||
-        env.EMAIL_FROM ||
-        "support@example.com"
-    );
-}
-
+/**
+ * Reply to a ticket by email — sent directly through the agent's connected
+ * mailbox (SMTP) so the message is delivered from the agent's real address
+ * and filed in their Sent folder; IMAP Sent-sync is deduped by Message-ID.
+ * Falls back to platform SMTP when no mailbox is connected.
+ */
 export async function replyToTicketByEmail(ticketId, data, actor) {
     const ticket = await findTicketByPublicId(ticketId);
 
@@ -297,33 +339,73 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
         throw new AppError("Ticket not found", 404);
     }
 
-    const toEmail = normalizeEmail(data.toEmail || ticket.customerEmail);
+    const toEmail = normalizeEmailAddress(data.toEmail || ticket.customerEmail);
 
     if (!toEmail) {
         throw new AppError("Ticket does not have a customer email address", 400);
     }
 
-    const fromEmail = await resolveTenantOutboundFrom(actor);
+    const sender = await resolveOutboundSender(actor);
+    const preferredFrom = formatFromAddress(sender.email, sender.name);
 
     const events = await listTicketEvents(ticket.id);
     const latestEmailEvent = [...events].reverse().find(
         (event) => event.type === "EMAIL" && event.metadata?.email?.messageId
     );
-    const inReplyTo = data.inReplyTo || latestEmailEvent?.metadata?.email?.messageId;
+    const inReplyTo = data.inReplyTo || latestEmailEvent?.metadata?.email?.messageId || undefined;
     const references = data.references || latestEmailEvent?.metadata?.email?.references || inReplyTo;
     const subject = data.subject || `Re: [${ticket.ticketId}] ${ticket.title}`;
     const body = data.body.trim();
-    const outboundEmail = await sendSupportEmail({
-        to: toEmail,
-        from: fromEmail,
-        subject,
-        text: body,
-        html: data.html,
-        headers: {
-            ...(inReplyTo ? { "In-Reply-To": inReplyTo } : {}),
-            ...(references ? { References: references } : {})
+
+    const userId = actor?.userId || actor?.id;
+    const tenantId = actor?.tenantId || actor?.tenant_id;
+
+    let emailAccount = null;
+    if (userId) {
+        try {
+            emailAccount = await getDefaultEmailAccount(userId, tenantId);
+        } catch {
+            emailAccount = null;
         }
-    });
+    }
+
+    let outboundEmail = null;
+    let effectiveFrom = preferredFrom;
+    let usedMailbox = false;
+    let sentFolder = null;
+
+    if (emailAccount && emailAccount.isActive) {
+        const smtpResult = await sendReplyEmail(emailAccount, toEmail, subject, body, {
+            inReplyTo,
+            references
+        });
+        outboundEmail = { id: smtpResult.messageId, messageId: smtpResult.messageId };
+        effectiveFrom = formatFromAddress(emailAccount.email, emailAccount.displayName || sender.name);
+        usedMailbox = true;
+        sentFolder = smtpResult.sentFolder || null;
+    } else {
+        // No connected mailbox — deliver via platform SMTP.
+        if (!isPlatformSmtpConfigured() && env.NODE_ENV === "production") {
+            throw new AppError(
+                "Connect your mailbox in Settings → Email so replies are sent from your own address (platform SMTP is not configured).",
+                503
+            );
+        }
+        const platformResult = await sendPlatformEmail({
+            to: toEmail,
+            from: preferredFrom,
+            replyTo: sender.email,
+            subject,
+            text: body,
+            html: data.html,
+            headers: {
+                ...(inReplyTo ? { "In-Reply-To": inReplyTo } : {}),
+                ...(references ? { References: references } : {})
+            }
+        });
+        outboundEmail = { id: platformResult.messageId, messageId: platformResult.messageId };
+    }
+
     const event = await addEventToTicket(
         ticketId,
         {
@@ -331,13 +413,15 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
             email: {
                 subject,
                 body,
-                fromEmail,
+                fromEmail: effectiveFrom,
                 toEmail,
                 senderType: SENDER_TYPE.AGENT
             },
             eventMetadata: buildEmailMetadata({
                 direction: "OUTBOUND",
-                outboundEmail,
+                provider: emailAccount?.provider || "smtp",
+                mailboxAccountId: emailAccount?.id || null,
+                messageId: outboundEmail.messageId,
                 inReplyTo,
                 references
             })
@@ -345,13 +429,21 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
         actor
     );
 
-    broadcastTicketEvent(ticketId, event, {
-        source: "EMAIL",
-        direction: "OUTBOUND"
-    });
+    broadcastTicketEvent(ticketId, event, { source: "EMAIL", direction: "OUTBOUND" });
 
     return {
         email: outboundEmail,
-        event
+        event,
+        from: effectiveFrom,
+        preferredFrom,
+        fromFallback: !usedMailbox,
+        senderSource: sender.source,
+        usedMailbox,
+        usedSmtp: usedMailbox,
+        mailboxEmail: emailAccount?.email || null,
+        emailAccountId: emailAccount?.id || null,
+        sentFolder
     };
 }
+
+export { mapTicketResponse };

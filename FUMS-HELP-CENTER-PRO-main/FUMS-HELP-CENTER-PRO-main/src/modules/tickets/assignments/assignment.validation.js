@@ -13,5 +13,9 @@ export const assignTicketSchema = z.object({
 
 export const transferTicketSchema = z.object({
     assignedToUserId: uuidSchema,
-    transferReason: z.string().trim().min(3, "Transfer reason is required")
+    transferReason: z.string().trim().min(3, "Transfer reason is required"),
+    priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+    notifyCustomer: z.boolean().optional(),
+    addInternalNote: z.boolean().optional(),
+    keepAsFollower: z.boolean().optional()
 });

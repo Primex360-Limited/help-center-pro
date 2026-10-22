@@ -1,15 +1,6 @@
 import successResponse from "../../../shared/utils/apiResponse.js";
 import { buildActorSnapshotFromRequest } from "../ticket.utils.js";
-import {
-    processResendInboundEmailWebhook,
-    replyToTicketByEmail
-} from "./support-email.service.js";
-
-export async function resendInboundEmailWebhookHandler(req, res) {
-    const result = await processResendInboundEmailWebhook(req);
-
-    return successResponse(res, "Inbound email processed successfully", result);
-}
+import { replyToTicketByEmail } from "./support-email.service.js";
 
 export async function replyToTicketByEmailHandler(req, res) {
     const result = await replyToTicketByEmail(

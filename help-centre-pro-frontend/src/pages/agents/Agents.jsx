@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Ban,
   CheckCircle2,
-  ChevronRight,
-  Copy,
+  Clock,
   Download,
+  MoreHorizontal,
   Plus,
   Search,
   ShieldCheck,
+  UserCheck,
   UserPlus,
   Users,
+  UserX,
   X,
 } from "lucide-react";
 import { inviteUser } from "../../api/invitations.api.js";
@@ -19,6 +20,7 @@ import {
   activateUser,
   deactivateUser,
   listUsers,
+  suspendUser,
 } from "../../api/users.api.js";
 import AddAgentModal, {
   roleDisplayLabel,
@@ -32,9 +34,34 @@ import "../../styles/auth.css";
 import "../../styles/agents.css";
 import "../../styles/admin.css";
 
-/** Portal-rendered row menu, sized like the platform tenant menu. */
-const MENU_WIDTH = 208;
-const MENU_ESTIMATED_HEIGHT = 168;
+/** Portal-rendered row menu ("Manage Member") shown from the "..." trigger. */
+const MENU_WIDTH = 232;
+const MENU_ESTIMATED_HEIGHT = 196;
+
+/** Copy for the confirm dialog that guards every membership status change. */
+const STATUS_CONFIRM = {
+  active: {
+    title: (name) => `Reactivate ${name}?`,
+    message: (name) =>
+      `${name} will regain access to the shared queue and their assigned tickets.`,
+    confirmLabel: "Reactivate",
+    tone: "primary",
+  },
+  inactive: {
+    title: (name) => `Deactivate ${name}?`,
+    message: (name) =>
+      `${name} loses access immediately, including any active session. Their tickets stay in the workspace and access can be restored later.`,
+    confirmLabel: "Deactivate",
+    tone: "danger",
+  },
+  suspended: {
+    title: (name) => `Suspend ${name}?`,
+    message: (name) =>
+      `${name} is blocked from signing in and any active session ends now. Their tickets stay in the workspace and the suspension can be lifted at any time.`,
+    confirmLabel: "Suspend",
+    tone: "danger",
+  },
+};
 
 const ROLE_FILTERS = [
   { value: "all", label: "All roles" },
@@ -48,6 +75,7 @@ const STATUS_FILTERS = [
   { value: "active", label: "Active" },
   { value: "pending", label: "Pending invite" },
   { value: "inactive", label: "Deactivated" },
+  { value: "suspended", label: "Suspended" },
 ];
 
 const STATUS_META = {
@@ -211,6 +239,7 @@ export default function Agents() {
     () => filtered.find((user) => (user.id || user.email) === menuFor) || null,
     [filtered, menuFor]
   );
+  const activeMenuStatus = activeMenuUser ? normalizedStatus(activeMenuUser) : "";
 
   const closeMenu = useCallback(() => setMenuFor(null), []);
 
@@ -288,16 +317,6 @@ export default function Agents() {
     }
   }
 
-  async function handleCopyEmail(user) {
-    closeMenu();
-    try {
-      await navigator.clipboard.writeText(user.email || "");
-      setBanner(`Copied ${user.email}`);
-    } catch {
-      setError("Copying to the clipboard is blocked by this browser");
-    }
-  }
-
   function handleExportCsv() {
     setError("");
 
@@ -357,13 +376,19 @@ export default function Agents() {
     try {
       if (nextStatus === "active") {
         await activateUser(key);
+      } else if (nextStatus === "suspended") {
+        await suspendUser(key);
       } else {
         await deactivateUser(key);
       }
       setConfirmTarget(null);
       setBanner(
         `${displayName(user)} ${
-          nextStatus === "active" ? "reactivated" : "deactivated"
+          nextStatus === "active"
+            ? "reactivated"
+            : nextStatus === "suspended"
+              ? "suspended"
+              : "deactivated"
         }`
       );
       await loadData();
@@ -375,7 +400,9 @@ export default function Agents() {
   }
 
   const confirmPerson = confirmTarget ? displayName(confirmTarget.user) : "";
-  const confirmIsActivate = confirmTarget?.nextStatus === "active";
+  const confirmCopy = confirmTarget
+    ? STATUS_CONFIRM[confirmTarget.nextStatus]
+    : null;
 
   const kpiCards = [
     {
@@ -433,9 +460,6 @@ export default function Agents() {
           >
             <Download size={16} />
             Export CSV
-          </button>
-          <button type="button" className="admin-btn admin-btn--ghost agents-admin-view">
-            Admin view
           </button>
           {canInvite ? (
             <button
@@ -535,7 +559,7 @@ export default function Agents() {
               <th>Assigned</th>
               <th>Open</th>
               <th>Resolved</th>
-              <th aria-label="Actions" />
+              <th className="agents-table__actions-head">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -581,20 +605,8 @@ export default function Agents() {
                       </span>
                     </td>
                     <td>
-                      <span
-                        className={`agent-status-pill agent-status-pill--${
-                          status === "active"
-                            ? "active"
-                            : status === "pending"
-                              ? "pending"
-                              : "inactive"
-                        }`}
-                      >
-                        {status === "active"
-                          ? "+Active"
-                          : status === "pending"
-                            ? "Pending"
-                            : "+Inactive"}
+                      <span className={`agent-status-pill agent-status-pill--${status}`}>
+                        {meta.label}
                       </span>
                       {status === "pending" ? (
                         <p className="agents-table__hint">
@@ -609,50 +621,27 @@ export default function Agents() {
                     <td className="agents-stat agents-stat--resolved">
                       {Number(stats.resolved || 0)}
                     </td>
-                    <td onClick={(event) => event.stopPropagation()}>
-                      <div className="agent-actions">
-                        {canDeactivate && status !== "pending" ? (
-                          status === "active" ? (
-                            <button
-                              type="button"
-                              className="agent-action-btn agent-action-btn--deactivate"
-                              disabled={actionBusy === key}
-                              onClick={() =>
-                                requestStatusChange(user, "inactive")
-                              }
-                            >
-                              <Ban size={14} />
-                              Deactivate
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="agent-action-btn agent-action-btn--activate"
-                              disabled={actionBusy === key}
-                              onClick={() =>
-                                requestStatusChange(user, "active")
-                              }
-                            >
-                              <UserPlus size={14} />
-                              Activate
-                            </button>
-                          )
-                        ) : (
-                          <button
-                            type="button"
-                            className="admin-row-actions__btn"
-                            aria-label={`Actions for ${displayName(user)}`}
-                            aria-expanded={menuFor === key}
-                            ref={(node) => {
-                              if (node) triggerRefs.current[key] = node;
-                              else delete triggerRefs.current[key];
-                            }}
-                            onClick={() => openActions(key)}
-                          >
-                            <ChevronRight size={18} />
-                          </button>
-                        )}
-                      </div>
+                    <td
+                      className="agents-table__actions"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {canDeactivate ? (
+                        <button
+                          type="button"
+                          className="agents-table__menu-btn"
+                          aria-label={`Actions for ${displayName(user)}`}
+                          aria-haspopup="menu"
+                          aria-expanded={menuFor === key}
+                          disabled={actionBusy === key}
+                          ref={(node) => {
+                            if (node) triggerRefs.current[key] = node;
+                            else delete triggerRefs.current[key];
+                          }}
+                          onClick={() => openActions(key)}
+                        >
+                          <MoreHorizontal size={18} />
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -682,52 +671,52 @@ export default function Agents() {
         ? createPortal(
             <div
               ref={menuRef}
-              className={`admin-menu admin-menu--portal${menuPos.openUp ? " is-up" : ""}`}
+              className={`agent-menu${menuPos.openUp ? " is-up" : ""}`}
               style={{ top: menuPos.top, left: menuPos.left, width: MENU_WIDTH }}
               role="menu"
+              aria-label={`Manage ${displayName(activeMenuUser)}`}
             >
+              <p className="agent-menu__header">Manage Member</p>
+
               <button
                 type="button"
-                className="edit"
                 role="menuitem"
-                onClick={() => handleCopyEmail(activeMenuUser)}
+                className="agent-menu__item agent-menu__item--activate"
+                disabled={
+                  activeMenuStatus === "active" || activeMenuStatus === "pending"
+                }
+                onClick={() => requestStatusChange(activeMenuUser, "active")}
               >
-                <Copy size={14} style={{ marginRight: 8 }} />
-                Copy email
+                <UserCheck size={16} aria-hidden="true" />
+                Activate
               </button>
 
-              {canDeactivate &&
-              normalizedStatus(activeMenuUser) !== "pending" ? (
-                normalizedStatus(activeMenuUser) === "active" ? (
-                  <button
-                    type="button"
-                    className="deactivate"
-                    role="menuitem"
-                    disabled={
-                      actionBusy === (activeMenuUser.id || activeMenuUser.email)
-                    }
-                    onClick={() =>
-                      requestStatusChange(activeMenuUser, "inactive")
-                    }
-                  >
-                    <Ban size={14} style={{ marginRight: 8 }} />
-                    Deactivate access
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="activate"
-                    role="menuitem"
-                    disabled={
-                      actionBusy === (activeMenuUser.id || activeMenuUser.email)
-                    }
-                    onClick={() => requestStatusChange(activeMenuUser, "active")}
-                  >
-                    <CheckCircle2 size={14} style={{ marginRight: 8 }} />
-                    Reactivate access
-                  </button>
-                )
-              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                className="agent-menu__item agent-menu__item--deactivate"
+                disabled={activeMenuStatus !== "active"}
+                onClick={() => requestStatusChange(activeMenuUser, "inactive")}
+              >
+                <Clock size={16} aria-hidden="true" />
+                Deactivate
+              </button>
+
+              <div className="agent-menu__divider" role="none" />
+
+              <button
+                type="button"
+                role="menuitem"
+                className="agent-menu__item agent-menu__item--suspend"
+                disabled={
+                  activeMenuStatus === "suspended" ||
+                  activeMenuStatus === "pending"
+                }
+                onClick={() => requestStatusChange(activeMenuUser, "suspended")}
+              >
+                <UserX size={16} aria-hidden="true" />
+                Suspend
+              </button>
             </div>,
             document.body
           )
@@ -751,20 +740,12 @@ export default function Agents() {
         />
       ) : null}
 
-      {confirmTarget ? (
+      {confirmTarget && confirmCopy ? (
         <ConfirmActionModal
-          title={
-            confirmIsActivate
-              ? `Reactivate ${confirmPerson}?`
-              : `Deactivate ${confirmPerson}?`
-          }
-          message={
-            confirmIsActivate
-              ? `${confirmPerson} will regain access to the shared queue and their assigned tickets.`
-              : `${confirmPerson} loses access immediately, including any active session. Their tickets stay in the workspace and access can be restored later.`
-          }
-          confirmLabel={confirmIsActivate ? "Reactivate" : "Deactivate"}
-          tone={confirmIsActivate ? "primary" : "danger"}
+          title={confirmCopy.title(confirmPerson)}
+          message={confirmCopy.message(confirmPerson)}
+          confirmLabel={confirmCopy.confirmLabel}
+          tone={confirmCopy.tone}
           busy={
             actionBusy === (confirmTarget.user.id || confirmTarget.user.email)
           }

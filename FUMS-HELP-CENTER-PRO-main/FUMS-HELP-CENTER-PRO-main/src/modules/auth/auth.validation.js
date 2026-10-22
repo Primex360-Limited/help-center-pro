@@ -90,6 +90,26 @@ const LANGUAGE_CODES = [
     "hi"
 ];
 
+/** Agent handset for outbound calls (self-service profile setting). */
+export const updateMyPhoneSchema = z.object({
+    phoneNumber: z
+        .string()
+        .trim()
+        .max(32)
+        .nullable()
+        .optional()
+        .transform((v) => (v ? v : null))
+});
+
+/** Agent sender email for outbound customer emails via Resend. */
+export const updateMySenderEmailSchema = z.object({
+    senderEmail: z
+        .union([z.literal(""), z.string().trim().email().max(254)])
+        .nullable()
+        .optional()
+        .transform((v) => (v ? v.trim().toLowerCase() : null))
+});
+
 /** Company details after email verification (signup step 3). */
 export const completeProfileSchema = z.object({
     email: z.string().email("Invalid email"),

@@ -8,6 +8,10 @@ import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import tenantRoutes from "./modules/tenants/tenant.routes.js";
 import workspaceRoutes from "./modules/workspace/workspace.routes.js";
 import platformContentRoutes from "./modules/platform/platform-content.routes.js";
+import emailAccountRoutes from "./modules/email/email-account.routes.js";
+import customerRoutes from "./modules/customers/customer.routes.js";
+import templateRoutes from "./modules/templates/template.routes.js";
+import automationRoutes from "./modules/automations/automation.routes.js";
 import healthRoutes from "./modules/health/health.routes.js";
 import {
     healthCheck,
@@ -34,6 +38,10 @@ const app = createServiceApp({
         expressApp.use("/api/v1", tenantRoutes);
         expressApp.use("/api/v1", platformContentRoutes);
         expressApp.use("/api/v1", workspaceRoutes);
+        expressApp.use("/api/v1", emailAccountRoutes);
+        expressApp.use("/api/v1", customerRoutes);
+        expressApp.use("/api/v1", templateRoutes);
+        expressApp.use("/api/v1", automationRoutes);
         expressApp.use("/api/v1", supportEmailRoutes);
         expressApp.use("/api/v1", voiceRoutes);
         expressApp.use("/api/v1", ticketRoutes);

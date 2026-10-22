@@ -5,11 +5,16 @@ import { requireAuth } from "../middleware/auth.middleware.js";
 import { bindTenantToUser } from "../tenants/tenant.middleware.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
+    generateCallNumberHandler,
     generateWidgetApiKeyHandler,
     getWorkspaceProfileHandler,
+    updateCallingSettingsHandler,
     updateWorkspaceProfileHandler
 } from "./workspace.controller.js";
-import { updateWorkspaceProfileSchema } from "./workspace.validation.js";
+import {
+    updateCallingSettingsSchema,
+    updateWorkspaceProfileSchema
+} from "./workspace.validation.js";
 
 const workspaceRoutes = express.Router();
 
@@ -122,6 +127,23 @@ workspaceRoutes.post(
     bindTenantToUser,
     requirePermission("settings:write"),
     asyncHandler(generateWidgetApiKeyHandler)
+);
+
+workspaceRoutes.post(
+    "/workspace/call-number/generate",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission("settings:write"),
+    asyncHandler(generateCallNumberHandler)
+);
+
+workspaceRoutes.patch(
+    "/workspace/calling",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission("settings:write"),
+    validate(updateCallingSettingsSchema),
+    asyncHandler(updateCallingSettingsHandler)
 );
 
 export default workspaceRoutes;

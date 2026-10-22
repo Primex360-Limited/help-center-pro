@@ -1,0 +1,112 @@
+
+> fums-project@1.0.0 test
+> node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand tests/auth/auth.service.test.js
+
+  console.info
+    [auth] welcome email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.error
+    [auth] welcome email failed in development: resend is down
+
+    [0m [90m 62 |[39m         }
+     [90m 63 |[39m
+    [31m[1m>[22m[39m[90m 64 |[39m         console[33m.[39merror([32m`[auth] ${label} failed in development:`[39m[33m,[39m error[33m.[39mmessage)[33m;[39m
+     [90m    |[39m                 [31m[1m^[22m[39m
+     [90m 65 |[39m         [36mreturn[39m [36mfalse[39m[33m;[39m
+     [90m 66 |[39m     }
+     [90m 67 |[39m }[0m
+
+      at error (src/modules/auth/auth.service.js:64:17)
+      at registerSuperAdmin (src/modules/auth/auth.service.js:794:23)
+      at Object.<anonymous> (tests/auth/auth.service.test.js:671:24)
+
+  console.info
+    [auth] password reset email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] password reset email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+(node:53980) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS tests/auth/auth.service.test.js
+  loginUser
+    √ issues a tenant-scoped token pair and records the session (216 ms)
+    √ treats a returning user as onboarded so company details never reappear (10 ms)
+    √ keeps a first-time sign-in on the company details step (9 ms)
+    √ embeds the PRD claim set in the access token (9 ms)
+    √ uses null tenant claims for provider super admins (12 ms)
+    √ rejects a wrong password without creating a session (9 ms)
+    √ blocks logins into a suspended workspace (9 ms)
+    √ scopes the lookup to the resolved tenant when one is known (13 ms)
+    √ reports an ambiguous email across workspaces (8 ms)
+  completeUserProfile
+    √ writes the completion flag to the workspace row, not the provider row (9 ms)
+    √ targets the workspace the request came from when the email spans tenants (8 ms)
+    √ refuses to complete company details before the email is verified (79 ms)
+  registerSuperAdmin
+    √ creates the provider super admin and reports the email contract (63 ms)
+    √ still creates the account when sending email fails in development (46 ms)
+    √ rejects an email already used by another provider account (12 ms)
+    √ rejects bootstrap when a platform admin already exists (8 ms)
+  requestPasswordReset
+    √ returns emailSent and a dev reset token for an existing user (9 ms)
+    √ uses the workspace row when a tenant is known (10 ms)
+    √ does not leak whether the account exists (10 ms)
+  resendVerificationEmail
+    √ re-sends the verification email for an unverified user (12 ms)
+    √ stays silent for verified or unknown emails (10 ms)
+  verifyEmailToken
+    √ verifies the email and issues a password setup token for invitees (8 ms)
+    √ rejects an unknown verification token (9 ms)
+    √ unlocks the platform owner's provider seat in the same step (7 ms)
+    √ leaves provider rows alone when a provider verifies its own email (12 ms)
+  resetPassword
+    √ stores the new hash, clears the flag and revokes live sessions (10 ms)
+    √ rejects mismatched passwords before touching the database (7 ms)
+    √ rejects an expired reset token (10 ms)
+  refresh and logout
+    √ rotates the refresh token for a valid session (9 ms)
+    √ refuses to rotate tokens for a suspended workspace (7 ms)
+    √ revokes the session on logout (7 ms)
+  registerWorkspaceAccount
+    √ gives the first workspace signup the provider super-admin seat (16 ms)
+    √ keeps the seat when the platform already has a provider super admin (9 ms)
+    √ never promotes a signup once other workspaces exist (9 ms)
+    √ does not duplicate a provider account that already owns the address (9 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       35 passed, 35 total
+Snapshots:   0 total
+Time:        2.183 s
+Ran all test suites matching tests/auth/auth.service.test.js.

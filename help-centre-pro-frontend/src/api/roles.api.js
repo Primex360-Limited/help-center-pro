@@ -11,3 +11,16 @@ export async function createRole(payload) {
     body: payload,
   });
 }
+
+export async function getRole(id) {
+  return apiRequest(`/roles/${id}`, { auth: true });
+}
+
+export async function updateRole(id, payload) {
+  return apiRequest(`/roles/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: payload,
+  });
+}
+

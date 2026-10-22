@@ -26,6 +26,7 @@ import {
 } from "./status/status.validation.js";
 import {
     assignTicketHandler,
+    listAssignableAgentsHandler,
     listOnlineAssignableAgentsHandler,
     pickQueuedTicketHandler,
     transferTicketHandler
@@ -228,6 +229,12 @@ ticketRoutes.get(
     "/tickets/agents/online",
     requirePermission(TICKET_PERMISSIONS.TRANSFER),
     asyncHandler(listOnlineAssignableAgentsHandler)
+);
+
+ticketRoutes.get(
+    "/tickets/agents/assignable",
+    requirePermission(TICKET_PERMISSIONS.TRANSFER),
+    asyncHandler(listAssignableAgentsHandler)
 );
 
 /**

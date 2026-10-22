@@ -28,13 +28,33 @@ export const env = {
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
     JWT_ACCESS_EXPIRES_IN: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
     JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+    // Resend — platform transactional email ONLY (verification, invites,
+    // password resets). Support mail uses connected mailboxes (SMTP/IMAP).
     RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
     EMAIL_FROM: process.env.EMAIL_FROM,
     SUPPORT_EMAIL_FROM: process.env.SUPPORT_EMAIL_FROM || process.env.EMAIL_FROM,
     EMAIL_ENABLED: bool(process.env.EMAIL_ENABLED, true),
-    /** Public API origin for Twilio/Resend webhooks (no trailing slash). */
+    // Platform SMTP (transactional mail: verification, invites, resets).
+    // No third-party email API — mail is sent directly via SMTP (nodemailer).
+    // Leave SMTP_HOST empty in local dev: emails are logged to the console
+    // instead of sent, so every flow still works end-to-end.
+    SMTP_HOST: process.env.SMTP_HOST || "",
+    SMTP_PORT: Number(process.env.SMTP_PORT) || 587,
+    SMTP_SECURE: bool(process.env.SMTP_SECURE, false),
+    SMTP_USER: process.env.SMTP_USER || "",
+    SMTP_PASS: process.env.SMTP_PASS || "",
+    /** Public API origin for Twilio webhooks (no trailing slash). */
     PUBLIC_API_URL: process.env.PUBLIC_API_URL || "",
+    // Connected-mailbox sync (IMAP/SMTP per agent, see modules/email).
+    EMAIL_ENCRYPTION_KEY: process.env.EMAIL_ENCRYPTION_KEY || "",
+    EMAIL_SYNC_INTERVAL: Number(process.env.EMAIL_SYNC_INTERVAL) || 60 * 1000,
+    EMAIL_SYNC_BATCH_SIZE: Number(process.env.EMAIL_SYNC_BATCH_SIZE) || 50,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "",
+    MICROSOFT_CLIENT_ID: process.env.MICROSOFT_CLIENT_ID || "",
+    MICROSOFT_CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET || "",
+    MICROSOFT_REDIRECT_URI: process.env.MICROSOFT_REDIRECT_URI || "",
     TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || "",
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || "",
     TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER || "",

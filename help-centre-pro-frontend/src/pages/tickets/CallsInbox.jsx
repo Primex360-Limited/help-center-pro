@@ -29,6 +29,13 @@ import {
   updateTicketStatus,
 } from "../../api/tickets.api.js";
 import { listUsers } from "../../api/users.api.js";
+import TemplatePicker, {
+  applyTemplateInsert,
+} from "../../components/tickets/TemplatePicker.jsx";
+import {
+  InCallBar,
+  useBrowserCall,
+} from "../../components/calls/BrowserCall.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { formatTicketId, statusLabel } from "../../utils/format.js";
 import {
@@ -82,6 +89,7 @@ export default function CallsInbox() {
   const [recordingBlobUrl, setRecordingBlobUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
   const audioRef = useRef(null);
+  const composerRef = useRef(null);
 
   const loadCalls = useCallback(async () => {
     setLoadingList(true);
@@ -261,6 +269,26 @@ export default function CallsInbox() {
     }
   }
 
+  const templateValues = useMemo(
+    () => ({
+      customer_name: selectedTicket ? customerName(selectedTicket) : "",
+      customer_email: selectedTicket ? customerEmail(selectedTicket) : "",
+      customer_phone: selectedTicket ? customerPhone(selectedTicket) : "",
+      ticket_id: selectedTicket?.ticketId || "",
+    }),
+    [selectedTicket]
+  );
+
+  function handleInsertTemplate(text, template) {
+    applyTemplateInsert({
+      textarea: composerRef.current,
+      value: draft,
+      text,
+      onChange: setDraft,
+    });
+    if (template) setBanner(`Template "${template.name}" inserted`);
+  }
+
   async function handleSend() {
     if (!selectedId || !draft.trim()) return;
     setSending(true);
@@ -292,6 +320,17 @@ export default function CallsInbox() {
     }
   }, [selectedId, tickets, ticketDetail]);
 
+  const browserCall = useBrowserCall({
+    onEnded: () => {
+      if (selectedId) {
+        setTimeout(() => {
+          loadDetail(selectedId);
+          loadCalls();
+        }, 1500);
+      }
+    },
+  });
+
   async function handlePlaceCall() {
     const to = (dialTo || customerPhone(selectedTicket) || "").trim();
     if (!to || !selectedTicket) {
@@ -311,13 +350,26 @@ export default function CallsInbox() {
         defaultRegion: "NG",
       });
       const data = result?.data || result;
-      setBanner(
-        data?.message || "Calling customer from your HelpCentre Pro line…"
-      );
+
+      if (data?.mode === "browser_pstn") {
+        setBanner("Connecting you from this device…");
+        await browserCall.start({
+          to: data.to || to,
+          ticketId: data.ticketId || selectedTicket.ticketId,
+          from: data.from,
+        });
+        setBanner("On call via your HelpCentre Pro line.");
+      } else {
+        setBanner(
+          data?.message || "Calling customer from your HelpCentre Pro line…"
+        );
+      }
       await loadDetail(selectedTicket.ticketId);
       await loadCalls();
     } catch (err) {
-      setDetailError(err.message || "Unable to place call");
+      if (!browserCall.active) {
+        setDetailError(err.message || "Unable to place call");
+      }
     } finally {
       setPlacing(false);
     }
@@ -645,12 +697,14 @@ export default function CallsInbox() {
                 type="button"
                 className="ch-btn ch-btn--call"
                 onClick={handlePlaceCall}
-                disabled={placing || !dialTo.trim()}
+                disabled={placing || browserCall.active || !dialTo.trim()}
               >
                 <PhoneCall size={15} aria-hidden="true" />
                 {placing ? "Calling…" : "Place call"}
               </button>
             </div>
+
+            <InCallBar call={browserCall} />
 
             <div className="ch-audio">
               <button
@@ -852,11 +906,10 @@ export default function CallsInbox() {
                 Internal Note
               </button>
             </div>
-            <select className="ch-composer__template" defaultValue="" disabled>
-              <option value="">Use Message Template</option>
-            </select>
+            <TemplatePicker values={templateValues} onInsert={handleInsertTemplate} />
           </div>
           <textarea
+            ref={composerRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Type Reply..."

@@ -1,0 +1,140 @@
+  console.info
+    [auth] welcome email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.error
+    [auth] welcome email failed in development: resend is down
+
+    [0m [90m 62 |[39m         }
+     [90m 63 |[39m
+    [31m[1m>[22m[39m[90m 64 |[39m         console[33m.[39merror([32m`[auth] ${label} failed in development:`[39m[33m,[39m error[33m.[39mmessage)[33m;[39m
+     [90m    |[39m                 [31m[1m^[22m[39m
+     [90m 65 |[39m         [36mreturn[39m [36mfalse[39m[33m;[39m
+     [90m 66 |[39m     }
+     [90m 67 |[39m }[0m
+
+      at error (src/modules/auth/auth.service.js:64:17)
+      at registerSuperAdmin (src/modules/auth/auth.service.js:842:23)
+      at Object.<anonymous> (tests/auth/auth.service.test.js:671:24)
+
+  console.info
+    [auth] password reset email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] password reset email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+  console.info
+    [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+(node:46612) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL tests/auth/auth.service.test.js
+  loginUser
+    √ issues a tenant-scoped token pair and records the session (611 ms)
+    √ treats a returning user as onboarded so company details never reappear (12 ms)
+    √ keeps a first-time sign-in on the company details step (14 ms)
+    √ embeds the PRD claim set in the access token (8 ms)
+    √ uses null tenant claims for provider super admins (11 ms)
+    √ rejects a wrong password without creating a session (8 ms)
+    √ blocks logins into a suspended workspace (6 ms)
+    √ scopes the lookup to the resolved tenant when one is known (8 ms)
+    √ reports an ambiguous email across workspaces (9 ms)
+  completeUserProfile
+    √ writes the completion flag to the workspace row, not the provider row (10 ms)
+    √ targets the workspace the request came from when the email spans tenants (7 ms)
+    √ refuses to complete company details before the email is verified (68 ms)
+  registerSuperAdmin
+    √ creates the provider super admin and reports the email contract (49 ms)
+    √ still creates the account when sending email fails in development (26 ms)
+    √ rejects an email already used by another provider account (7 ms)
+    √ rejects bootstrap when a platform admin already exists (7 ms)
+  requestPasswordReset
+    × returns emailSent and a dev reset token for an existing user (16 ms)
+    √ uses the workspace row when a tenant is known (6 ms)
+    √ does not leak whether the account exists (6 ms)
+  resendVerificationEmail
+    √ re-sends the verification email for an unverified user (7 ms)
+    √ stays silent for verified or unknown emails (6 ms)
+  verifyEmailToken
+    √ verifies the email and issues a password setup token for invitees (7 ms)
+    √ rejects an unknown verification token (6 ms)
+    √ unlocks the platform owner's provider seat in the same step (6 ms)
+    √ leaves provider rows alone when a provider verifies its own email (8 ms)
+  resetPassword
+    √ stores the new hash, clears the flag and revokes live sessions (6 ms)
+    √ rejects mismatched passwords before touching the database (7 ms)
+    √ rejects an expired reset token (6 ms)
+  refresh and logout
+    √ rotates the refresh token for a valid session (9 ms)
+    √ refuses to rotate tokens for a suspended workspace (9 ms)
+    √ revokes the session on logout (6 ms)
+  registerWorkspaceAccount
+    √ gives the first workspace signup the provider super-admin seat (12 ms)
+    √ keeps the seat when the platform already has a provider super admin (8 ms)
+    √ never promotes a signup once other workspaces exist (8 ms)
+    √ does not duplicate a provider account that already owns the address (8 ms)
+
+  ● requestPasswordReset › returns emailSent and a dev reset token for an existing user
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    - Expected
+    + Received
+
+      Object {
+    +   "orderBy": Object {
+    +     "createdAt": "asc",
+    +   },
+        "where": Object {
+          "email": "admin@example.com",
+    -     "tenantId": null,
+    +     "tenantId": Object {
+    +       "not": null,
+    +     },
+        },
+      },
+
+    Number of calls: 1
+
+    [0m [90m 743 |[39m         })[33m;[39m
+     [90m 744 |[39m
+    [31m[1m>[22m[39m[90m 745 |[39m         expect(userFindFirstMock)[33m.[39mtoHaveBeenCalledWith({
+     [90m     |[39m                                   [31m[1m^[22m[39m
+     [90m 746 |[39m             where[33m:[39m { email[33m:[39m [32m"admin@example.com"[39m[33m,[39m tenantId[33m:[39m [36mnull[39m }
+     [90m 747 |[39m         })[33m;[39m
+     [90m 748 |[39m         expect(passwordResetTokenCreateMock)[33m.[39mtoHaveBeenCalledWith({[0m
+
+      at Object.toHaveBeenCalledWith (tests/auth/auth.service.test.js:745:35)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 34 passed, 35 total
+Snapshots:   0 total
+Time:        1.653 s
+Ran all test suites matching tests/auth/auth.service.test.js.

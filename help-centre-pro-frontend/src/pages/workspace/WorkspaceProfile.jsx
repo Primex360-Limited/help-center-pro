@@ -20,11 +20,15 @@ import {
   Users,
 } from "lucide-react";
 import {
+  generateCallNumber,
   generateWidgetApiKey,
   getWorkspaceProfile,
+  updateCallingSettings,
   updateWorkspaceProfile,
 } from "../../api/workspace.api.js";
 import PremiumSelect from "../../components/auth/PremiumSelect.jsx";
+import SettingsTabs from "../../components/workspace/SettingsTabs.jsx";
+import { Link } from "react-router-dom";
 import { TIMEZONES } from "../../constants/profileOptions.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import "../../styles/app.css";
@@ -124,6 +128,10 @@ export default function WorkspaceProfile() {
   const [banner, setBanner] = useState("");
   const [apiKeyBusy, setApiKeyBusy] = useState(false);
   const [revealedApiKey, setRevealedApiKey] = useState("");
+  const [callingBusy, setCallingBusy] = useState(false);
+  const [callingMode, setCallingMode] = useState("hcp");
+  const [hcpPaused, setHcpPaused] = useState(false);
+  const [ownNumber, setOwnNumber] = useState("");
   const fileRef = useRef(null);
 
   const loadProfile = useCallback(async () => {
@@ -139,6 +147,9 @@ export default function WorkspaceProfile() {
       setTimezone(snap.timezone);
       setLogoUrl(snap.logoUrl);
       setSupportEmail(snap.supportEmail);
+      setCallingMode(next?.calling?.mode || "hcp");
+      setHcpPaused(Boolean(next?.calling?.hcpPaused));
+      setOwnNumber(next?.calling?.ownNumber || "");
     } catch (err) {
       setError(err.message || "Failed to load workspace settings");
     } finally {
@@ -183,6 +194,49 @@ export default function WorkspaceProfile() {
     setLogoError("");
     setBanner("");
     setError("");
+  }
+
+  function syncCalling(workspace) {
+    if (!workspace) return;
+    setProfile(workspace);
+    setCallingMode(workspace.calling?.mode || "hcp");
+    setHcpPaused(Boolean(workspace.calling?.hcpPaused));
+    setOwnNumber(workspace.calling?.ownNumber || "");
+  }
+
+  async function handleGenerateNumber() {
+    if (!canWrite || callingBusy) return;
+    setCallingBusy(true);
+    setError("");
+    setBanner("");
+    try {
+      const res = await generateCallNumber();
+      syncCalling(res?.data?.workspace || profile);
+      setBanner(
+        res?.message ||
+          "HelpCentre Pro number generated and active for outbound calls."
+      );
+    } catch (err) {
+      setError(err.message || "Unable to generate number");
+    } finally {
+      setCallingBusy(false);
+    }
+  }
+
+  async function handleCallingSave(payload, successMessage) {
+    if (!canWrite || callingBusy) return;
+    setCallingBusy(true);
+    setError("");
+    setBanner("");
+    try {
+      const res = await updateCallingSettings(payload);
+      syncCalling(res?.data?.workspace || profile);
+      setBanner(res?.message || successMessage);
+    } catch (err) {
+      setError(err.message || "Unable to update calling settings");
+    } finally {
+      setCallingBusy(false);
+    }
   }
 
   async function handleGenerateApiKey() {
@@ -320,6 +374,7 @@ export default function WorkspaceProfile() {
 
   return (
     <div className="workspace-page">
+      <SettingsTabs />
       <div className="admin-page-header">
         <div>
           <h1 className="admin-page-title" style={{ marginBottom: 4 }}>
@@ -541,28 +596,171 @@ export default function WorkspaceProfile() {
             }}
           />
           <p className="workspace-field__hint">
-            Agents send email tickets from this address via Help Centre Pro.
+            Connect this mailbox in Settings → Email (app password or OAuth)
+            and agent replies are sent directly from it — delivered mail is
+            filed in Sent, and incoming customer mail syncs into tickets
+            automatically. Agents can override the sender in My profile.
           </p>
+          <p className="workspace-field__hint ws-effective-line">
+            <strong>Effective sender:</strong>{" "}
+            {supportEmail.trim()
+              ? `${supportEmail.trim()} (your workspace address)`
+              : "HelpCentre Pro platform mailbox"}
+            {" · "}Agent connected mailbox in Settings → Email takes priority.
+          </p>
+          <Link
+            to="/workspace/email-settings"
+            className="admin-btn admin-btn--ghost"
+            style={{ marginTop: 10, display: "inline-flex", textDecoration: "none" }}
+          >
+            <Mail size={14} />
+            Manage Email Accounts — connect mailbox &amp; sync
+          </Link>
         </div>
 
-        <div className="workspace-field" style={{ marginBottom: 18 }}>
+        <div className="workspace-field ws-calling-premium" style={{ marginBottom: 18 }}>
           <label>
-            <Phone size={14} aria-hidden="true" /> Provisioned call numbers
+            <Phone size={14} aria-hidden="true" /> Calling line
+            <span className="ws-calling-badge">
+              {callingMode === "own"
+                ? "Your number active"
+                : hcpPaused
+                  ? "HCP number paused"
+                  : "HelpCentre Pro number"}
+            </span>
           </label>
+          <p className="workspace-field__hint">
+            HelpCentre Pro provides a number customers see when agents call.
+            Each agent can also set a personal callback number under{" "}
+            <strong>My profile</strong>. Pause the HCP number anytime and use
+            your existing business number instead.
+          </p>
           {(profile?.callNumbers || []).length ? (
-            <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+            <ul className="ws-call-numbers">
               {profile.callNumbers.map((num) => (
                 <li key={num.id || num.e164}>
                   <strong>{num.e164}</strong>
                   {num.label ? ` — ${num.label}` : ""}
+                  {callingMode === "hcp" && !hcpPaused ? " · Active" : ""}
                 </li>
               ))}
             </ul>
           ) : (
             <p className="workspace-field__hint">
-              No numbers yet. Help Centre Pro assigns lines to your workspace.
+              No HCP number yet — generate one instantly below.
             </p>
           )}
+          {canWrite ? (
+            <div className="ws-calling-actions">
+              <button
+                type="button"
+                className="admin-btn admin-btn--ghost"
+                onClick={handleGenerateNumber}
+                disabled={callingBusy}
+              >
+                {callingBusy ? (
+                  <Loader2 size={14} className="ws-spin" />
+                ) : (
+                  <Phone size={14} />
+                )}
+                Generate HCP number
+              </button>
+              {(profile?.callNumbers || []).length ? (
+                <button
+                  type="button"
+                  className="admin-btn admin-btn--ghost"
+                  disabled={callingBusy}
+                  onClick={() =>
+                    handleCallingSave(
+                      {
+                        mode: hcpPaused ? "hcp" : callingMode,
+                        hcpPaused: !hcpPaused,
+                      },
+                      hcpPaused
+                        ? "HelpCentre Pro number resumed."
+                        : "HelpCentre Pro number paused."
+                    )
+                  }
+                >
+                  {hcpPaused ? "Resume HCP number" : "Pause HCP number"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="ws-calling-modes" role="radiogroup" aria-label="Calling line">
+            <label className="ws-calling-mode">
+              <input
+                type="radio"
+                name="calling-mode"
+                checked={callingMode === "hcp"}
+                onChange={() => setCallingMode("hcp")}
+                disabled={!canWrite}
+              />
+              <span>
+                <strong>Use HelpCentre Pro number</strong>
+                <small>Customers see your generated HCP line.</small>
+              </span>
+            </label>
+            <label className="ws-calling-mode">
+              <input
+                type="radio"
+                name="calling-mode"
+                checked={callingMode === "own"}
+                onChange={() => setCallingMode("own")}
+                disabled={!canWrite}
+              />
+              <span>
+                <strong>Use my existing number</strong>
+                <small>Pause HCP and call as your own business line.</small>
+              </span>
+            </label>
+          </div>
+          {callingMode === "own" ? (
+            <div className="ws-calling-own">
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="e.g. +234 803 000 0000"
+                value={ownNumber}
+                onChange={(e) => setOwnNumber(e.target.value)}
+                disabled={!canWrite || callingBusy}
+                aria-label="Your existing business number"
+              />
+              <p className="workspace-field__hint">
+                Customers see this number. Twilio must own or verify it as a
+                caller ID, otherwise calls fall back to the HCP line.
+              </p>
+            </div>
+          ) : null}
+          {canWrite ? (
+            <button
+              type="button"
+              className="admin-btn admin-btn--ghost"
+              style={{ marginTop: 10 }}
+              disabled={
+                callingBusy || (callingMode === "own" && !ownNumber.trim())
+              }
+              onClick={() =>
+                handleCallingSave(
+                  {
+                    mode: callingMode,
+                    hcpPaused: callingMode === "own" ? true : hcpPaused,
+                    ownNumber: ownNumber.trim() || null,
+                  },
+                  callingMode === "own"
+                    ? "Your existing number is now the calling line."
+                    : "HelpCentre Pro number is now the calling line."
+                )
+              }
+            >
+              {callingBusy ? (
+                <Loader2 size={14} className="ws-spin" />
+              ) : (
+                <Save size={14} />
+              )}
+              Save calling line
+            </button>
+          ) : null}
         </div>
 
         <div className="workspace-field">

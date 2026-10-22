@@ -79,8 +79,8 @@ export function AuthProvider({ children }) {
     refreshUser();
   }, [refreshUser]);
 
-  const login = useCallback(async (email, password) => {
-    const result = await authApi.login({ email, password });
+  const login = useCallback(async (email, password, options) => {
+    const result = await authApi.login({ email, password }, options);
     const nextUser = normalizeUser(result?.data?.user);
     setUser(nextUser);
     rememberOnboardingState(nextUser);

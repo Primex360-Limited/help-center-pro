@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Forward,
@@ -23,6 +23,9 @@ import {
   updateTicketStatus,
 } from "../../api/tickets.api.js";
 import { listUsers } from "../../api/users.api.js";
+import TemplatePicker, {
+  applyTemplateInsert,
+} from "../../components/tickets/TemplatePicker.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { formatTicketId, priorityLabel, statusLabel } from "../../utils/format.js";
 import {
@@ -134,6 +137,7 @@ export default function EmailsInbox() {
   const [sending, setSending] = useState(false);
   const [banner, setBanner] = useState(location.state?.notice || "");
   const [menuOpen, setMenuOpen] = useState(false);
+  const composerRef = useRef(null);
 
   const loadEmails = useCallback(async () => {
     setLoadingList(true);
@@ -330,10 +334,11 @@ export default function EmailsInbox() {
     setSending(true);
     setDetailError("");
     try {
+      let sendResult = null;
       if (composerTab === "note") {
         await addInternalNote(selectedId, draft.trim());
       } else {
-        await replyTicketEmail(selectedId, {
+        sendResult = await replyTicketEmail(selectedId, {
           body: draft.trim(),
           toEmail: customerEmail(selectedTicket) || undefined,
           subject: selectedTicket?.title || undefined,
@@ -342,13 +347,45 @@ export default function EmailsInbox() {
       setDraft("");
       await loadDetail(selectedId);
       await loadEmails();
-      setBanner(composerTab === "note" ? "Internal note added" : "Reply sent");
+      if (composerTab === "note") {
+        setBanner("Internal note added");
+      } else if (sendResult?.data?.usedMailbox) {
+        setBanner(
+          `Reply sent from your mailbox (${sendResult.data.mailboxEmail || "connected account"}) — it is also in your Sent folder.`
+        );
+      } else if (sendResult?.data?.fromFallback) {
+        setBanner(
+          "Reply sent via the HelpCentre Pro platform mailbox. Connect your mailbox in Settings → Email to send from your own address and keep everything in sync."
+        );
+      } else {
+        setBanner("Reply sent");
+      }
     } catch (err) {
       setDetailError(err.message || "Unable to send");
     } finally {
       setSending(false);
     }
   }
+
+  function handleInsertTemplate(text, template) {
+    applyTemplateInsert({
+      textarea: composerRef.current,
+      value: draft,
+      text,
+      onChange: setDraft,
+    });
+    if (template) setBanner(`Template "${template.name}" inserted`);
+  }
+
+  const templateValues = useMemo(
+    () => ({
+      customer_name: selectedTicket ? customerName(selectedTicket) : "",
+      customer_email: selectedTicket ? customerEmail(selectedTicket) : "",
+      customer_phone: selectedTicket?.customer?.phone || "",
+      ticket_id: selectedTicket?.ticketId || "",
+    }),
+    [selectedTicket]
+  );
 
   function handleForward() {
     const email = customerEmail(selectedTicket);
@@ -557,6 +594,9 @@ export default function EmailsInbox() {
             onDraftChange={setDraft}
             onSend={handleSend}
             sending={sending}
+            textareaRef={composerRef}
+            templateValues={templateValues}
+            onInsertTemplate={handleInsertTemplate}
           />
         </section>
 
@@ -770,7 +810,17 @@ export default function EmailsInbox() {
   );
 }
 
-function Composer({ tab, onTabChange, draft, onDraftChange, onSend, sending }) {
+function Composer({
+  tab,
+  onTabChange,
+  draft,
+  onDraftChange,
+  onSend,
+  sending,
+  textareaRef,
+  templateValues,
+  onInsertTemplate,
+}) {
   return (
     <div className="ch-composer">
       <div className="ch-composer__tabs">
@@ -791,11 +841,10 @@ function Composer({ tab, onTabChange, draft, onDraftChange, onSend, sending }) {
             Internal Note
           </button>
         </div>
-        <select className="ch-composer__template" defaultValue="" disabled>
-          <option value="">Use Message Template</option>
-        </select>
+        <TemplatePicker values={templateValues} onInsert={onInsertTemplate} />
       </div>
       <textarea
+        ref={textareaRef}
         value={draft}
         onChange={(e) => onDraftChange(e.target.value)}
         placeholder="Type Reply..."

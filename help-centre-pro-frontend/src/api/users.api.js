@@ -39,3 +39,11 @@ export async function deactivateUser(id) {
     body: { status: "inactive" },
   });
 }
+
+export async function suspendUser(id) {
+  return apiRequest(`/users/${id}`, {
+    method: "PATCH",
+    auth: true,
+    body: { status: "suspended" },
+  });
+}

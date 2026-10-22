@@ -1,7 +1,9 @@
 import successResponse from "../../shared/utils/apiResponse.js";
 import {
+    generateCallNumber,
     generateWidgetApiKey,
     getWorkspaceProfile,
+    updateCallingSettings,
     updateWorkspaceProfile
 } from "./workspace.service.js";
 
@@ -36,6 +38,30 @@ export async function updateWorkspaceProfileHandler(req, res) {
         "Workspace profile updated successfully",
         result
     );
+}
+
+export async function generateCallNumberHandler(req, res) {
+    const result = await generateCallNumber({
+        tenantId: resolveTenantId(req),
+        actorId: req.user?.sub || req.user?.id
+    });
+
+    return successResponse(res, result.message, {
+        workspace: result.workspace,
+        number: result.number
+    });
+}
+
+export async function updateCallingSettingsHandler(req, res) {
+    const result = await updateCallingSettings({
+        tenantId: resolveTenantId(req),
+        payload: req.validatedBody,
+        actorId: req.user?.sub || req.user?.id
+    });
+
+    return successResponse(res, result.message, {
+        workspace: result.workspace
+    });
 }
 
 export async function generateWidgetApiKeyHandler(req, res) {

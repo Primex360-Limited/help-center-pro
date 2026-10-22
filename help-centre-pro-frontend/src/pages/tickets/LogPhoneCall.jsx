@@ -7,6 +7,10 @@ import {
   placeOutboundCall,
 } from "../../api/tickets.api.js";
 import {
+  InCallBar,
+  useBrowserCall,
+} from "../../components/calls/BrowserCall.jsx";
+import {
   extractCustomersFromTickets,
   formatRelative,
 } from "./channelUtils.js";
@@ -54,6 +58,17 @@ export default function LogPhoneCall() {
   const [lookingUp, setLookingUp] = useState(false);
 
   const isOutgoing = callType === "outgoing";
+  const [browserTicketId, setBrowserTicketId] = useState("");
+  const browserCall = useBrowserCall({
+    onEnded: () => {
+      if (browserTicketId) {
+        navigate(
+          `/tickets/calls?ticket=${encodeURIComponent(browserTicketId)}`,
+          { replace: true }
+        );
+      }
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +213,19 @@ export default function LogPhoneCall() {
       const data = result?.data || result;
       const ticketId = data?.ticketId;
       localStorage.removeItem(DRAFT_KEY);
+
+      if (data?.mode === "browser_pstn" && ticketId) {
+        setBrowserTicketId(ticketId);
+        setNotice("Connecting you from this device…");
+        await browserCall.start({
+          to: data.to || phone.trim(),
+          ticketId,
+          from: data.from,
+        });
+        setNotice("On call via your HelpCentre Pro line.");
+        return;
+      }
+
       navigate(
         ticketId
           ? `/tickets/calls?ticket=${encodeURIComponent(ticketId)}`
@@ -212,7 +240,9 @@ export default function LogPhoneCall() {
         }
       );
     } catch (err) {
-      setError(err.message || "Unable to place call");
+      if (!browserCall.active) {
+        setError(err.message || "Unable to place call");
+      }
     } finally {
       setPlacing(false);
     }
@@ -288,6 +318,8 @@ export default function LogPhoneCall() {
 
       {error ? <p className="ch-alert ch-alert--error">{error}</p> : null}
       {notice ? <p className="ch-alert ch-alert--info">{notice}</p> : null}
+
+      <InCallBar call={browserCall} />
 
       <form onSubmit={isOutgoing ? handlePlaceCall : handleSubmit}>
         <section className="ch-panel ch-call-type" aria-label="Call type">

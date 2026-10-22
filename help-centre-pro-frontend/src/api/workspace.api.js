@@ -21,3 +21,20 @@ export async function generateWidgetApiKey() {
     auth: true,
   });
 }
+
+/** Generate (allocate) a HelpCentre Pro call number for this workspace. */
+export async function generateCallNumber() {
+  return apiRequest("/workspace/call-number/generate", {
+    method: "POST",
+    auth: true,
+  });
+}
+
+/** Pause/resume HCP number or switch to tenant's existing number. */
+export async function updateCallingSettings(payload) {
+  return apiRequest("/workspace/calling", {
+    method: "PATCH",
+    auth: true,
+    body: payload,
+  });
+}

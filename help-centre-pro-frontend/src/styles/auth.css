@@ -613,29 +613,35 @@
   color: #667085;
 }
 
-/* —— Signup split (premium, image 5) —— */
+/* —— Signup split (premium — hero fitted exactly to the viewport) —— */
 .signup-split {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(380px, 48%) minmax(0, 1fr);
   background: #f8fafc;
+  overflow: hidden;
 }
 
 .signup-split__hero {
   position: relative;
   overflow: hidden;
   padding: 0;
-  background: #155eef;
-  min-height: 100vh;
+  background: linear-gradient(160deg, #155eef 0%, #1849c9 55%, #123a9e 100%);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .signup-split__hero-art {
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 100vh;
-  object-fit: cover;
-  object-position: left center;
+  max-height: 100dvh;
+  object-fit: contain;
+  object-position: center;
   user-select: none;
   pointer-events: none;
   -webkit-user-drag: none;
@@ -644,8 +650,10 @@
 .signup-split__panel {
   display: grid;
   place-items: center;
-  padding: 48px 32px;
+  padding: 32px;
   background: #ffffff;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .signup-split__card {
@@ -761,20 +769,25 @@
 @media (max-width: 960px) {
   .signup-split {
     grid-template-columns: 1fr;
+    grid-template-rows: 38dvh minmax(0, 1fr);
+    height: 100dvh;
   }
 
   .signup-split__hero {
-    min-height: 360px;
-    max-height: 48vh;
+    min-height: 0;
+    max-height: none;
+    height: 100%;
   }
 
   .signup-split__hero-art {
-    min-height: 360px;
-    object-position: center top;
+    min-height: 0;
+    max-height: 100%;
+    object-position: center;
   }
 
   .signup-split__panel {
-    padding: 28px 16px 40px;
+    padding: 24px 16px 32px;
+    overflow-y: auto;
   }
 }
 

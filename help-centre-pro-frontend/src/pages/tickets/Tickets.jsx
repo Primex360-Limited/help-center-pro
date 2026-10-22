@@ -15,13 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  assignTicket,
-  listTickets,
-  updateTicketStatus,
-} from "../../api/tickets.api.js";
+import { listTickets, updateTicketStatus } from "../../api/tickets.api.js";
 import { listUsers } from "../../api/users.api.js";
 import ConfirmActionModal from "../../components/agents/ConfirmActionModal.jsx";
+import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
 import { formatTicketId, priorityLabel, statusLabel } from "../../utils/format.js";
 import { channelTicketPath } from "./channelUtils.js";
 import "../../styles/tickets.css";
@@ -210,8 +207,6 @@ export default function Tickets() {
   const triggerRefs = useRef({});
 
   const [assignTicketTarget, setAssignTicketTarget] = useState(null);
-  const [assignBusy, setAssignBusy] = useState(false);
-  const [assignError, setAssignError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -419,7 +414,6 @@ export default function Tickets() {
 
   function handleAssignOpen(ticket) {
     setMenuTicketId(null);
-    setAssignError("");
     setAssignTicketTarget(ticket);
   }
 
@@ -427,23 +421,6 @@ export default function Tickets() {
     setMenuTicketId(null);
     setDeleteError("");
     setDeleteTarget(ticket);
-  }
-
-  async function confirmAssign(userId) {
-    if (!assignTicketTarget || !userId) return;
-    setAssignBusy(true);
-    setAssignError("");
-    try {
-      const id = assignTicketTarget.ticketId || assignTicketTarget.id;
-      await assignTicket(id, userId);
-      setAssignTicketTarget(null);
-      setNotice("Ticket assigned successfully");
-      await loadTickets();
-    } catch (err) {
-      setAssignError(err.message || "Unable to assign ticket");
-    } finally {
-      setAssignBusy(false);
-    }
   }
 
   async function confirmDelete() {
@@ -871,7 +848,7 @@ export default function Tickets() {
                 onClick={() => handleAssignOpen(menuTicket)}
               >
                 <Clock size={15} aria-hidden="true" />
-                Assign
+                Transfer
               </button>
               <div className="tk-menu__divider" role="separator" />
               <button
@@ -888,72 +865,17 @@ export default function Tickets() {
           )
         : null}
 
-      {assignTicketTarget
-        ? createPortal(
-            <div
-              className="tk-modal-overlay"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="assign-ticket-title"
-            >
-              <div className="tk-modal">
-                <div className="tk-modal__head">
-                  <h2 id="assign-ticket-title">Assign ticket</h2>
-                  <button
-                    type="button"
-                    className="tk-drawer__close"
-                    onClick={() => setAssignTicketTarget(null)}
-                    aria-label="Close"
-                    disabled={assignBusy}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <p className="tk-modal__sub">
-                  Choose an agent for{" "}
-                  <strong>{assignTicketTarget.ticketId}</strong>
-                </p>
-                {assignError ? (
-                  <p className="tickets-error" style={{ marginBottom: 12 }}>
-                    {assignError}
-                  </p>
-                ) : null}
-                {agents.length ? (
-                  <ul className="tk-modal__list">
-                    {agents.map((agent) => {
-                      const name = agentDisplayName(agent);
-                      return (
-                        <li key={agent.id}>
-                          <button
-                            type="button"
-                            disabled={assignBusy}
-                            onClick={() => confirmAssign(agent.id)}
-                          >
-                            <span
-                              className={`tk-avatar tone-${avatarTone(name)}`}
-                              aria-hidden="true"
-                            >
-                              {initialsFromName(name)}
-                            </span>
-                            <span>
-                              <span className="tk-modal__agent-name">{name}</span>
-                              <span className="tk-modal__agent-meta">
-                                {agent.email}
-                              </span>
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (
-                  <p className="tk-modal__empty">No active agents available.</p>
-                )}
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      {assignTicketTarget ? (
+        <TransferTicketModal
+          ticket={assignTicketTarget}
+          onClose={() => setAssignTicketTarget(null)}
+          onTransferred={async (agent) => {
+            setAssignTicketTarget(null);
+            setNotice(`Ticket transferred to ${agent.name}`);
+            await loadTickets();
+          }}
+        />
+      ) : null}
 
       {deleteTarget ? (
         <ConfirmActionModal

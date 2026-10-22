@@ -60,7 +60,7 @@ export default function AdminLogin() {
     setError("");
     setSubmitting(true);
     try {
-      const nextUser = await login(email.trim(), password);
+      const nextUser = await login(email.trim(), password, { portal: "admin" });
       if (!(nextUser?.isSuperAdmin || nextUser?.userType === "provider")) {
         await logout();
         setError("This portal is for HelpCentre Pro platform administrators only.");

@@ -1,4 +1,6 @@
 import { AppError } from "../../../shared/errors/AppError.js";
+import prisma from "../../../database/prisma/client.js";
+import { USER_STATUS } from "../../../shared/constants/system.js";
 import {
     findTicketByPublicId,
     pickQueuedTicketWithHistory,
@@ -6,9 +8,13 @@ import {
 } from "../ticket.repository.js";
 import { mapTicketResponse } from "../helpers/map-ticket-response.js";
 import {
+    canReceiveTicketAssignment,
     getAssignableUserSnapshot,
+    isUserOnline,
     listOnlineAssignableUsers
 } from "../helpers/ticket-assignee.js";
+import { getUsers } from "../../users/user.service.js";
+import { buildUserSnapshot } from "../ticket.utils.js";
 import { TICKET_STATUS } from "../ticket.constants.js";
 import { buildTicketLogEvent } from "../timeline/timeline.service.js";
 
@@ -49,7 +55,7 @@ export async function assignTicket(ticketId, assignedToUserId, actor, transferRe
     return mapTicketResponse(updatedTicket);
 }
 
-export async function transferTicket(ticketId, assignedToUserId, transferReason, actor) {
+export async function transferTicket(ticketId, assignedToUserId, transferReason, actor, options = {}) {
     const reason = transferReason.trim();
     const ticket = await findTicketByPublicId(ticketId);
 
@@ -62,7 +68,7 @@ export async function transferTicket(ticketId, assignedToUserId, transferReason,
     }
 
     const assignmentSnapshot = await getAssignableUserSnapshot(assignedToUserId);
-    const updatedTicket = await updateTicketAssignmentWithHistory({
+    let updatedTicket = await updateTicketAssignmentWithHistory({
         ticketRefId: ticket.id,
         assignment: assignmentSnapshot,
         updatedBy: actor,
@@ -73,6 +79,9 @@ export async function transferTicket(ticketId, assignedToUserId, transferReason,
             content: {
                 message: "Ticket transferred to another agent",
                 reason,
+                notifyCustomer: Boolean(options.notifyCustomer),
+                addInternalNote: Boolean(options.addInternalNote),
+                keepAsFollower: Boolean(options.keepAsFollower),
                 from: ticket.assignedToUserId
                     ? {
                         userId: ticket.assignedToUserId,
@@ -85,7 +94,50 @@ export async function transferTicket(ticketId, assignedToUserId, transferReason,
         })
     });
 
+    // Optional priority change requested from the transfer dialog.
+    if (options.priority && options.priority !== updatedTicket.priority) {
+        updatedTicket = await prisma.ticket.update({
+            where: { id: updatedTicket.id },
+            data: { priority: options.priority }
+        });
+    }
+
     return mapTicketResponse(updatedTicket);
+}
+
+/**
+ * All assignable agents with live presence + open-ticket load — powers the
+ * premium Transfer dialog (Available / Busy / Offline, open ticket counts).
+ */
+export async function listAssignableAgents() {
+    const users = await getUsers();
+    const assignable = users.filter(
+        (user) => user.status === USER_STATUS.ACTIVE && canReceiveTicketAssignment(user)
+    );
+
+    const load = await prisma.ticket.groupBy({
+        by: ["assignedToUserId"],
+        where: {
+            assignedToUserId: { in: assignable.map((u) => u.id) },
+            status: { notIn: [TICKET_STATUS.RESOLVED, TICKET_STATUS.CLOSED] }
+        },
+        _count: { _all: true }
+    });
+    const loadByUser = new Map(load.map((row) => [row.assignedToUserId, row._count._all]));
+
+    return assignable.map((user) => {
+        const openTickets = loadByUser.get(user.id) || 0;
+        const online = isUserOnline(user);
+        return {
+            ...buildUserSnapshot(user),
+            role: user?.role?.name || null,
+            expertise: user?.role?.name || "Support",
+            isOnline: online,
+            presence: !online ? "offline" : openTickets >= 5 ? "busy" : "available",
+            openTickets,
+            lastSeenAt: user?.lastSeenAt || user?.lastLoginAt || null
+        };
+    });
 }
 
 export async function pickQueuedTicket(ticketId, actor) {

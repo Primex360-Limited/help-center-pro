@@ -2,6 +2,7 @@ import successResponse from "../../../shared/utils/apiResponse.js";
 import {
     assignTicket,
     getOnlineAssignableAgents,
+    listAssignableAgents,
     pickQueuedTicket,
     transferTicket
 } from "./assignment.service.js";
@@ -18,14 +19,21 @@ export async function assignTicketHandler(req, res) {
 }
 
 export async function transferTicketHandler(req, res) {
+    const { assignedToUserId, transferReason, ...options } = req.validatedBody;
     const ticket = await transferTicket(
         req.validatedParams.ticketId,
-        req.validatedBody.assignedToUserId,
-        req.validatedBody.transferReason,
-        buildActorSnapshotFromRequest(req)
+        assignedToUserId,
+        transferReason,
+        buildActorSnapshotFromRequest(req),
+        options
     );
 
     return successResponse(res, "Ticket transferred successfully", { ticket });
+}
+
+export async function listAssignableAgentsHandler(_req, res) {
+    const agents = await listAssignableAgents();
+    return successResponse(res, "Assignable agents fetched successfully", { agents });
 }
 
 export async function pickQueuedTicketHandler(req, res) {

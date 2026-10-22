@@ -6,6 +6,7 @@ import { bindTenantToUser } from "../../tenants/tenant.middleware.js";
 import { requirePermission } from "../../roles/rbac.middleware.js";
 import { TICKET_PERMISSIONS } from "../ticket.constants.js";
 import {
+    browserOutboundTwimlHandler,
     connectCustomerTwimlHandler,
     downloadRecordingHandler,
     getVoiceTokenHandler,
@@ -54,6 +55,19 @@ voiceRoutes.post(
 voiceRoutes.get(
     "/tickets/voice/twiml/connect-customer",
     asyncHandler(connectCustomerTwimlHandler)
+);
+
+/**
+ * TwiML App Voice URL for browser softphone calls.
+ * Point your Twilio TwiML App's Voice URL here (POST).
+ */
+voiceRoutes.post(
+    "/tickets/voice/twiml/browser-outbound",
+    asyncHandler(browserOutboundTwimlHandler)
+);
+voiceRoutes.get(
+    "/tickets/voice/twiml/browser-outbound",
+    asyncHandler(browserOutboundTwimlHandler)
 );
 
 voiceRoutes.post(

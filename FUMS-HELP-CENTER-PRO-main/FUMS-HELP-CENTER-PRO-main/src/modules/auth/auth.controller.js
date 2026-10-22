@@ -13,6 +13,8 @@ import {
     requestPasswordReset,
     resendVerificationEmail,
     resetPassword,
+    updateCurrentUserPhone,
+    updateCurrentUserSenderEmail,
     verifyEmailToken,
 } from "./auth.service.js";
 import { setAuthCookies, clearAuthCookies } from "./auth.cookie.js";
@@ -52,6 +54,7 @@ export async function registerWorkspace(req, res) {
         {
             emailSent: Boolean(result.emailSent),
             claimed: Boolean(result.claimed),
+            platformOwner: Boolean(result.platformOwner),
             email: result.email || result.user?.email || null,
             workspace: result.workspace,
             user: result.user,
@@ -137,6 +140,24 @@ export async function me(req, res) {
     const user = await getCurrentUser(req.user.sub);
 
     return successResponse(res, "Current user fetched successfully", { user });
+}
+
+export async function updateMyPhone(req, res) {
+    const user = await updateCurrentUserPhone(
+        req.user.sub,
+        req.validatedBody?.phoneNumber ?? null
+    );
+
+    return successResponse(res, "Agent phone updated", { user });
+}
+
+export async function updateMySenderEmail(req, res) {
+    const user = await updateCurrentUserSenderEmail(
+        req.user.sub,
+        req.validatedBody?.senderEmail ?? null
+    );
+
+    return successResponse(res, "Sender email updated", { user });
 }
 
 export async function verifyEmail(req, res) {

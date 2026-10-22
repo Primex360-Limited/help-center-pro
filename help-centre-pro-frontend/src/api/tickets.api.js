@@ -65,6 +65,28 @@ export async function assignTicket(ticketId, assignedToUserId) {
 }
 
 /**
+ * PATCH /tickets/:ticketId/transfer
+ * Body: { assignedToUserId, transferReason, priority?, notifyCustomer?, addInternalNote?, keepAsFollower? }
+ */
+export async function transferTicket(ticketId, payload) {
+  return apiRequest(`/tickets/${encodeURIComponent(ticketId)}/transfer`, {
+    method: "PATCH",
+    auth: true,
+    body: payload,
+  });
+}
+
+/**
+ * GET /tickets/agents/assignable — all assignable agents with presence + load.
+ */
+export async function getAssignableAgents() {
+  return apiRequest("/tickets/agents/assignable", {
+    method: "GET",
+    auth: true,
+  });
+}
+
+/**
  * PATCH /tickets/:ticketId/status
  * Body: { status } — OPEN | PENDING | WAITING_FOR_REPLY | RESOLVED | CLOSED | …
  */

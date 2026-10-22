@@ -300,11 +300,14 @@ model Tenant {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  users       User[]
-  roles       Role[]
-  sessions    Session[]
-  invitations AgentInvitation[]
-  auditLogs   AuditLog[]
+  users         User[]
+  roles         Role[]
+  sessions      Session[]
+  invitations   AgentInvitation[]
+  auditLogs     AuditLog[]
+  emailAccounts    EmailAccount[]
+  messageTemplates MessageTemplate[]
+  automationRules  AutomationRule[]
 
   @@index([status])
 }
@@ -391,6 +394,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   verificationTokens  VerificationToken[]
   auditLogs           AuditLog[]
+  emailAccounts       EmailAccount[]
 
   @@unique([tenantId, email])
   @@index([email])
@@ -418,6 +422,79 @@ model Session {
   @@index([tenantId])
   @@index([refreshTokenHash])
   @@index([expiresAt])
+}
+
+model EmailAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  tenantId          String?  @db.Uuid
+  provider          String   // gmail, outlook, custom
+  email             String
+  displayName       String?
+  accessToken       String?  // encrypted
+  refreshToken      String?  // encrypted
+  tokenExpiresAt    DateTime?
+  imapHost          String?
+  imapPort          Int?
+  imapSecure        Boolean  @default(true)
+  smtpHost          String?
+  smtpPort          Int?
+  smtpSecure        Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  isDefault         Boolean  @default(false)
+  syncEnabled       Boolean  @default(true)
+  lastSyncedAt      DateTime?
+  lastSyncStatus    String?
+  syncError         String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+  @@index([userId])
+  @@index([tenantId])
+  @@index([provider])
+  @@index([isActive])
+  @@index([isDefault])
+}
+
+model MessageTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String?  @db.Uuid
+  name            String
+  category        String   @default("General")
+  content         String
+  isActive        Boolean  @default(true)
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([isActive])
+}
+
+/// Workspace automation rules (auto-acknowledge, routing, escalation…).
+model AutomationRule {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String?  @db.Uuid
+  name            String
+  type            String   @default("auto_acknowledge")
+  description     String?
+  assignToUserId  String?  @db.Uuid
+  isActive        Boolean  @default(true)
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([isActive])
 }
 
 model AgentInvitation {

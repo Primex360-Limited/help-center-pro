@@ -13,6 +13,7 @@ import {
     closeTicketRealtime,
     initializeTicketRealtime
 } from "./src/modules/tickets/realtime/ticket-socket.service.js";
+import { startEmailSyncWorker, stopEmailSyncWorker } from "./src/modules/email/worker/email-sync-worker.js";
 
 let httpServer;
 let shuttingDown = false;
@@ -20,6 +21,7 @@ let shuttingDown = false;
 async function closeResources() {
     await Promise.allSettled([
         closeTicketRealtime(),
+        stopEmailSyncWorker(),
         disconnectRedis(),
         disconnectPostgres(),
         disconnectDB()
@@ -105,6 +107,15 @@ async function startServer() {
         }
 
         initializeTicketRealtime(httpServer);
+
+        // Start email sync worker
+        try {
+            startEmailSyncWorker();
+            console.log("✅ Email sync worker started");
+        } catch (error) {
+            console.error("Email sync worker startup error:", error.message);
+            console.warn("Continuing without email sync worker");
+        }
     } catch (error) {
         console.error("Server startup failed:", error.message);
         await closeResources();

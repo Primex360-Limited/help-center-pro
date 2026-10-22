@@ -1,0 +1,148 @@
+
+> fums-project@1.0.0 test
+> node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand
+
+(node:54820) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL tests/tickets/ticket.routes.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+  ● ticket routes › returns the added event payload shape for POST /tickets/:ticketId/events
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    - Expected
+    + Received
+
+      "TKT-20260420-ABC123",
+      {"channel": "EMAIL", "email": {"body": "We have re-issued the reset link. Please try again.", "fromEmail": "support@example.com", "subject": "Reset link reissued", "toEmail": "sarah.chen@example.com"}},
+      Object {
+        "email": "admin@example.com",
+        "name": "Admin User",
+    +   "tenantId": null,
+        "userId": "admin-id",
+      },
+
+    Number of calls: 1
+
+    [0m [90m 280 |[39m
+     [90m 281 |[39m         expect(response[33m.[39mstatus)[33m.[39mtoBe([35m201[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 282 |[39m         expect(addEventToTicket)[33m.[39mtoHaveBeenCalledWith(
+     [90m     |[39m                                  [31m[1m^[22m[39m
+     [90m 283 |[39m             [32m"TKT-20260420-ABC123"[39m[33m,[39m
+     [90m 284 |[39m             {
+     [90m 285 |[39m                 channel[33m:[39m [32m"EMAIL"[39m[33m,[39m[0m
+
+      at Object.toHaveBeenCalledWith (tests/tickets/ticket.routes.test.js:282:34)
+
+FAIL tests/tickets/ticket.utils.test.js
+  ● ticket utils › builds an actor snapshot from the authenticated request context
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Object {
+        "email": "caroline@example.com",
+        "name": "Caroline Susan",
+    +   "tenantId": null,
+        "userId": "mongo-user-id",
+      }
+
+    [0m [90m 19 |[39m         })[33m;[39m
+     [90m 20 |[39m
+    [31m[1m>[22m[39m[90m 21 |[39m         expect(actor)[33m.[39mtoEqual({
+     [90m    |[39m                       [31m[1m^[22m[39m
+     [90m 22 |[39m             userId[33m:[39m [32m"mongo-user-id"[39m[33m,[39m
+     [90m 23 |[39m             name[33m:[39m [32m"Caroline Susan"[39m[33m,[39m
+     [90m 24 |[39m             email[33m:[39m [32m"caroline@example.com"[39m[0m
+
+      at Object.toEqual (tests/tickets/ticket.utils.test.js:21:23)
+
+PASS tests/auth/auth.service.test.js
+  ● Console
+
+    console.info
+      [auth] welcome email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.error
+      [auth] welcome email failed in development: resend is down
+
+    [0m [90m 62 |[39m         }
+     [90m 63 |[39m
+    [31m[1m>[22m[39m[90m 64 |[39m         console[33m.[39merror([32m`[auth] ${label} failed in development:`[39m[33m,[39m error[33m.[39mmessage)[33m;[39m
+     [90m    |[39m                 [31m[1m^[22m[39m
+     [90m 65 |[39m         [36mreturn[39m [36mfalse[39m[33m;[39m
+     [90m 66 |[39m     }
+     [90m 67 |[39m }[0m
+
+      at error (src/modules/auth/auth.service.js:64:17)
+      at registerSuperAdmin (src/modules/auth/auth.service.js:794:23)
+      at Object.<anonymous> (tests/auth/auth.service.test.js:671:24)
+
+    console.info
+      [auth] password reset email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.info
+      [auth] password reset email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.info
+      [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.info
+      [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.info
+      [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.info
+      [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+    console.info
+      [auth] verification email sent successfully
+
+      at info (src/modules/auth/auth.service.js:57:17)
+
+PASS tests/tickets/status.service.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+PASS tests/tickets/assignment.service.test.js
+  ● Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+PASS tests/tickets/status.rules.test.js
+
+Test Suites: 2 failed, 4 passed, 6 total
+Tests:       2 failed, 46 passed, 48 total
+Snapshots:   0 total
+Time:        5.204 s, estimated 14 s
+Ran all test suites.
