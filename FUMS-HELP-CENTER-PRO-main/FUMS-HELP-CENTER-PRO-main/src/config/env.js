@@ -47,7 +47,7 @@ export const env = {
     PUBLIC_API_URL: process.env.PUBLIC_API_URL || "",
     // Connected-mailbox sync (IMAP/SMTP per agent, see modules/email).
     EMAIL_ENCRYPTION_KEY: process.env.EMAIL_ENCRYPTION_KEY || "",
-    EMAIL_SYNC_INTERVAL: Number(process.env.EMAIL_SYNC_INTERVAL) || 60 * 1000,
+    EMAIL_SYNC_INTERVAL: Number(process.env.EMAIL_SYNC_INTERVAL) || 15 * 1000,
     EMAIL_SYNC_BATCH_SIZE: Number(process.env.EMAIL_SYNC_BATCH_SIZE) || 50,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",

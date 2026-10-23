@@ -129,7 +129,15 @@ export default function App() {
           <Route
             path="/workspace/user-management"
             element={
-              <ProtectedRoute permission="user_management:read" tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={[
+                  "role:read",
+                  "role:manage",
+                  "agent:read",
+                  "agent:invite",
+                ]}
+                tenantOnly
+              >
                 <UserManagement />
               </ProtectedRoute>
             }
@@ -314,7 +322,22 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/workspace/user-management" element={<UserManagement />} />
+        <Route
+          path="/workspace/user-management"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={[
+                "role:read",
+                "role:manage",
+                "agent:read",
+                "agent:invite",
+              ]}
+              tenantOnly
+            >
+              <UserManagement />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/workspace/email-settings"
           element={

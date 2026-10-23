@@ -18,7 +18,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { listTickets, updateTicketStatus } from "../../api/tickets.api.js";
 import { listUsers } from "../../api/users.api.js";
 import ConfirmActionModal from "../../components/agents/ConfirmActionModal.jsx";
-import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
+import AssignTicketModal from "../../components/tickets/AssignTicketModal.jsx";
 import { formatTicketId, priorityLabel, statusLabel } from "../../utils/format.js";
 import { channelTicketPath } from "./channelUtils.js";
 import "../../styles/tickets.css";
@@ -848,7 +848,7 @@ export default function Tickets() {
                 onClick={() => handleAssignOpen(menuTicket)}
               >
                 <Clock size={15} aria-hidden="true" />
-                Transfer
+                Assign
               </button>
               <div className="tk-menu__divider" role="separator" />
               <button
@@ -866,12 +866,12 @@ export default function Tickets() {
         : null}
 
       {assignTicketTarget ? (
-        <TransferTicketModal
+        <AssignTicketModal
           ticket={assignTicketTarget}
           onClose={() => setAssignTicketTarget(null)}
-          onTransferred={async (agent) => {
+          onAssigned={async (agent) => {
             setAssignTicketTarget(null);
-            setNotice(`Ticket transferred to ${agent.name}`);
+            setNotice(`Ticket assigned to ${agent.name}`);
             await loadTickets();
           }}
         />

@@ -68,7 +68,7 @@ function buildSmtpAuth(account, secret) {
         : { type: "OAuth2", user: account.email, accessToken: secret };
 }
 
-async function createSmtpTransporter(account) {
+async function createSmtpTransporter(account, { verify = false } = {}) {
     const secret = await getAccountSecret(account);
 
     const transporter = nodemailer.createTransport({
@@ -76,10 +76,18 @@ async function createSmtpTransporter(account) {
         port: account.smtpPort,
         secure: account.smtpSecure,
         auth: buildSmtpAuth(account, secret),
-        tls: { rejectUnauthorized: false }
+        tls: { rejectUnauthorized: false },
+        // Prevent "Sending…" from hanging forever on a dead SMTP host.
+        connectionTimeout: 12_000,
+        greetingTimeout: 12_000,
+        socketTimeout: 25_000
     });
 
-    await transporter.verify();
+    // Only verify on explicit connection tests — verifying on every reply
+    // doubles latency and is the main cause of stuck Send buttons.
+    if (verify) {
+        await transporter.verify();
+    }
     return transporter;
 }
 
@@ -162,21 +170,24 @@ export async function sendEmailViaSmtp(account, emailData) {
 
         const info = await transporter.sendMail(mailOptions);
 
-        // Guarantee Sent-folder visibility in the agent's own mailbox.
-        let sentFolder = { appended: false };
-        try {
-            const raw = await buildRawMessage({ ...mailOptions, messageId: info.messageId });
-            sentFolder = await appendToSentFolder(account, raw);
-        } catch (appendError) {
-            console.warn(`Sent-folder append failed for ${account.email}:`, appendError.message);
-            sentFolder = { appended: false, error: appendError.message };
+        // Append to Sent in the background so a slow IMAP host never blocks
+        // the agent UI on "Sending…". Gmail/Outlook already file SMTP mail.
+        if (isPasswordAccount(account)) {
+            buildRawMessage({ ...mailOptions, messageId: info.messageId })
+                .then((raw) => appendToSentFolder(account, raw))
+                .catch((appendError) => {
+                    console.warn(
+                        `Sent-folder append failed for ${account.email}:`,
+                        appendError.message
+                    );
+                });
         }
 
         return {
             success: true,
             messageId: info.messageId,
             response: info.response,
-            sentFolder
+            sentFolder: { appended: isPasswordAccount(account), deferred: true }
         };
     } catch (error) {
         console.error("SMTP send error:", error);
@@ -191,7 +202,7 @@ export async function sendEmailViaSmtp(account, emailData) {
  */
 export async function testSmtpConnection(account) {
     try {
-        const transporter = await createSmtpTransporter(account);
+        const transporter = await createSmtpTransporter(account, { verify: true });
         transporter.close();
         return { success: true, message: "SMTP connection successful" };
     } catch (error) {

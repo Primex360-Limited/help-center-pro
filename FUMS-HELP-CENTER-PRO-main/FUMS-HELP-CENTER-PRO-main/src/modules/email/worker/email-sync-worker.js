@@ -7,8 +7,9 @@ import { env } from "../../../config/env.js";
  * Background service for periodic email synchronization
  */
 
-const SYNC_INTERVAL = env.EMAIL_SYNC_INTERVAL || 5 * 60 * 1000; // Default: 5 minutes
-const SYNC_BATCH_SIZE = env.EMAIL_SYNC_BATCH_SIZE || 10;
+// Default 15s so inbound customer mail appears quickly in the inbox.
+const SYNC_INTERVAL = env.EMAIL_SYNC_INTERVAL || 15 * 1000;
+const SYNC_BATCH_SIZE = env.EMAIL_SYNC_BATCH_SIZE || 50;
 
 let isRunning = false;
 let intervalId = null;

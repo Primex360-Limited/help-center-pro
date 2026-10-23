@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Eye, EyeOff, ChevronRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import { registerWorkspace } from "../../api/auth.api.js";
-import signupHero from "../../assets/signup-hero.png";
+import heroArt from "../../assets/signup-hero-exact.png";
+import logoMark from "../../assets/helpcentre-pro-mark-blue.png";
 import "../../styles/auth.css";
 
 export default function NewSignup() {
@@ -66,130 +66,134 @@ export default function NewSignup() {
   }
 
   return (
-    <div className="signup-split">
-      <aside className="signup-split__hero" aria-label="HelpCentre Pro">
+    <div className="signup-page">
+      <aside className="signup-hero" aria-hidden="true">
         <img
-          className="signup-split__hero-art"
-          src={signupHero}
-          alt="HelpCentre Pro support channels"
-          draggable="false"
+          src={heroArt}
+          alt=""
+          className="signup-hero__art"
+          width={1833}
+          height={1930}
         />
       </aside>
 
-      <main className="signup-split__panel">
-        <div className="signup-split__card">
-          <BrandLogo size="sm" />
+      <main className="signup-form-container">
+        <div className="signup-form-card">
+          <div className="signup-brand">
+            <img src={logoMark} alt="" className="signup-brand__mark" />
+            <span className="signup-brand__name">Help Center Pro</span>
+          </div>
 
-          <h1 className="signup-split__title">{t("auth.signup.title")}</h1>
-          <p className="signup-split__subtitle">{t("auth.signup.subtitle")}</p>
+          <h1 className="signup-form-title">Create your account</h1>
+          <p className="signup-form-subtitle">
+            Start your Help Center Pro account.
+          </p>
 
-          <form className="signup-split__form" onSubmit={handleSubmit} noValidate>
+          <form className="signup-form" onSubmit={handleSubmit} noValidate>
             {error ? <p className="auth-error">{error}</p> : null}
 
-            <div>
-              <label className="auth-label" htmlFor="signup-name">
-                {t("auth.signup.fullName")}
+            <div className="signup-form-field">
+              <label className="signup-form-label" htmlFor="signup-name">
+                Full name
               </label>
               <input
                 id="signup-name"
-                className="auth-input signup-input"
+                className="signup-form-input"
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder={t("auth.signup.namePlaceholder")}
+                placeholder="Name"
                 autoComplete="name"
                 required
               />
             </div>
 
-            <div>
-              <label className="auth-label" htmlFor="signup-email">
-                {t("auth.signup.workEmail")}
+            <div className="signup-form-field">
+              <label className="signup-form-label" htmlFor="signup-email">
+                Work email
               </label>
               <input
                 id="signup-email"
-                className="auth-input signup-input"
+                className="signup-form-input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={t("auth.signup.emailPlaceholder")}
+                placeholder="Email"
                 autoComplete="email"
                 required
               />
             </div>
 
-            <div>
-              <label className="auth-label" htmlFor="signup-password">
-                {t("auth.signup.password")}
+            <div className="signup-form-field">
+              <label className="signup-form-label" htmlFor="signup-password">
+                Password
               </label>
-              <div className="signup-input-wrap">
+              <div className="signup-form-input-wrap">
                 <input
                   id="signup-password"
-                  className="auth-input signup-input"
+                  className="signup-form-input"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t("auth.signup.passwordPlaceholder")}
+                  placeholder="Password"
                   autoComplete="new-password"
                   required
                 />
                 <button
                   type="button"
-                  className="signup-eye"
+                  className="signup-form-eye"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                 </button>
               </div>
-              <p className="auth-password-hint">{t("auth.signup.passwordHint")}</p>
+              <p className="signup-form-hint">At least 8 characters</p>
             </div>
 
-            <div>
-              <label className="auth-label" htmlFor="signup-confirm">
-                {t("auth.signup.confirmPassword")}
+            <div className="signup-form-field">
+              <label className="signup-form-label" htmlFor="signup-confirm">
+                Confirm Password
               </label>
-              <div className="signup-input-wrap">
+              <div className="signup-form-input-wrap">
                 <input
                   id="signup-confirm"
-                  className="auth-input signup-input"
+                  className="signup-form-input"
                   type={showConfirm ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder={t("auth.signup.passwordPlaceholder")}
+                  placeholder="Password"
                   autoComplete="new-password"
                   required
                 />
                 <button
                   type="button"
-                  className="signup-eye"
+                  className="signup-form-eye"
                   onClick={() => setShowConfirm((v) => !v)}
                   aria-label={showConfirm ? "Hide password" : "Show password"}
                 >
-                  {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showConfirm ? <Eye size={18} /> : <EyeOff size={18} />}
                 </button>
               </div>
             </div>
 
             <button
-              className="auth-btn signup-cta"
+              className="signup-form-submit"
               type="submit"
               disabled={submitting}
             >
               {submitting ? (
-                t("common.loading")
+                "Creating account..."
               ) : (
                 <>
-                  {t("auth.signup.createAccount")}
-                  <ChevronRight size={18} strokeWidth={2.5} />
+                  Create account <ChevronRight size={18} strokeWidth={2.5} />
                 </>
               )}
             </button>
           </form>
 
-          <p className="signup-split__footer">
-            {t("auth.signup.alreadyHaveAccount")}{" "}
-            <Link to="/login">{t("auth.signup.signIn")}</Link>
+          <p className="signup-form-footer">
+            Already have an account? <Link to="/login">Sign in</Link>
           </p>
         </div>
       </main>

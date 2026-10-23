@@ -112,7 +112,10 @@ export function AuthProvider({ children }) {
       refreshUser,
       hasPermission,
       canManageUsers:
-        hasPermission("agent:read") || hasPermission("agent:invite"),
+        hasPermission("agent:read") ||
+        hasPermission("agent:invite") ||
+        hasPermission("role:read") ||
+        hasPermission("role:manage"),
       canManageRoles: hasPermission("role:read") || hasPermission("role:manage"),
       canManageSettings:
         hasPermission("settings:read") || hasPermission("settings:write"),

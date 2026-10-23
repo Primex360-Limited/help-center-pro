@@ -31,7 +31,10 @@ function getTransporter() {
         ...(env.SMTP_USER
             ? { auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } }
             : {}),
-        tls: { rejectUnauthorized: false }
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 12_000,
+        greetingTimeout: 12_000,
+        socketTimeout: 25_000
     });
 
     return transporter;

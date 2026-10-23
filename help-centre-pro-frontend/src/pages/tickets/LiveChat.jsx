@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowRightLeft,
   Paperclip,
   Search,
   Send,
@@ -14,6 +15,7 @@ import {
   sendMessage,
   updateTicketStatus,
 } from "../../api/tickets.api.js";
+import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { formatTicketId } from "../../utils/format.js";
 import "../../styles/tickets.css";
@@ -122,6 +124,7 @@ export default function LiveChat() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
 
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
@@ -279,13 +282,13 @@ export default function LiveChat() {
           return [...prev, message];
         });
       } else {
-        await loadThreadMessages(id, { silent: true });
+        loadThreadMessages(id, { silent: true }).catch(() => {});
       }
       setDraft("");
-      await loadChats();
+      setSending(false);
+      loadChats().catch(() => {});
     } catch (err) {
       setMessagesError(err.message || "Unable to send message");
-    } finally {
       setSending(false);
     }
   }
@@ -449,6 +452,14 @@ export default function LiveChat() {
                 </button>
                 <button
                   type="button"
+                  className="live-chat__btn live-chat__btn--primary"
+                  onClick={() => setTransferOpen(true)}
+                >
+                  <ArrowRightLeft size={14} aria-hidden="true" />
+                  Transfer
+                </button>
+                <button
+                  type="button"
                   className="live-chat__btn live-chat__btn--danger"
                   onClick={handleEndChat}
                   disabled={ended || ending}
@@ -544,6 +555,18 @@ export default function LiveChat() {
           </>
         )}
       </section>
+
+      {transferOpen && selectedTicket ? (
+        <TransferTicketModal
+          ticket={selectedTicket}
+          onClose={() => setTransferOpen(false)}
+          onTransferred={async () => {
+            setTransferOpen(false);
+            setBanner("Ticket transferred");
+            await loadChats();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
+  ArrowRightLeft,
   AudioLines,
   Download,
   Lock,
@@ -11,6 +12,7 @@ import {
   Play,
   Search,
   Send,
+  Signal,
   Volume2,
 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -32,6 +34,7 @@ import { listUsers } from "../../api/users.api.js";
 import TemplatePicker, {
   applyTemplateInsert,
 } from "../../components/tickets/TemplatePicker.jsx";
+import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
 import {
   InCallBar,
   useBrowserCall,
@@ -88,6 +91,7 @@ export default function CallsInbox() {
   const [placing, setPlacing] = useState(false);
   const [recordingBlobUrl, setRecordingBlobUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const audioRef = useRef(null);
   const composerRef = useRef(null);
 
@@ -290,22 +294,24 @@ export default function CallsInbox() {
   }
 
   async function handleSend() {
-    if (!selectedId || !draft.trim()) return;
+    if (!selectedId || !draft.trim() || sending) return;
+    const body = draft.trim();
     setSending(true);
     setDetailError("");
     try {
       if (composerTab === "note") {
-        await addInternalNote(selectedId, draft.trim());
+        await addInternalNote(selectedId, body);
+        setBanner("Internal note added");
       } else {
-        await sendMessage(selectedId, draft.trim());
+        await sendMessage(selectedId, body);
+        setBanner("Reply sent");
       }
       setDraft("");
-      await loadDetail(selectedId);
-      await loadCalls();
-      setBanner(composerTab === "note" ? "Internal note added" : "Reply sent");
+      setSending(false);
+      loadDetail(selectedId).catch(() => {});
+      loadCalls().catch(() => {});
     } catch (err) {
       setDetailError(err.message || "Unable to send");
-    } finally {
       setSending(false);
     }
   }
@@ -637,16 +643,28 @@ export default function CallsInbox() {
             <ArrowLeft size={18} />
           </button>
 
-          <div className="ch-thread__id-row">
-            <strong className="ch-ticket-id">
-              {formatTicketId(selectedTicket.ticketId)}
-            </strong>
-            <span className="ch-channel-tag">call</span>
-            <span
-              className={`ch-pill ch-pill--${statusTone(selectedTicket.status)}`}
-            >
-              {statusLabel(selectedTicket.status)}
-            </span>
+          <div className="ch-thread__top">
+            <div className="ch-thread__id-row">
+              <strong className="ch-ticket-id">
+                {formatTicketId(selectedTicket.ticketId)}
+              </strong>
+              <span className="ch-channel-tag">call</span>
+              <span
+                className={`ch-pill ch-pill--${statusTone(selectedTicket.status)}`}
+              >
+                {statusLabel(selectedTicket.status)}
+              </span>
+            </div>
+            <div className="ch-thread__actions">
+              <button
+                type="button"
+                className="ch-btn ch-btn--primary"
+                onClick={() => setTransferOpen(true)}
+              >
+                <ArrowRightLeft size={15} />
+                Transfer
+              </button>
+            </div>
           </div>
 
           <h1 className="ch-thread__title">{selectedTicket.title}</h1>
@@ -1019,6 +1037,18 @@ export default function CallsInbox() {
           </div>
         </div>
       </aside>
+
+      {transferOpen ? (
+        <TransferTicketModal
+          ticket={selectedTicket}
+          onClose={() => setTransferOpen(false)}
+          onTransferred={async () => {
+            setTransferOpen(false);
+            setBanner("Ticket transferred");
+            await Promise.all([loadDetail(selectedId), loadCalls()]);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

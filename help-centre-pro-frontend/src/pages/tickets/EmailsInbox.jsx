@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
-  Forward,
+  ArrowRightLeft,
   Lock,
   Mail,
-  MoreHorizontal,
-  Reply,
   Search,
   Send,
 } from "lucide-react";
@@ -26,6 +24,7 @@ import { listUsers } from "../../api/users.api.js";
 import TemplatePicker, {
   applyTemplateInsert,
 } from "../../components/tickets/TemplatePicker.jsx";
+import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { formatTicketId, priorityLabel, statusLabel } from "../../utils/format.js";
 import {
@@ -136,12 +135,14 @@ export default function EmailsInbox() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [banner, setBanner] = useState(location.state?.notice || "");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const composerRef = useRef(null);
 
-  const loadEmails = useCallback(async () => {
-    setLoadingList(true);
-    setListError("");
+  const loadEmails = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoadingList(true);
+      setListError("");
+    }
     try {
       const result = await listTickets({
         channel: "EMAIL",
@@ -155,15 +156,23 @@ export default function EmailsInbox() {
       );
       setTickets(rows);
     } catch (err) {
-      setListError(err.message || "Unable to load email tickets");
-      setTickets([]);
+      if (!silent) {
+        setListError(err.message || "Unable to load email tickets");
+        setTickets([]);
+      }
     } finally {
-      setLoadingList(false);
+      if (!silent) setLoadingList(false);
     }
   }, []);
 
   useEffect(() => {
     loadEmails();
+    // Keep the inbox fresh while the agent is on the page — backend sync
+    // lands mail every ~15s; poll slightly faster so new mail appears promptly.
+    const pollId = setInterval(() => {
+      loadEmails({ silent: true }).catch(() => {});
+    }, 12_000);
+    return () => clearInterval(pollId);
   }, [loadEmails]);
 
   useEffect(() => {
@@ -229,36 +238,36 @@ export default function EmailsInbox() {
     });
   }, [tickets, searchQuery]);
 
-  const loadDetail = useCallback(
-    async (ticketId) => {
-      if (!ticketId) return;
+  const loadDetail = useCallback(async (ticketId, { silent = false } = {}) => {
+    if (!ticketId) return;
+    if (!silent) {
       setLoadingDetail(true);
       setDetailError("");
-      try {
-        const [ticketRes, messagesRes, notesRes, threadRes] =
-          await Promise.all([
-            getTicket(ticketId),
-            getMessages(ticketId, { page: 1, limit: 100 }).catch(() => null),
-            getInternalNotes(ticketId, { page: 1, limit: 100 }).catch(() => null),
-            getTicketThread(ticketId).catch(() => null),
-          ]);
-        const ticket = ticketRes?.data?.ticket || ticketRes?.data || null;
-        setTicketDetail(ticket);
-        setMessages(messagesRes?.data?.messages || []);
-        setNotes(notesRes?.data?.messages || notesRes?.data?.notes || []);
-        setThread(unwrapThread(threadRes));
-      } catch (err) {
+    }
+    try {
+      const [ticketRes, messagesRes, notesRes, threadRes] = await Promise.all([
+        getTicket(ticketId),
+        getMessages(ticketId, { page: 1, limit: 100 }).catch(() => null),
+        getInternalNotes(ticketId, { page: 1, limit: 100 }).catch(() => null),
+        getTicketThread(ticketId).catch(() => null),
+      ]);
+      const ticket = ticketRes?.data?.ticket || ticketRes?.data || null;
+      setTicketDetail(ticket);
+      setMessages(messagesRes?.data?.messages || []);
+      setNotes(notesRes?.data?.messages || notesRes?.data?.notes || []);
+      setThread(unwrapThread(threadRes));
+    } catch (err) {
+      if (!silent) {
         setDetailError(err.message || "Unable to load ticket");
         setTicketDetail(null);
         setMessages([]);
         setNotes([]);
         setThread([]);
-      } finally {
-        setLoadingDetail(false);
       }
-    },
-    []
-  );
+    } finally {
+      if (!silent) setLoadingDetail(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedId) {
@@ -266,13 +275,21 @@ export default function EmailsInbox() {
     }
   }, [selectedId, loadDetail]);
 
+  useEffect(() => {
+    if (!selectedId || mode !== "thread") return undefined;
+    const pollId = setInterval(() => {
+      loadDetail(selectedId, { silent: true }).catch(() => {});
+    }, 12_000);
+    return () => clearInterval(pollId);
+  }, [selectedId, mode, loadDetail]);
+
   function selectTicket(ticketId) {
     setSelectedId(ticketId);
-    setMode("inbox");
-    setMenuOpen(false);
+    setMode("thread");
+    setTransferOpen(false);
     const next = new URLSearchParams(params);
     next.set("ticket", ticketId);
-    next.delete("view");
+    next.set("view", "thread");
     setParams(next, { replace: true });
   }
 
@@ -330,39 +347,41 @@ export default function EmailsInbox() {
   }
 
   async function handleSend() {
-    if (!selectedId || !draft.trim()) return;
+    if (!selectedId || !draft.trim() || sending) return;
+    const body = draft.trim();
     setSending(true);
     setDetailError("");
     try {
       let sendResult = null;
       if (composerTab === "note") {
-        await addInternalNote(selectedId, draft.trim());
+        await addInternalNote(selectedId, body);
+        setBanner("Internal note added");
       } else {
         sendResult = await replyTicketEmail(selectedId, {
-          body: draft.trim(),
+          body,
           toEmail: customerEmail(selectedTicket) || undefined,
           subject: selectedTicket?.title || undefined,
         });
+        if (sendResult?.data?.usedMailbox) {
+          setBanner(
+            `Reply sent from your mailbox (${sendResult.data.mailboxEmail || "connected account"}) — it is also in your Sent folder.`
+          );
+        } else if (sendResult?.data?.fromFallback) {
+          setBanner(
+            "Reply sent via the HelpCentre Pro platform mailbox. Connect your mailbox in Settings → Email to send from your own address and keep everything in sync."
+          );
+        } else {
+          setBanner("Reply sent");
+        }
       }
       setDraft("");
-      await loadDetail(selectedId);
-      await loadEmails();
-      if (composerTab === "note") {
-        setBanner("Internal note added");
-      } else if (sendResult?.data?.usedMailbox) {
-        setBanner(
-          `Reply sent from your mailbox (${sendResult.data.mailboxEmail || "connected account"}) — it is also in your Sent folder.`
-        );
-      } else if (sendResult?.data?.fromFallback) {
-        setBanner(
-          "Reply sent via the HelpCentre Pro platform mailbox. Connect your mailbox in Settings → Email to send from your own address and keep everything in sync."
-        );
-      } else {
-        setBanner("Reply sent");
-      }
+      // Clear Sending immediately — reload the thread in the background so
+      // a slow list refresh never traps the button in "Sending…".
+      setSending(false);
+      loadDetail(selectedId).catch(() => {});
+      loadEmails().catch(() => {});
     } catch (err) {
       setDetailError(err.message || "Unable to send");
-    } finally {
       setSending(false);
     }
   }
@@ -386,21 +405,6 @@ export default function EmailsInbox() {
     }),
     [selectedTicket]
   );
-
-  function handleForward() {
-    const email = customerEmail(selectedTicket);
-    const subject = selectedTicket?.title || "";
-    if (email) {
-      window.open(
-        `mailto:?subject=${encodeURIComponent(`Fwd: ${subject}`)}&body=${encodeURIComponent(
-          `Forwarding ticket ${selectedTicket?.ticketId || ""}\n\n`
-        )}`,
-        "_blank"
-      );
-    } else {
-      setBanner("No customer email available to forward");
-    }
-  }
 
   const conversation = useMemo(
     () =>
@@ -471,69 +475,12 @@ export default function EmailsInbox() {
               <div className="ch-thread__actions">
                 <button
                   type="button"
-                  className="ch-btn ch-btn--ghost"
-                  onClick={() => setComposerTab("reply")}
+                  className="ch-btn ch-btn--primary"
+                  onClick={() => setTransferOpen(true)}
                 >
-                  <Reply size={15} />
-                  Reply
+                  <ArrowRightLeft size={15} />
+                  Transfer
                 </button>
-                <button
-                  type="button"
-                  className="ch-btn ch-btn--ghost"
-                  onClick={handleForward}
-                >
-                  <Forward size={15} />
-                  Forward
-                </button>
-                <div style={{ position: "relative" }}>
-                  <button
-                    type="button"
-                    className="ch-btn ch-btn--ghost"
-                    aria-label="More actions"
-                    onClick={() => setMenuOpen((v) => !v)}
-                  >
-                    <MoreHorizontal size={16} />
-                  </button>
-                  {menuOpen ? (
-                    <div
-                      className="ch-panel"
-                      style={{
-                        position: "absolute",
-                        right: 0,
-                        top: "110%",
-                        zIndex: 20,
-                        minWidth: 180,
-                        padding: 8,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="ch-btn ch-btn--ghost"
-                        style={{ width: "100%", marginBottom: 6 }}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          backToInbox();
-                        }}
-                      >
-                        Back to list
-                      </button>
-                      <button
-                        type="button"
-                        className="ch-btn ch-btn--ghost"
-                        style={{ width: "100%" }}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          navigator.clipboard?.writeText(
-                            selectedTicket.ticketId || ""
-                          );
-                          setBanner("Ticket ID copied");
-                        }}
-                      >
-                        Copy ticket ID
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
               </div>
             </div>
 
@@ -607,6 +554,18 @@ export default function EmailsInbox() {
           onPriorityChange={handlePriorityChange}
           onAssignChange={handleAssignChange}
         />
+
+        {transferOpen ? (
+          <TransferTicketModal
+            ticket={selectedTicket}
+            onClose={() => setTransferOpen(false)}
+            onTransferred={async () => {
+              setTransferOpen(false);
+              setBanner("Ticket transferred");
+              await Promise.all([loadDetail(selectedId), loadEmails()]);
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -791,21 +750,32 @@ export default function EmailsInbox() {
                 className="ch-btn ch-btn--primary"
                 onClick={openThread}
               >
-                <Reply size={15} />
-                Reply
+                Open conversation
               </button>
               <button
                 type="button"
                 className="ch-btn ch-btn--ghost"
-                onClick={handleForward}
+                onClick={() => setTransferOpen(true)}
               >
-                <Forward size={15} />
-                Forward
+                <ArrowRightLeft size={15} />
+                Transfer
               </button>
             </div>
           </>
         )}
       </section>
+
+      {transferOpen && selectedTicket ? (
+        <TransferTicketModal
+          ticket={selectedTicket}
+          onClose={() => setTransferOpen(false)}
+          onTransferred={async () => {
+            setTransferOpen(false);
+            setBanner("Ticket transferred");
+            await Promise.all([loadDetail(selectedId), loadEmails()]);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

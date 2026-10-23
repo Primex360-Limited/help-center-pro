@@ -1020,6 +1020,17 @@
   background: #f9fafb;
 }
 
+.live-chat__btn--primary {
+  border: 1px solid #1570ef;
+  background: #1570ef;
+  color: #ffffff;
+}
+
+.live-chat__btn--primary:hover {
+  background: #175cd3;
+  border-color: #175cd3;
+}
+
 .live-chat__btn--danger {
   border: 1px solid #fda29b;
   background: #fff;

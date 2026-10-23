@@ -6,6 +6,8 @@ import { isProviderUser, needsCompanyDetails } from "../../utils/onboarding.js";
 export default function ProtectedRoute({
   children,
   permission,
+  /** Pass when any one of several permissions should grant access. */
+  anyOfPermissions,
   providerOnly = false,
   tenantOnly = false,
 }) {
@@ -55,7 +57,14 @@ export default function ProtectedRoute({
     return <Navigate to="/admin/overview" replace />;
   }
 
-  if (permission && !hasPermission(permission)) {
+  const required = [
+    ...(permission ? [permission] : []),
+    ...(Array.isArray(anyOfPermissions) ? anyOfPermissions : []),
+  ];
+  if (
+    required.length > 0 &&
+    !required.some((key) => hasPermission(key))
+  ) {
     return (
       <Navigate
         to={isProviderUser(user) ? "/admin/overview" : "/dashboard"}
