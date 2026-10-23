@@ -3,6 +3,7 @@ import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { bindTenantToUser } from "../tenants/tenant.middleware.js";
+import { requireWorkspaceTenant } from "../tenants/require-workspace-tenant.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
     deleteUserHandler,
@@ -42,6 +43,7 @@ userRoutes.get(
     "/users",
     requireAuth,
     bindTenantToUser,
+    requireWorkspaceTenant,
     requirePermission("agent:read"),
     asyncHandler(getUsersHandler)
 );
@@ -73,6 +75,7 @@ userRoutes.get(
     "/users/:id",
     requireAuth,
     bindTenantToUser,
+    requireWorkspaceTenant,
     requirePermission("agent:read"),
     validate(userIdParamSchema, "params"),
     asyncHandler(getUserHandler)
@@ -111,6 +114,7 @@ userRoutes.patch(
     "/users/:id",
     requireAuth,
     bindTenantToUser,
+    requireWorkspaceTenant,
     requirePermission("agent:update"),
     validate(userIdParamSchema, "params"),
     validate(updateUserSchema),
@@ -144,6 +148,7 @@ userRoutes.delete(
     "/users/:id",
     requireAuth,
     bindTenantToUser,
+    requireWorkspaceTenant,
     requirePermission("agent:deactivate"),
     validate(userIdParamSchema, "params"),
     asyncHandler(deleteUserHandler)

@@ -107,6 +107,39 @@ export async function startService({
             await onListening(httpServer, app);
         }
 
+        // Keep the API up when background IMAP/mail sockets drop unexpectedly.
+        const isTransientMailSocketError = (err) => {
+            const code = err?.code || "";
+            const msg = String(err?.message || err || "");
+            return (
+                code === "ECONNRESET" ||
+                code === "EPIPE" ||
+                code === "ETIMEDOUT" ||
+                code === "ECONNREFUSED" ||
+                /imap|imapflow|tls/i.test(msg)
+            );
+        };
+
+        process.on("uncaughtException", (err) => {
+            if (isTransientMailSocketError(err)) {
+                console.error(`[${name}] transient socket error (kept alive):`, err.message);
+                return;
+            }
+            console.error(`[${name}] uncaughtException:`, err);
+            void shutdown("uncaughtException");
+        });
+
+        process.on("unhandledRejection", (reason) => {
+            if (isTransientMailSocketError(reason)) {
+                console.error(
+                    `[${name}] transient rejection (kept alive):`,
+                    reason?.message || reason
+                );
+                return;
+            }
+            console.error(`[${name}] unhandledRejection:`, reason);
+        });
+
         return httpServer;
     } catch (error) {
         console.error(`[${name}] startup failed:`, error.message);

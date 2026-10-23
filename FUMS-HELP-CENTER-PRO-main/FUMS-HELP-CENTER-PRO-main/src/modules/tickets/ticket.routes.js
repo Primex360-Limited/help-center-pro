@@ -3,6 +3,7 @@ import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { bindTenantToUser } from "../tenants/tenant.middleware.js";
+import { requireWorkspaceTenant } from "../tenants/require-workspace-tenant.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
     createTicketHandler,
@@ -53,6 +54,7 @@ const ticketRoutes = express.Router();
 
 ticketRoutes.use(requireAuth);
 ticketRoutes.use(bindTenantToUser);
+ticketRoutes.use(requireWorkspaceTenant);
 
 /**
  * @openapi

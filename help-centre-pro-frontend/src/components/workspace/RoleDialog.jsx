@@ -7,6 +7,9 @@ import { useDialogChrome } from "./dialogUtils.js";
  * Create / Edit Role — permission matrix (Module × Create/Read/Update/Delete)
  * mapped onto the canonical backend permission catalog. Keys outside the
  * matrix (advanced grants) are preserved untouched when editing.
+ *
+ * A module with zero checked permissions means users on this role cannot see
+ * that module in the sidebar at all.
  */
 const MATRIX = [
   {
@@ -20,7 +23,12 @@ const MATRIX = [
   },
   {
     module: "Customers",
-    actions: { create: null, read: "message:create", update: "note:create", delete: null },
+    actions: {
+      create: null,
+      read: "message:create",
+      update: "note:create",
+      delete: null,
+    },
   },
   {
     module: "Agents",
@@ -54,12 +62,22 @@ const MATRIX = [
     actions: { create: null, read: "report:read", update: null, delete: null },
   },
   {
-    module: "Billing & Invoices",
-    actions: { create: null, read: "role:read", update: "role:manage", delete: null },
+    module: "User management",
+    actions: {
+      create: null,
+      read: "role:read",
+      update: "role:manage",
+      delete: null,
+    },
   },
   {
     module: "Settings",
-    actions: { create: null, read: "settings:read", update: "settings:write", delete: null },
+    actions: {
+      create: null,
+      read: "settings:read",
+      update: "settings:write",
+      delete: null,
+    },
   },
   {
     module: "Reports",
@@ -71,6 +89,10 @@ const MATRIX_KEYS = new Set(
   MATRIX.flatMap((row) => Object.values(row.actions).filter(Boolean))
 );
 const ACTION_COLUMNS = ["create", "read", "update", "delete"];
+
+function moduleHasAccess(permissions, row) {
+  return Object.values(row.actions).some((key) => key && permissions.has(key));
+}
 
 export default function RoleDialog({
   open,
@@ -97,6 +119,11 @@ export default function RoleDialog({
 
   const preservedCount = useMemo(
     () => [...permissions].filter((key) => !MATRIX_KEYS.has(key)).length,
+    [permissions]
+  );
+
+  const modulesWithoutAccess = useMemo(
+    () => MATRIX.filter((row) => !moduleHasAccess(permissions, row)).map((row) => row.module),
     [permissions]
   );
 
@@ -169,6 +196,10 @@ export default function RoleDialog({
           />
 
           <span className="um-matrix__label">Enable Permissions</span>
+          <p className="um-matrix__hint">
+            Unchecked modules stay invisible in the sidebar for everyone on this
+            role. Access never exceeds what you select here.
+          </p>
           <div className="um-matrix-wrap">
             <table className="um-matrix">
               <thead>
@@ -181,37 +212,54 @@ export default function RoleDialog({
                 </tr>
               </thead>
               <tbody>
-                {MATRIX.map((row) => (
-                  <tr key={row.module}>
-                    <td className="um-matrix__module">{row.module}</td>
-                    {ACTION_COLUMNS.map((action) => {
-                      const key = row.actions[action];
-                      if (!key) {
+                {MATRIX.map((row) => {
+                  const lockedOut = !moduleHasAccess(permissions, row);
+                  return (
+                    <tr
+                      key={row.module}
+                      className={lockedOut ? "um-matrix__row--locked" : undefined}
+                    >
+                      <td className="um-matrix__module">
+                        {row.module}
+                        {lockedOut ? (
+                          <span className="um-matrix__hidden-tag">Hidden</span>
+                        ) : null}
+                      </td>
+                      {ACTION_COLUMNS.map((action) => {
+                        const key = row.actions[action];
+                        if (!key) {
+                          return (
+                            <td key={action} className="um-matrix__dash">
+                              –
+                            </td>
+                          );
+                        }
+                        const checked = permissions.has(key);
                         return (
-                          <td key={action} className="um-matrix__dash">
-                            –
+                          <td key={action}>
+                            <button
+                              type="button"
+                              role="checkbox"
+                              aria-checked={checked}
+                              aria-label={`${row.module} ${action}`}
+                              className={`um-matrix__check${checked ? " is-checked" : ""}`}
+                              onClick={() => togglePermission(key)}
+                            />
                           </td>
                         );
-                      }
-                      const checked = permissions.has(key);
-                      return (
-                        <td key={action}>
-                          <button
-                            type="button"
-                            role="checkbox"
-                            aria-checked={checked}
-                            aria-label={`${row.module} ${action}`}
-                            className={`um-matrix__check${checked ? " is-checked" : ""}`}
-                            onClick={() => togglePermission(key)}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          {modulesWithoutAccess.length > 0 ? (
+            <p className="um-matrix__note">
+              Hidden from this role: {modulesWithoutAccess.join(", ")}.
+            </p>
+          ) : null}
 
           {preservedCount > 0 ? (
             <p className="um-matrix__note">

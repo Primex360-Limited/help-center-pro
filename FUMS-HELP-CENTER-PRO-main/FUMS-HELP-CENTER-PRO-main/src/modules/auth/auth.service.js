@@ -605,16 +605,16 @@ export async function registerWorkspaceAccount({ fullName, email, password }) {
         data: {
             tenantId: tenant.id,
             userType: USER_TYPE.TENANT,
-            email: normalizedEmail,
-            passwordHash,
-            firstName,
-            lastName,
+        email: normalizedEmail,
+        passwordHash,
+        firstName,
+        lastName,
             roleId: adminRole.id,
-            status: USER_STATUS.ACTIVE,
+        status: USER_STATUS.ACTIVE,
             emailVerified: false,
-            mustChangePassword: false,
+        mustChangePassword: false,
             profileCompleted: false,
-            deniedPermissions: []
+        deniedPermissions: []
         }
     });
 
@@ -666,7 +666,7 @@ export async function registerWorkspaceAccount({ fullName, email, password }) {
         user: {
             id: user.id,
             email: user.email,
-            firstName: user.firstName,
+        firstName: user.firstName,
             lastName: user.lastName
         }
     };

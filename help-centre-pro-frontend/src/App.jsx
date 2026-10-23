@@ -68,16 +68,101 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/tickets" element={<Tickets />} />
-          <Route path="/tickets/live-chat" element={<LiveChat />} />
-          <Route path="/tickets/emails" element={<EmailsInbox />} />
-          <Route path="/tickets/calls" element={<CallsInbox />} />
-          <Route path="/tickets/new" element={<CreateTicketChooser />} />
-          <Route path="/tickets/new/email" element={<CreateEmailTicket />} />
-          <Route path="/tickets/new/call" element={<LogPhoneCall />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/customers/:customerKey" element={<CustomerProfile />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute permission="ticket:read" tenantOnly>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets"
+            element={
+              <ProtectedRoute permission="ticket:read" tenantOnly>
+                <Tickets />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/live-chat"
+            element={
+              <ProtectedRoute permission="ticket:read" tenantOnly>
+                <LiveChat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/emails"
+            element={
+              <ProtectedRoute permission="ticket:read" tenantOnly>
+                <EmailsInbox />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/calls"
+            element={
+              <ProtectedRoute permission="ticket:read" tenantOnly>
+                <CallsInbox />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/new"
+            element={
+              <ProtectedRoute
+                anyOfPermissions={["ticket:create", "ticket:read"]}
+                tenantOnly
+              >
+                <CreateTicketChooser />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/new/email"
+            element={
+              <ProtectedRoute
+                anyOfPermissions={["ticket:create", "ticket:read"]}
+                tenantOnly
+              >
+                <CreateEmailTicket />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/new/call"
+            element={
+              <ProtectedRoute
+                anyOfPermissions={["ticket:create", "ticket:read"]}
+                tenantOnly
+              >
+                <LogPhoneCall />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers"
+            element={
+              <ProtectedRoute
+                anyOfPermissions={["ticket:read", "message:create"]}
+                tenantOnly
+              >
+                <Customers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/customers/:customerKey"
+            element={
+              <ProtectedRoute
+                anyOfPermissions={["ticket:read", "message:create"]}
+                tenantOnly
+              >
+                <CustomerProfile />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/templates"
             element={
@@ -89,7 +174,14 @@ export default function App() {
           <Route
             path="/automations"
             element={
-              <ProtectedRoute permission="ticket:transfer" tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={[
+                  "ticket:transfer",
+                  "ticket:assign",
+                  "ticket:supervise",
+                ]}
+                tenantOnly
+              >
                 <Automations />
               </ProtectedRoute>
             }
@@ -105,7 +197,10 @@ export default function App() {
           <Route
             path="/automations/:ruleId/edit"
             element={
-              <ProtectedRoute permission="ticket:transfer" tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={["ticket:transfer", "ticket:assign"]}
+                tenantOnly
+              >
                 <AutomationRuleForm />
               </ProtectedRoute>
             }
@@ -113,7 +208,10 @@ export default function App() {
           <Route
             path="/agents"
             element={
-              <ProtectedRoute permission="agent:read" tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={["agent:read", "agent:invite"]}
+                tenantOnly
+              >
                 <Agents />
               </ProtectedRoute>
             }
@@ -121,7 +219,10 @@ export default function App() {
           <Route
             path="/workspace/profile"
             element={
-              <ProtectedRoute permission="settings:read" tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={["settings:read", "settings:write"]}
+                tenantOnly
+              >
                 <WorkspaceProfile />
               </ProtectedRoute>
             }
@@ -145,7 +246,10 @@ export default function App() {
           <Route
             path="/workspace/email-settings"
             element={
-              <ProtectedRoute permission="settings:read" tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={["settings:read", "settings:write"]}
+                tenantOnly
+              >
                 <EmailSettings />
               </ProtectedRoute>
             }
@@ -153,7 +257,10 @@ export default function App() {
           <Route
             path="/settings/email/callback/:provider"
             element={
-              <ProtectedRoute tenantOnly>
+              <ProtectedRoute
+                anyOfPermissions={["settings:read", "settings:write"]}
+                tenantOnly
+              >
                 <EmailOAuthCallback />
               </ProtectedRoute>
             }
@@ -264,16 +371,101 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/tickets" element={<Tickets />} />
-        <Route path="/tickets/live-chat" element={<LiveChat />} />
-        <Route path="/tickets/emails" element={<EmailsInbox />} />
-        <Route path="/tickets/calls" element={<CallsInbox />} />
-        <Route path="/tickets/new" element={<CreateTicketChooser />} />
-        <Route path="/tickets/new/email" element={<CreateEmailTicket />} />
-        <Route path="/tickets/new/call" element={<LogPhoneCall />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/customers/:customerKey" element={<CustomerProfile />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute permission="ticket:read" tenantOnly>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets"
+          element={
+            <ProtectedRoute permission="ticket:read" tenantOnly>
+              <Tickets />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/live-chat"
+          element={
+            <ProtectedRoute permission="ticket:read" tenantOnly>
+              <LiveChat />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/emails"
+          element={
+            <ProtectedRoute permission="ticket:read" tenantOnly>
+              <EmailsInbox />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/calls"
+          element={
+            <ProtectedRoute permission="ticket:read" tenantOnly>
+              <CallsInbox />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/new"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={["ticket:create", "ticket:read"]}
+              tenantOnly
+            >
+              <CreateTicketChooser />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/new/email"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={["ticket:create", "ticket:read"]}
+              tenantOnly
+            >
+              <CreateEmailTicket />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/tickets/new/call"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={["ticket:create", "ticket:read"]}
+              tenantOnly
+            >
+              <LogPhoneCall />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customers"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={["ticket:read", "message:create"]}
+              tenantOnly
+            >
+              <Customers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customers/:customerKey"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={["ticket:read", "message:create"]}
+              tenantOnly
+            >
+              <CustomerProfile />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/templates"
           element={
@@ -285,7 +477,14 @@ export default function App() {
         <Route
           path="/automations"
           element={
-            <ProtectedRoute permission="ticket:transfer" tenantOnly>
+            <ProtectedRoute
+              anyOfPermissions={[
+                "ticket:transfer",
+                "ticket:assign",
+                "ticket:supervise",
+              ]}
+              tenantOnly
+            >
               <Automations />
             </ProtectedRoute>
           }
@@ -301,7 +500,10 @@ export default function App() {
         <Route
           path="/automations/:ruleId/edit"
           element={
-            <ProtectedRoute permission="ticket:transfer" tenantOnly>
+            <ProtectedRoute
+              anyOfPermissions={["ticket:transfer", "ticket:assign"]}
+              tenantOnly
+            >
               <AutomationRuleForm />
             </ProtectedRoute>
           }
@@ -309,7 +511,10 @@ export default function App() {
         <Route
           path="/agents"
           element={
-            <ProtectedRoute permission="agent:read" tenantOnly>
+            <ProtectedRoute
+              anyOfPermissions={["agent:read", "agent:invite"]}
+              tenantOnly
+            >
               <Agents />
             </ProtectedRoute>
           }
@@ -317,7 +522,10 @@ export default function App() {
         <Route
           path="/workspace/profile"
           element={
-            <ProtectedRoute permission="settings:read" tenantOnly>
+            <ProtectedRoute
+              anyOfPermissions={["settings:read", "settings:write"]}
+              tenantOnly
+            >
               <WorkspaceProfile />
             </ProtectedRoute>
           }
@@ -341,7 +549,10 @@ export default function App() {
         <Route
           path="/workspace/email-settings"
           element={
-            <ProtectedRoute permission="settings:read" tenantOnly>
+            <ProtectedRoute
+              anyOfPermissions={["settings:read", "settings:write"]}
+              tenantOnly
+            >
               <EmailSettings />
             </ProtectedRoute>
           }
@@ -349,7 +560,10 @@ export default function App() {
         <Route
           path="/settings/email/callback/:provider"
           element={
-            <ProtectedRoute tenantOnly>
+            <ProtectedRoute
+              anyOfPermissions={["settings:read", "settings:write"]}
+              tenantOnly
+            >
               <EmailOAuthCallback />
             </ProtectedRoute>
           }

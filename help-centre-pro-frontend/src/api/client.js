@@ -42,8 +42,9 @@ export async function apiRequest(path, options = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
+    const target = API_URL || window.location.origin;
     throw new Error(
-      `Unable to reach the API (${API_URL}). Confirm the backend is live and CORS allows this site.`
+      `Unable to reach the API (${target}). Confirm the backend is live on port 4008 and CORS allows this site.`
     );
   }
 

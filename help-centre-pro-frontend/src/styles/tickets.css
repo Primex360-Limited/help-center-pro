@@ -1229,6 +1229,7 @@
   .tickets-filters {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
 
   .tickets-filters__select,
@@ -1240,9 +1241,29 @@
   .tickets-footer {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
 
   .tickets-pagination {
     justify-content: center;
+  }
+
+  .tickets-table-wrap,
+  .tk-table-wrap {
+    margin: 0 -4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tickets-page__header,
+  .tk-page__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .live-chat__composer,
+  .tk-composer {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 }

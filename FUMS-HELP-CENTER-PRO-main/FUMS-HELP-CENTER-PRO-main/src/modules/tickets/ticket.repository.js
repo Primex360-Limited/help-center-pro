@@ -69,19 +69,25 @@ export async function ticketIdExists(ticketId) {
     return Boolean(existingTicket);
 }
 
-export async function findExistingTicketCustomer({ customerPhone, customerEmail, customerIp }) {
+export async function findExistingTicketCustomer({
+    customerPhone,
+    customerEmail,
+    customerIp,
+    tenantId
+}) {
     const conditions = [
         customerPhone ? { customerPhone } : null,
         customerEmail ? { customerEmail } : null,
         customerIp ? { customerIp } : null
     ].filter(Boolean);
 
-    if (!conditions.length) {
+    if (!conditions.length || !tenantId) {
         return null;
     }
 
     return prisma.ticket.findFirst({
         where: {
+            tenantId,
             OR: conditions
         },
         orderBy: {
@@ -97,13 +103,14 @@ export async function findExistingTicketCustomer({ customerPhone, customerEmail,
     });
 }
 
-export async function findLatestActiveTicketByCustomerEmail(customerEmail) {
-    if (!customerEmail) {
+export async function findLatestActiveTicketByCustomerEmail(customerEmail, tenantId = null) {
+    if (!customerEmail || !tenantId) {
         return null;
     }
 
     return prisma.ticket.findFirst({
         where: {
+            tenantId,
             customerEmail,
             status: {
                 notIn: ["RESOLVED", "CLOSED"]
@@ -309,11 +316,18 @@ export async function countTickets(where) {
     return prisma.ticket.count({ where });
 }
 
-export async function findTicketByPublicId(ticketId, includeOptions = {}) {
+export async function findTicketByPublicId(ticketId, options = {}) {
+    const { tenantId, ...includeOptions } = options;
     const include = buildTicketInclude(includeOptions);
+    const where = { ticketId };
 
-    return prisma.ticket.findUnique({
-        where: { ticketId },
+    // Fail closed: tenant-scoped lookups never return another workspace's ticket.
+    if (tenantId) {
+        where.tenantId = tenantId;
+    }
+
+    return prisma.ticket.findFirst({
+        where,
         ...(Object.keys(include).length > 0 ? { include } : {})
     });
 }

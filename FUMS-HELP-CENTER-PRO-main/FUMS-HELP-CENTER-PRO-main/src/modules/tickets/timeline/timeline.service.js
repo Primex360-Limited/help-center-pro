@@ -172,10 +172,16 @@ export function buildAgentChatEvent(content, actor, metadata = {}) {
     };
 }
 
-async function getTicketOrThrow(ticketId) {
-    const ticket = await findTicketByPublicId(ticketId);
+async function getTicketOrThrow(ticketId, tenantId) {
+    const ticket = await findTicketByPublicId(ticketId, {
+        ...(tenantId ? { tenantId } : {})
+    });
 
     if (!ticket) {
+        throw new AppError("Ticket not found", 404);
+    }
+
+    if (tenantId && ticket.tenantId && ticket.tenantId !== tenantId) {
         throw new AppError("Ticket not found", 404);
     }
 
@@ -183,7 +189,7 @@ async function getTicketOrThrow(ticketId) {
 }
 
 export async function addEventToTicket(ticketId, data, actor) {
-    const ticket = await getTicketOrThrow(ticketId);
+    const ticket = await getTicketOrThrow(ticketId, actor?.tenantId || data?.tenantId);
     const event = buildTicketEventPayload(data, actor, {
         customerId: ticket.customerId,
         customerName: ticket.customerName,
@@ -239,8 +245,8 @@ export async function addCallLogToTicketCall(callId, log) {
     });
 }
 
-export async function getTicketThread(ticketId) {
-    const ticket = await getTicketOrThrow(ticketId);
+export async function getTicketThread(ticketId, tenantId = null) {
+    const ticket = await getTicketOrThrow(ticketId, tenantId);
     const [events, legacyMessagesResult] = await Promise.all([
         listTicketEvents(ticket.id),
         listTicketMessages({

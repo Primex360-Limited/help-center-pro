@@ -801,7 +801,23 @@
   .ch-inbox.is-thread {
     grid-template-columns: 1fr;
     height: auto;
-    min-height: calc(100vh - 72px);
+    min-height: calc(100dvh - 60px);
+    margin: -16px -12px;
+  }
+
+  .ch-inbox__list {
+    max-height: 42vh;
+    border-right: none;
+    border-bottom: 1px solid var(--ch-line);
+  }
+
+  .ch-inbox__thread,
+  .ch-inbox__detail {
+    min-height: 52vh;
+  }
+
+  .ch-composer {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 }
 

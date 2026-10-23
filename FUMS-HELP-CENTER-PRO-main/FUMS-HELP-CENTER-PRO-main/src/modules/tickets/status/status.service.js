@@ -4,9 +4,11 @@ import { TICKET_STATUS } from "../ticket.constants.js";
 import { findTicketByPublicId, updateTicketStatusWithHistory } from "../ticket.repository.js";
 import { isValidStatusTransition } from "./status.rules.js";
 import { mapTicketResponse } from "../helpers/map-ticket-response.js";
+import { requireTenantId } from "../helpers/tenant-scope.js";
 
 export async function updateTicketStatus(ticketId, status, actor) {
-    const ticket = await findTicketByPublicId(ticketId);
+    const tenantId = requireTenantId({ tenantId: actor?.tenantId });
+    const ticket = await findTicketByPublicId(ticketId, { tenantId });
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
@@ -43,7 +45,8 @@ export async function updateTicketStatus(ticketId, status, actor) {
 }
 
 export async function updateTicketPriority(ticketId, priority, actor) {
-    const ticket = await findTicketByPublicId(ticketId);
+    const tenantId = requireTenantId({ tenantId: actor?.tenantId });
+    const ticket = await findTicketByPublicId(ticketId, { tenantId });
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);

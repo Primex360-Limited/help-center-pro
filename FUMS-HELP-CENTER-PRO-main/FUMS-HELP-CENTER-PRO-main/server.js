@@ -8,6 +8,7 @@ import {
     seedTestUser
 } from "./src/modules/auth/seedTestUser.js";
 import { seedDemoTickets } from "./src/modules/tickets/seedDemoTickets.js";
+import { purgeDemoTickets } from "./src/modules/tickets/purgeDemoData.js";
 import { assertCriticalEnv, env } from "./src/config/env.js";
 import {
     closeTicketRealtime,
@@ -89,8 +90,16 @@ async function startServer() {
 
         await ensureDefaultSuperAdmin();
 
+        if (env.PURGE_DEMO_DATA) {
+            await purgeDemoTickets();
+        }
+
         if (env.SEED_TEST_USER && env.NODE_ENV !== "production") {
             await seedTestUser();
+        }
+
+        // Explicit opt-in only — never seed demo tickets into real workspaces.
+        if (env.SEED_DEMO_TICKETS && env.NODE_ENV !== "production") {
             await seedDemoTickets();
         }
 

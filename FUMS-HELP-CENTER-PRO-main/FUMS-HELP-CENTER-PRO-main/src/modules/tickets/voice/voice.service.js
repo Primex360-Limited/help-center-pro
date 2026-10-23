@@ -147,7 +147,12 @@ export async function placeOutboundCall({
         throw new AppError("Customer number cannot match your support line", 400);
     }
 
-    let ticket = ticketId ? await findTicketByPublicId(ticketId) : null;
+    const tenantId = actor?.tenantId || null;
+    let ticket = ticketId
+        ? await findTicketByPublicId(ticketId, {
+            ...(tenantId ? { tenantId } : {})
+        })
+        : null;
 
     if (!ticket) {
         ticket = await createTicket(
@@ -155,6 +160,7 @@ export async function placeOutboundCall({
                 title: title || `Outbound call to ${customerName || customerNumber}`,
                 description: `Outbound PSTN call to ${customerNumber} from ${fromNumber}.`,
                 priority: TICKET_PRIORITY.MEDIUM,
+                tenantId,
                 channel: TICKET_CHANNEL.PHONE,
                 customerName: customerName || customerNumber,
                 customerEmail: customerEmail || undefined,
@@ -402,8 +408,10 @@ export function buildOutboundTwiml() {
 /**
  * Stream a Twilio recording through the API (authenticated download / playback).
  */
-export async function streamTicketRecording(ticketId, res) {
-    const ticket = await findTicketByPublicId(ticketId);
+export async function streamTicketRecording(ticketId, res, tenantId = null) {
+    const ticket = await findTicketByPublicId(ticketId, {
+        ...(tenantId ? { tenantId } : {})
+    });
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
     }

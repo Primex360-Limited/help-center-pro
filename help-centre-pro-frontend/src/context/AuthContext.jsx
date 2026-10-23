@@ -95,12 +95,40 @@ export function AuthProvider({ children }) {
 
   const hasPermission = useCallback(
     (permission) => {
-      if (!user) return false;
-      if (user.isSuperAdmin) return true;
+      if (!user || !permission) return false;
+      // Provider platform operators only — tenant roles never bypass RBAC.
+      if (user.isSuperAdmin && (user.userType === "provider" || user.user_type === "provider")) {
+        return true;
+      }
       return (user.permissions || []).includes(permission);
     },
     [user]
   );
+
+  const hasAnyPermission = useCallback(
+    (permissions = []) => {
+      if (!Array.isArray(permissions) || permissions.length === 0) return false;
+      return permissions.some((key) => hasPermission(key));
+    },
+    [hasPermission]
+  );
+
+  // Re-hydrate access when the tab regains focus so role edits take effect
+  // without forcing a full logout.
+  useEffect(() => {
+    function syncAccess() {
+      if (!getStoredToken()) return;
+      if (document.visibilityState && document.visibilityState !== "visible") return;
+      refreshUser();
+    }
+
+    window.addEventListener("focus", syncAccess);
+    document.addEventListener("visibilitychange", syncAccess);
+    return () => {
+      window.removeEventListener("focus", syncAccess);
+      document.removeEventListener("visibilitychange", syncAccess);
+    };
+  }, [refreshUser]);
 
   const value = useMemo(
     () => ({
@@ -111,16 +139,17 @@ export function AuthProvider({ children }) {
       logout,
       refreshUser,
       hasPermission,
-      canManageUsers:
-        hasPermission("agent:read") ||
-        hasPermission("agent:invite") ||
-        hasPermission("role:read") ||
-        hasPermission("role:manage"),
-      canManageRoles: hasPermission("role:read") || hasPermission("role:manage"),
-      canManageSettings:
-        hasPermission("settings:read") || hasPermission("settings:write"),
+      hasAnyPermission,
+      canManageUsers: hasAnyPermission([
+        "agent:read",
+        "agent:invite",
+        "role:read",
+        "role:manage",
+      ]),
+      canManageRoles: hasAnyPermission(["role:read", "role:manage"]),
+      canManageSettings: hasAnyPermission(["settings:read", "settings:write"]),
     }),
-    [user, loading, login, logout, refreshUser, hasPermission]
+    [user, loading, login, logout, refreshUser, hasPermission, hasAnyPermission]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

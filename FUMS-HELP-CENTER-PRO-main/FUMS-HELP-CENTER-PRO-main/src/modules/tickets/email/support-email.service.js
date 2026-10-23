@@ -95,13 +95,21 @@ async function findEventByMessageId(messageId) {
     return null;
 }
 
-async function resolveThreadTicket({ subject, customerEmail, inReplyTo, references }) {
+async function resolveThreadTicket({
+    subject,
+    customerEmail,
+    inReplyTo,
+    references,
+    tenantId
+}) {
     const ticketId =
         extractTicketPublicId(subject) ||
         extractTicketPublicId(inReplyTo || "") ||
         extractTicketPublicId(references || "");
     if (ticketId) {
-        const byPublicId = await findTicketByPublicId(ticketId);
+        const byPublicId = await findTicketByPublicId(ticketId, {
+            ...(tenantId ? { tenantId } : {})
+        });
         if (byPublicId) return byPublicId;
     }
 
@@ -109,12 +117,15 @@ async function resolveThreadTicket({ subject, customerEmail, inReplyTo, referenc
         if (!ref) continue;
         for (const token of String(ref).split(/\s+/).filter(Boolean)) {
             const threadEvent = await findEventByMessageId(token);
-            if (threadEvent?.ticket) return threadEvent.ticket;
+            const ticket = threadEvent?.ticket;
+            if (ticket && (!tenantId || ticket.tenantId === tenantId)) {
+                return ticket;
+            }
         }
     }
 
-    if (customerEmail) {
-        return findLatestActiveTicketByCustomerEmail(customerEmail);
+    if (customerEmail && tenantId) {
+        return findLatestActiveTicketByCustomerEmail(customerEmail, tenantId);
     }
     return null;
 }
@@ -163,11 +174,17 @@ export async function ingestMailboxEmail({
 
     const isOutbound = direction === "OUTBOUND";
     const customerEmail = isOutbound ? to : from;
+    const tenantId = account?.tenantId || null;
+    if (!tenantId) {
+        return { skipped: true, reason: "mailbox_missing_tenant" };
+    }
+
     const ticket = await resolveThreadTicket({
         subject,
         customerEmail,
         inReplyTo,
-        references
+        references,
+        tenantId
     });
 
     const eventMetadata = buildEmailMetadata({
@@ -187,14 +204,16 @@ export async function ingestMailboxEmail({
         ? {
               userId: account.userId,
               name: account.displayName || account.email,
-              email: account.email
+              email: account.email,
+              tenantId
           }
-        : SYSTEM_EMAIL_ACTOR;
+        : { ...SYSTEM_EMAIL_ACTOR, tenantId };
 
     if (ticket) {
         const event = await addEventToTicket(
             ticket.ticketId,
             {
+                tenantId,
                 channel: TICKET_CHANNEL.EMAIL,
                 customerName: isOutbound ? ticket.customerName : fromName || ticket.customerName,
                 customerEmail: customerEmail || ticket.customerEmail,
@@ -207,7 +226,7 @@ export async function ingestMailboxEmail({
                 },
                 eventMetadata
             },
-            isOutbound ? mailboxActor : SYSTEM_EMAIL_ACTOR
+            isOutbound ? mailboxActor : { ...SYSTEM_EMAIL_ACTOR, tenantId }
         );
 
         broadcastTicketEvent(ticket.ticketId, event, {
@@ -228,6 +247,7 @@ export async function ingestMailboxEmail({
             title: subject,
             description: text,
             priority: TICKET_PRIORITY.MEDIUM,
+            tenantId,
             customerName: fromName || from,
             customerEmail: from,
             channel: TICKET_CHANNEL.EMAIL,
@@ -240,9 +260,9 @@ export async function ingestMailboxEmail({
             },
             initialEventMetadata: eventMetadata
         },
-        SYSTEM_EMAIL_ACTOR
+        { ...SYSTEM_EMAIL_ACTOR, tenantId }
     );
-    const thread = await getTicketThread(newTicket.ticketId);
+    const thread = await getTicketThread(newTicket.ticketId, tenantId);
     const initialEvent = thread[thread.length - 1] || null;
 
     broadcastInboundEmail({ ticket: newTicket, event: initialEvent, created: true });
@@ -333,7 +353,10 @@ async function resolveOutboundSender(actor) {
  * Falls back to platform SMTP when no mailbox is connected.
  */
 export async function replyToTicketByEmail(ticketId, data, actor) {
-    const ticket = await findTicketByPublicId(ticketId);
+    const tenantId = actor?.tenantId || actor?.tenant_id || null;
+    const ticket = await findTicketByPublicId(ticketId, {
+        ...(tenantId ? { tenantId } : {})
+    });
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
@@ -358,7 +381,6 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
     const body = data.body.trim();
 
     const userId = actor?.userId || actor?.id;
-    const tenantId = actor?.tenantId || actor?.tenant_id;
 
     let emailAccount = null;
     if (userId) {

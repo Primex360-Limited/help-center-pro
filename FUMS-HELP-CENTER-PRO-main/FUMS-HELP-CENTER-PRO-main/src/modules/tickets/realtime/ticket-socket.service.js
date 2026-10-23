@@ -206,7 +206,10 @@ async function authenticateSocket(socket, next) {
         socket.data.user = user;
         socket.data.tenantId =
             decoded.tenant_id ?? user.tenantId ?? null;
-        socket.data.actor = buildUserSnapshot(user);
+        socket.data.actor = {
+            ...buildUserSnapshot(user),
+            tenantId: socket.data.tenantId
+        };
         socket.data.permissions = getEffectivePermissionsFromUser(user);
 
         return next();
@@ -278,9 +281,37 @@ async function assertCustomerCanUseTicket(ticket, customer = {}) {
     }
 }
 
+async function resolveCustomerTenantId(socket, payload = {}) {
+    if (payload.tenantId) return payload.tenantId;
+    if (socket.data.tenantId) return socket.data.tenantId;
+
+    const slug =
+        payload.tenantSlug ||
+        payload.workspace ||
+        socket.handshake?.query?.tenant ||
+        socket.handshake?.query?.tenantSlug ||
+        null;
+
+    if (!slug) return null;
+
+    const tenant = await prisma.tenant.findFirst({
+        where: {
+            OR: [{ slug: String(slug) }, { primaryDomain: String(slug) }]
+        },
+        select: { id: true }
+    });
+
+    return tenant?.id || null;
+}
+
 async function handleCustomerStartChat(io, socket, payload, ack) {
     const message = ensureMessage(payload);
     const customer = buildCustomerPayload(socket, payload);
+    const tenantId = await resolveCustomerTenantId(socket, payload);
+    if (!tenantId) {
+        throw new Error("Workspace context is required to start a chat");
+    }
+    socket.data.tenantId = tenantId;
     const title = payload.title?.trim() ||
         `Live chat from ${customer.customerName || customer.customerEmail || customer.customerIp || "customer"}`;
     const ticket = await createTicket(
@@ -288,6 +319,7 @@ async function handleCustomerStartChat(io, socket, payload, ack) {
             title,
             description: message,
             priority: payload.priority || TICKET_PRIORITY.MEDIUM,
+            tenantId,
             ...customer,
             channel: TICKET_CHANNEL.CHAT,
             chat: {
@@ -295,7 +327,7 @@ async function handleCustomerStartChat(io, socket, payload, ack) {
                 senderType: SENDER_TYPE.CUSTOMER
             }
         },
-        CHAT_WIDGET_ACTOR
+        { ...CHAT_WIDGET_ACTOR, tenantId }
     );
 
     socket.data.customer = {
@@ -312,7 +344,10 @@ async function handleCustomerStartChat(io, socket, payload, ack) {
 }
 
 async function handleCustomerJoinTicket(socket, payload, ack) {
-    const ticket = await findTicketByPublicId(payload.ticketId);
+    const tenantId = await resolveCustomerTenantId(socket, payload);
+    const ticket = await findTicketByPublicId(payload.ticketId, {
+        ...(tenantId ? { tenantId } : {})
+    });
     const customer = buildCustomerPayload(socket, payload);
 
     await assertCustomerCanUseTicket(ticket, customer);
@@ -329,7 +364,14 @@ async function handleCustomerJoinTicket(socket, payload, ack) {
 
 async function handleCustomerSendMessage(io, socket, payload, ack) {
     const message = ensureMessage(payload);
-    const ticket = await findTicketByPublicId(payload.ticketId || socket.data.customer?.ticketId);
+    const tenantId =
+        (await resolveCustomerTenantId(socket, payload)) ||
+        socket.data.tenantId ||
+        null;
+    const ticket = await findTicketByPublicId(
+        payload.ticketId || socket.data.customer?.ticketId,
+        { ...(tenantId ? { tenantId } : {}) }
+    );
     const customer = buildCustomerPayload(socket, payload);
 
     await assertCustomerCanUseTicket(ticket, customer);
@@ -338,13 +380,14 @@ async function handleCustomerSendMessage(io, socket, payload, ack) {
         ticket.ticketId,
         {
             ...customer,
+            tenantId: ticket.tenantId,
             channel: TICKET_CHANNEL.CHAT,
             chat: {
                 message,
                 senderType: SENDER_TYPE.CUSTOMER
             }
         },
-        CHAT_WIDGET_ACTOR
+        { ...CHAT_WIDGET_ACTOR, tenantId: ticket.tenantId }
     );
 
     socket.join(ticketRoom(ticket.ticketId));
@@ -369,7 +412,12 @@ async function handleAgentJoinQueue(socket, _payload, ack) {
 async function handleAgentJoinTicket(socket, payload, ack) {
     requireSocketPermission(socket, TICKET_PERMISSIONS.VIEW);
 
-    const ticket = await findTicketByPublicId(payload.ticketId);
+    const tenantId = socket.data.tenantId;
+    if (!tenantId) {
+        throw new Error("Workspace context is required");
+    }
+
+    const ticket = await findTicketByPublicId(payload.ticketId, { tenantId });
 
     if (!ticket) {
         throw new Error("Ticket not found");
@@ -382,7 +430,12 @@ async function handleAgentJoinTicket(socket, payload, ack) {
 async function handleSupervisorJoinTicket(socket, payload, ack) {
     requireSocketPermission(socket, TICKET_PERMISSIONS.SUPERVISE);
 
-    const ticket = await findTicketByPublicId(payload.ticketId);
+    const tenantId = socket.data.tenantId;
+    if (!tenantId) {
+        throw new Error("Workspace context is required");
+    }
+
+    const ticket = await findTicketByPublicId(payload.ticketId, { tenantId });
 
     if (!ticket) {
         throw new Error("Ticket not found");

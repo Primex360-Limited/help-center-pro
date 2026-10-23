@@ -35,9 +35,9 @@ export function buildUserSnapshot(user) {
             .filter(Boolean)
             .join(" ")
             .trim() || user.name || user.email,
-        email: user.email
-
-    }
+        email: user.email,
+        tenantId: user.tenantId ?? user.tenant_id ?? null
+    };
 }
 
 export function getClientIpFromRequest(req) {

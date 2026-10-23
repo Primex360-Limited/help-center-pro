@@ -122,6 +122,9 @@ export async function appendToSentFolder(account, rawMessage) {
         auth: buildImapAuth(account, secret),
         logger: false
     });
+    client.on("error", (err) => {
+        console.error(`[IMAP Sent] ${account.email}:`, err?.message || err);
+    });
     try {
         await client.connect();
         const sentPath = await findSentMailboxPath(client);

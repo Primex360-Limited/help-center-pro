@@ -1,4 +1,5 @@
 export function buildTicketFilters({
+    tenantId,
     status,
     priority,
     assignedToUserId,
@@ -8,6 +9,10 @@ export function buildTicketFilters({
     to
 }) {
     const where = {};
+
+    if (tenantId) {
+        where.tenantId = tenantId;
+    }
 
     if (status) {
         where.status = status;

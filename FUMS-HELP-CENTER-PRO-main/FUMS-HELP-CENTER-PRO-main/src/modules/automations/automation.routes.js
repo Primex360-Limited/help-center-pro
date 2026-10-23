@@ -4,6 +4,7 @@ import { validate } from "../../middleware/validate.middleware.js";
 import { PERMISSION } from "../../shared/constants/permissions.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { bindTenantToUser } from "../tenants/tenant.middleware.js";
+import { requireWorkspaceTenant } from "../tenants/require-workspace-tenant.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
     createAutomationRuleHandler,
@@ -25,18 +26,16 @@ import {
  */
 const automationRoutes = express.Router();
 
+automationRoutes.use(requireAuth, bindTenantToUser, requireWorkspaceTenant);
+
 automationRoutes.get(
     "/automations",
-    requireAuth,
-    bindTenantToUser,
     requirePermission(PERMISSION.TICKET_TRANSFER),
     asyncHandler(listAutomationRulesHandler)
 );
 
 automationRoutes.get(
     "/automations/:ruleId",
-    requireAuth,
-    bindTenantToUser,
     requirePermission(PERMISSION.TICKET_TRANSFER),
     validate(automationRuleIdParamSchema, "params"),
     asyncHandler(getAutomationRuleHandler)
@@ -44,8 +43,6 @@ automationRoutes.get(
 
 automationRoutes.post(
     "/automations",
-    requireAuth,
-    bindTenantToUser,
     requirePermission(PERMISSION.TICKET_ASSIGN),
     validate(createAutomationRuleSchema),
     asyncHandler(createAutomationRuleHandler)
@@ -53,8 +50,6 @@ automationRoutes.post(
 
 automationRoutes.patch(
     "/automations/:ruleId",
-    requireAuth,
-    bindTenantToUser,
     requirePermission(PERMISSION.TICKET_ASSIGN),
     validate(automationRuleIdParamSchema, "params"),
     validate(updateAutomationRuleSchema),
@@ -63,8 +58,6 @@ automationRoutes.patch(
 
 automationRoutes.delete(
     "/automations/:ruleId",
-    requireAuth,
-    bindTenantToUser,
     requirePermission(PERMISSION.TICKET_ASSIGN),
     validate(automationRuleIdParamSchema, "params"),
     asyncHandler(deleteAutomationRuleHandler)

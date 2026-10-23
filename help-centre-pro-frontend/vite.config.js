@@ -14,5 +14,16 @@ export default defineConfig({
     hmr: {
       overlay: true,
     },
+    // Dev-only same-origin fallback when VITE_API_URL is unset.
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:4008',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://127.0.0.1:4008',
+        changeOrigin: true,
+      },
+    },
   },
 })

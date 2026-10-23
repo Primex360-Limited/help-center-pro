@@ -7,8 +7,16 @@ function trimSlash(value) {
  * On Render static hosts, fall back to the known API service when VITE_API_URL
  * was not baked in at build time (common Blueprint miss → "Failed to fetch").
  */
+/** Avoid `localhost` → ::1 failures when the API is healthy on IPv4 only. */
+function preferIpv4Loopback(url) {
+  return String(url || "").replace(
+    /^http:\/\/localhost(?=:\d|$)/i,
+    "http://127.0.0.1"
+  );
+}
+
 function resolveApiUrl() {
-  const fromEnv = trimSlash(import.meta.env.VITE_API_URL);
+  const fromEnv = preferIpv4Loopback(trimSlash(import.meta.env.VITE_API_URL));
   if (fromEnv) return fromEnv;
 
   if (typeof window !== "undefined") {
@@ -18,7 +26,7 @@ function resolveApiUrl() {
     }
   }
 
-  return "http://localhost:4008";
+  return "http://127.0.0.1:4008";
 }
 
 export const API_URL = resolveApiUrl();

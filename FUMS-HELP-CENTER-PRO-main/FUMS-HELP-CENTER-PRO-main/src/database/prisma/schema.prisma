@@ -77,6 +77,9 @@ model Ticket {
   title       String
   description String
 
+  // Workspace isolation — every ticket belongs to exactly one tenant.
+  tenantId String @db.Uuid
+
   // EXISTING
   status           TicketStatus @default(OPEN)
   assignedToUserId String?
@@ -111,6 +114,7 @@ model Ticket {
   lastAgentResponseAt    DateTime?
 
   // EXISTING RELATIONS
+  tenant            Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   assignmentHistory TicketAssignmentHistory[]
   messages          TicketMessage[]
   statusHistory     TicketStatusHistory[]
@@ -118,6 +122,9 @@ model Ticket {
   // ✅ NEW RELATION
   events TicketEvent[]
 
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
   @@index([status])
   @@index([priority])
   @@index([assignedToUserId])
@@ -308,6 +315,7 @@ model Tenant {
   emailAccounts    EmailAccount[]
   messageTemplates MessageTemplate[]
   automationRules  AutomationRule[]
+  tickets          Ticket[]
 
   @@index([status])
 }

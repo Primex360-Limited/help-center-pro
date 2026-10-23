@@ -551,9 +551,27 @@
 @media (max-width: 720px) {
   .agents-page__header {
     flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
   .agents-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agents-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .agents-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .agents-kpi-grid {
     grid-template-columns: 1fr;
   }
 }

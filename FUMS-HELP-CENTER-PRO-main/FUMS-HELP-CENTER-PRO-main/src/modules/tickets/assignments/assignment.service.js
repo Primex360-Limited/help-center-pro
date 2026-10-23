@@ -17,6 +17,7 @@ import { getUsers } from "../../users/user.service.js";
 import { buildUserSnapshot } from "../ticket.utils.js";
 import { TICKET_STATUS } from "../ticket.constants.js";
 import { buildTicketLogEvent } from "../timeline/timeline.service.js";
+import { requireTenantId } from "../helpers/tenant-scope.js";
 
 function buildAssignmentHistory(ticket, assignmentSnapshot, actor, transferReason) {
     return {
@@ -33,8 +34,16 @@ function buildAssignmentHistory(ticket, assignmentSnapshot, actor, transferReaso
     };
 }
 
+function actorTenantId(actor) {
+    return requireTenantId(
+        { tenantId: actor?.tenantId },
+        "Workspace context is required for ticket assignment"
+    );
+}
+
 export async function assignTicket(ticketId, assignedToUserId, actor, transferReason = undefined) {
-    const ticket = await findTicketByPublicId(ticketId);
+    const tenantId = actorTenantId(actor);
+    const ticket = await findTicketByPublicId(ticketId, { tenantId });
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
@@ -44,7 +53,7 @@ export async function assignTicket(ticketId, assignedToUserId, actor, transferRe
         throw new AppError("Ticket is already assigned to this user", 409);
     }
 
-    const assignmentSnapshot = await getAssignableUserSnapshot(assignedToUserId);
+    const assignmentSnapshot = await getAssignableUserSnapshot(assignedToUserId, tenantId);
     const updatedTicket = await updateTicketAssignmentWithHistory({
         ticketRefId: ticket.id,
         assignment: assignmentSnapshot,
@@ -56,8 +65,9 @@ export async function assignTicket(ticketId, assignedToUserId, actor, transferRe
 }
 
 export async function transferTicket(ticketId, assignedToUserId, transferReason, actor, options = {}) {
+    const tenantId = actorTenantId(actor);
     const reason = transferReason.trim();
-    const ticket = await findTicketByPublicId(ticketId);
+    const ticket = await findTicketByPublicId(ticketId, { tenantId });
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
@@ -67,7 +77,7 @@ export async function transferTicket(ticketId, assignedToUserId, transferReason,
         throw new AppError("Ticket is already assigned to this user", 409);
     }
 
-    const assignmentSnapshot = await getAssignableUserSnapshot(assignedToUserId);
+    const assignmentSnapshot = await getAssignableUserSnapshot(assignedToUserId, tenantId);
     let updatedTicket = await updateTicketAssignmentWithHistory({
         ticketRefId: ticket.id,
         assignment: assignmentSnapshot,
@@ -108,9 +118,14 @@ export async function transferTicket(ticketId, assignedToUserId, transferReason,
 /**
  * All assignable agents with live presence + open-ticket load — powers the
  * premium Transfer dialog (Available / Busy / Offline, open ticket counts).
+ * Strictly scoped to the caller's workspace.
  */
-export async function listAssignableAgents() {
-    const users = await getUsers();
+export async function listAssignableAgents(tenantId) {
+    const scopedTenantId = requireTenantId(
+        { tenantId },
+        "Workspace context is required to list assignable agents"
+    );
+    const users = await getUsers(scopedTenantId);
     const assignable = users.filter(
         (user) => user.status === USER_STATUS.ACTIVE && canReceiveTicketAssignment(user)
     );
@@ -118,6 +133,7 @@ export async function listAssignableAgents() {
     const load = await prisma.ticket.groupBy({
         by: ["assignedToUserId"],
         where: {
+            tenantId: scopedTenantId,
             assignedToUserId: { in: assignable.map((u) => u.id) },
             status: { notIn: [TICKET_STATUS.RESOLVED, TICKET_STATUS.CLOSED] }
         },
@@ -141,7 +157,8 @@ export async function listAssignableAgents() {
 }
 
 export async function pickQueuedTicket(ticketId, actor) {
-    const ticket = await findTicketByPublicId(ticketId);
+    const tenantId = actorTenantId(actor);
+    const ticket = await findTicketByPublicId(ticketId, { tenantId });
 
     if (!ticket) {
         throw new AppError("Ticket not found", 404);
@@ -155,7 +172,7 @@ export async function pickQueuedTicket(ticketId, actor) {
         throw new AppError("Ticket has already been picked by another agent", 409);
     }
 
-    const assignmentSnapshot = await getAssignableUserSnapshot(actor.userId);
+    const assignmentSnapshot = await getAssignableUserSnapshot(actor.userId, tenantId);
     const updatedTicket = await pickQueuedTicketWithHistory({
         ticketRefId: ticket.id,
         assignment: assignmentSnapshot,
@@ -186,6 +203,6 @@ export async function pickQueuedTicket(ticketId, actor) {
     return mapTicketResponse(updatedTicket);
 }
 
-export async function getOnlineAssignableAgents() {
-    return listOnlineAssignableUsers();
+export async function getOnlineAssignableAgents(tenantId) {
+    return listOnlineAssignableUsers(tenantId);
 }

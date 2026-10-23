@@ -137,8 +137,9 @@ export async function findUserByEmailInScope(email, tenantId = null, client = pr
 }
 
 /**
- * List users inside a scope. Pass `undefined` (the default) for the
- * provider-wide view, `null` for provider accounts only, or a tenant UUID.
+ * List users inside a scope. Pass `undefined` for the provider-wide view
+ * (platform admin only), `null` for provider accounts only, or a tenant UUID.
+ * Workspace routes must always pass an explicit tenant UUID — never omit it.
  */
 export async function getUsers(tenantId = undefined) {
     const users = await prisma.user.findMany({
@@ -148,6 +149,18 @@ export async function getUsers(tenantId = undefined) {
     });
 
     return users.map(toUserView);
+}
+
+/**
+ * Fail-closed workspace team list. Rejects missing tenant scope so callers
+ * cannot accidentally enumerate every workspace's agents.
+ */
+export async function getTenantUsers(tenantId) {
+    if (!tenantId) {
+        throw new AppError("Workspace context is required to list users", 403);
+    }
+
+    return getUsers(tenantId);
 }
 
 /**
@@ -167,7 +180,10 @@ export async function getUsersWithTicketStats(tenantId = undefined) {
 
     const grouped = await prisma.ticket.groupBy({
         by: ["assignedToUserId", "status"],
-        where: { assignedToUserId: { in: userIds } },
+        where: {
+            assignedToUserId: { in: userIds },
+            ...(tenantId ? { tenantId } : {})
+        },
         _count: { _all: true }
     });
 

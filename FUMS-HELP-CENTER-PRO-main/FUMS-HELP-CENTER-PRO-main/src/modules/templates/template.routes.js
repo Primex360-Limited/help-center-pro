@@ -3,6 +3,7 @@ import asyncHandler from "../../middleware/async.middleware.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
 import { bindTenantToUser } from "../tenants/tenant.middleware.js";
+import { requireWorkspaceTenant } from "../tenants/require-workspace-tenant.js";
 import { requirePermission } from "../roles/rbac.middleware.js";
 import {
     createTemplateHandler,
@@ -18,18 +19,16 @@ import {
 
 const templateRoutes = express.Router();
 
+templateRoutes.use(requireAuth, bindTenantToUser, requireWorkspaceTenant);
+
 templateRoutes.get(
     "/templates",
-    requireAuth,
-    bindTenantToUser,
     requirePermission("template:read"),
     asyncHandler(listTemplatesHandler)
 );
 
 templateRoutes.post(
     "/templates",
-    requireAuth,
-    bindTenantToUser,
     requirePermission("template:create"),
     validate(createTemplateSchema),
     asyncHandler(createTemplateHandler)
@@ -37,8 +36,6 @@ templateRoutes.post(
 
 templateRoutes.patch(
     "/templates/:templateId",
-    requireAuth,
-    bindTenantToUser,
     requirePermission("template:update"),
     validate(templateIdParamSchema, "params"),
     validate(updateTemplateSchema),
@@ -47,8 +44,6 @@ templateRoutes.patch(
 
 templateRoutes.delete(
     "/templates/:templateId",
-    requireAuth,
-    bindTenantToUser,
     requirePermission("template:delete"),
     validate(templateIdParamSchema, "params"),
     asyncHandler(deleteTemplateHandler)

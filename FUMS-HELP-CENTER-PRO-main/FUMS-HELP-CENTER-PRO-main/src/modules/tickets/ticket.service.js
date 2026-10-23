@@ -17,6 +17,7 @@ import { isTicketIdUniqueConflict } from "./helpers/ticket-id-generator.js";
 import { buildTicketFilters } from "./helpers/build-ticket-filters.js";
 import { resolveCustomerIdentity } from "./helpers/resolve-customer-identity.js";
 import { getAssignableUserSnapshot } from "./helpers/ticket-assignee.js";
+import { requireTenantId } from "./helpers/tenant-scope.js";
 import { buildTicketEventPayload } from "./timeline/timeline.service.js";
 import { toCreateTicketDto } from "./dto/create-ticket.dto.js";
 import { toListTicketsDto } from "./dto/list-ticket.dto.js";
@@ -41,14 +42,19 @@ function shouldQueueInitialTicket(data, hasAssignment) {
 }
 
 export async function createTicket(data, actor) {
+    const tenantId = requireTenantId({
+        tenantId: actor?.tenantId || data?.tenantId || null
+    }, "Tickets must belong to a workspace");
+
     const customer = await resolveCustomerIdentity({
         customerEmail: data.customerEmail || data.email?.fromEmail,
         customerPhone: data.customerPhone,
         customerName: data.customerName,
-        customerIp: data.customerIp
+        customerIp: data.customerIp,
+        tenantId
     });
     const assignmentSnapshot = data.assignedToUserId
-        ? await getAssignableUserSnapshot(data.assignedToUserId)
+        ? await getAssignableUserSnapshot(data.assignedToUserId, tenantId)
         : null;
     const initialStatus = shouldQueueInitialTicket(data, Boolean(assignmentSnapshot))
         ? TICKET_STATUS.QUEUED
@@ -90,6 +96,7 @@ export async function createTicket(data, actor) {
 
             const ticket = await createTicketWithTimeline({
                 ticketData: {
+                    tenantId,
                     title: data.title.trim(),
                     description: data.description.trim(),
                     status: initialStatus,
@@ -159,8 +166,9 @@ export async function createTicket(data, actor) {
 }
 
 export async function getTickets(query = {}) {
+    const tenantId = requireTenantId(query, "Workspace context is required to list tickets");
     const pagination = getPagination(query);
-    const where = buildTicketFilters(query);
+    const where = buildTicketFilters({ ...query, tenantId });
 
     const [tickets, total] = await Promise.all([
         listTickets({
@@ -184,8 +192,13 @@ export async function getTickets(query = {}) {
     };
 }
 
-export async function getTicketDetail(ticketId) {
+export async function getTicketDetail(ticketId, tenantId) {
+    const scopedTenantId = requireTenantId(
+        { tenantId },
+        "Workspace context is required to view a ticket"
+    );
     const ticket = await findTicketByPublicId(ticketId, {
+        tenantId: scopedTenantId,
         includeMessages: true
     });
 

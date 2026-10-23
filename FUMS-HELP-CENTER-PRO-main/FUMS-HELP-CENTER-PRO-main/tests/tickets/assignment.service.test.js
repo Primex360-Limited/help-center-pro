@@ -73,11 +73,25 @@ describe("assignTicket", () => {
             assignTicket("TKT-20260420-ABC123", "agent-id", {
                 userId: "admin-id",
                 name: "Admin User",
-                email: "admin@example.com"
+                email: "admin@example.com",
+                tenantId: "tenant-1"
             })
         ).rejects.toMatchObject({
             message: "Only active users can be assigned to tickets",
             statusCode: 400
+        });
+    });
+
+    it("rejects assignment without workspace context", async () => {
+        await expect(
+            assignTicket("TKT-20260420-ABC123", "agent-id", {
+                userId: "admin-id",
+                name: "Admin User",
+                email: "admin@example.com"
+            })
+        ).rejects.toMatchObject({
+            message: "Workspace context is required for ticket assignment",
+            statusCode: 403
         });
     });
 
@@ -87,7 +101,8 @@ describe("assignTicket", () => {
             ticketId: "TKT-20260420-ABC123",
             assignedToUserId: null,
             assignedToName: null,
-            assignedToEmail: null
+            assignedToEmail: null,
+            tenantId: "tenant-1"
         });
 
         getUserById.mockResolvedValue({
@@ -96,6 +111,7 @@ describe("assignTicket", () => {
             lastName: "Agent",
             email: "agent@example.com",
             status: USER_STATUS.ACTIVE,
+            tenantId: "tenant-1",
             allowedPermissions: ["ticket.receive_assignment"]
         });
 
@@ -110,21 +126,28 @@ describe("assignTicket", () => {
             {
                 userId: "admin-id",
                 name: "Admin User",
-                email: "admin@example.com"
+                email: "admin@example.com",
+                tenantId: "tenant-1"
             }
         );
 
+        expect(findTicketByPublicId).toHaveBeenCalledWith("TKT-20260420-ABC123", {
+            tenantId: "tenant-1"
+        });
+        expect(getUserById).toHaveBeenCalledWith("agent-id", "tenant-1");
         expect(updateTicketAssignmentWithHistory).toHaveBeenCalledWith({
             ticketRefId: "ticket-db-id",
             assignment: {
                 userId: "agent-id",
                 name: "Assigned Agent",
-                email: "agent@example.com"
+                email: "agent@example.com",
+                tenantId: "tenant-1"
             },
             updatedBy: {
                 userId: "admin-id",
                 name: "Admin User",
-                email: "admin@example.com"
+                email: "admin@example.com",
+                tenantId: "tenant-1"
             },
             history: {
                 previousAssignedToUserId: null,

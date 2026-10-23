@@ -1,5 +1,6 @@
 import prisma from "../../../database/prisma/client.js";
 import { TICKET_CHANNEL, TICKET_STATUS } from "../ticket.constants.js";
+import { requireTenantId } from "../helpers/tenant-scope.js";
 
 const CHANNEL_LABELS = Object.freeze({
     EMAIL: "Emails",
@@ -78,8 +79,10 @@ async function getPrimaryChannelsByTicketIds(ticketIds) {
     return map;
 }
 
-export async function getDashboardOverview() {
+export async function getDashboardOverview(tenantId) {
+    const scopedTenantId = requireTenantId({ tenantId });
     const todayStart = startOfUtcDay();
+    const tenantWhere = { tenantId: scopedTenantId };
 
     const [
         openCount,
@@ -92,10 +95,14 @@ export async function getDashboardOverview() {
         activeAgentGroups
     ] = await Promise.all([
         prisma.ticket.count({
-            where: { status: { in: [TICKET_STATUS.OPEN, TICKET_STATUS.QUEUED] } }
+            where: {
+                ...tenantWhere,
+                status: { in: [TICKET_STATUS.OPEN, TICKET_STATUS.QUEUED] }
+            }
         }),
         prisma.ticket.count({
             where: {
+                ...tenantWhere,
                 status: {
                     in: [TICKET_STATUS.PENDING, TICKET_STATUS.WAITING_FOR_REPLY]
                 }
@@ -104,7 +111,8 @@ export async function getDashboardOverview() {
         prisma.ticketStatusHistory.findMany({
             where: {
                 newStatus: TICKET_STATUS.RESOLVED,
-                createdAt: { gte: todayStart }
+                createdAt: { gte: todayStart },
+                ticket: tenantWhere
             },
             select: {
                 ticketRefId: true,
@@ -114,22 +122,24 @@ export async function getDashboardOverview() {
         }),
         prisma.ticket.groupBy({
             by: ["customerEmail"],
-            where: { customerEmail: { not: null } },
+            where: { ...tenantWhere, customerEmail: { not: null } },
             _count: { _all: true }
         }),
         prisma.ticket.groupBy({
             by: ["customerId"],
             where: {
+                ...tenantWhere,
                 customerId: { not: null },
                 customerEmail: null
             },
             _count: { _all: true }
         }),
         prisma.ticket.findMany({
-            where: { createdAt: { gte: todayStart } },
+            where: { ...tenantWhere, createdAt: { gte: todayStart } },
             select: { id: true }
         }),
         prisma.ticket.findMany({
+            where: tenantWhere,
             orderBy: { createdAt: "desc" },
             take: 8,
             select: {
@@ -147,6 +157,7 @@ export async function getDashboardOverview() {
         prisma.ticket.groupBy({
             by: ["assignedToUserId"],
             where: {
+                ...tenantWhere,
                 assignedToUserId: { not: null },
                 status: {
                     in: [
@@ -164,7 +175,7 @@ export async function getDashboardOverview() {
     const resolvedTicketIds = [...new Set(resolvedTodayRows.map((row) => row.ticketRefId))];
     const resolvedTodayDetails = resolvedTicketIds.length
         ? await prisma.ticket.findMany({
-            where: { id: { in: resolvedTicketIds } },
+            where: { ...tenantWhere, id: { in: resolvedTicketIds } },
             select: {
                 id: true,
                 assignedToUserId: true,

@@ -40,6 +40,12 @@ async function connectToImap(account) {
         logger: false
     });
 
+    // ImapFlow emits 'error' on socket resets — without a listener Node crashes
+    // the whole API process (seen as "Unable to reach the API" on login).
+    client.on("error", (err) => {
+        console.error(`[IMAP] ${account.email}:`, err?.message || err);
+    });
+
     await client.connect();
     return client;
 }

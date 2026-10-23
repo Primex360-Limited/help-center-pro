@@ -7,6 +7,7 @@ import {
     transferTicket
 } from "./assignment.service.js";
 import { buildActorSnapshotFromRequest } from "../ticket.utils.js";
+import { requireTenantId } from "../helpers/tenant-scope.js";
 
 export async function assignTicketHandler(req, res) {
     const ticket = await assignTicket(
@@ -31,8 +32,9 @@ export async function transferTicketHandler(req, res) {
     return successResponse(res, "Ticket transferred successfully", { ticket });
 }
 
-export async function listAssignableAgentsHandler(_req, res) {
-    const agents = await listAssignableAgents();
+export async function listAssignableAgentsHandler(req, res) {
+    const tenantId = requireTenantId({ req });
+    const agents = await listAssignableAgents(tenantId);
     return successResponse(res, "Assignable agents fetched successfully", { agents });
 }
 
@@ -45,8 +47,9 @@ export async function pickQueuedTicketHandler(req, res) {
     return successResponse(res, "Ticket picked from queue successfully", { ticket });
 }
 
-export async function listOnlineAssignableAgentsHandler(_req, res) {
-    const agents = await getOnlineAssignableAgents();
+export async function listOnlineAssignableAgentsHandler(req, res) {
+    const tenantId = requireTenantId({ req });
+    const agents = await getOnlineAssignableAgents(tenantId);
 
     return successResponse(res, "Online assignable agents fetched successfully", { agents });
 }

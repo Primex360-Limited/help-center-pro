@@ -18,7 +18,8 @@ export async function listTicketMessagesHandler(req, res) {
     const result = await getTicketMessages(
         req.validatedParams.ticketId,
         req.validatedQuery,
-        MESSAGE_TYPE.MESSAGE
+        MESSAGE_TYPE.MESSAGE,
+        req.tenantId ?? req.currentUser?.tenantId ?? req.user?.tenant_id ?? null
     );
 
     return successResponse(
@@ -45,7 +46,8 @@ export async function listInternalNotesHandler(req, res) {
     const result = await getTicketMessages(
         req.validatedParams.ticketId,
         req.validatedQuery,
-        MESSAGE_TYPE.INTERNAL_NOTE
+        MESSAGE_TYPE.INTERNAL_NOTE,
+        req.tenantId ?? req.currentUser?.tenantId ?? req.user?.tenant_id ?? null
     );
 
     return successResponse(

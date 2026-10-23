@@ -18,9 +18,12 @@ import {
   CreditCard,
   PieChart,
   Settings,
+  Menu,
+  X,
 } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { updateMyPhone, updateMySenderEmail } from "../../api/auth.api.js";
+import { MODULE_ACCESS, COMING_SOON_MODULES } from "../../constants/moduleAccess.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import HowItWorksCard from "./HowItWorksCard.jsx";
 import SidebarBrand from "./SidebarBrand.jsx";
@@ -28,20 +31,25 @@ import "../../styles/app.css";
 
 /** Exact sidebar order from the tenant dashboard mock. */
 const TENANT_NAV = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true, ready: true },
-  { to: "/tickets", label: "Tickets", icon: Ticket, end: true, ready: true },
-  { to: "/tickets/live-chat", label: "Live Chat", icon: MessageSquare, ready: true },
-  { to: "/tickets/emails", label: "Emails", icon: Mail, ready: true },
-  { to: "/tickets/calls", label: "Calls", icon: Phone, ready: true },
-  { to: "/customers", label: "Customers", icon: Users, ready: true },
-  { to: "/agents", label: "Agents", icon: UserRound, ready: true, needsUsers: true },
-  { to: "/analytics", label: "Analytics", icon: PieChart, ready: false },
-  { to: "/reports", label: "Reports", icon: BarChart3, ready: false },
-  { to: "/templates", label: "Templates", icon: FileText, ready: true },
-  { to: "/automations", label: "Automations", icon: Zap, ready: true, needsPermission: "ticket:transfer" },
-  { to: "/billing", label: "Billing", icon: CreditCard, ready: false },
-  { to: "/workspace/user-management", label: "User management", icon: Users, ready: true, needsUsers: true },
-  { to: "/workspace/profile", label: "Settings", icon: Settings, ready: true, needsSettings: true },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true, module: "dashboard" },
+  { to: "/tickets", label: "Tickets", icon: Ticket, end: true, module: "tickets" },
+  { to: "/tickets/live-chat", label: "Live Chat", icon: MessageSquare, module: "liveChat" },
+  { to: "/tickets/emails", label: "Emails", icon: Mail, module: "emails" },
+  { to: "/tickets/calls", label: "Calls", icon: Phone, module: "calls" },
+  { to: "/customers", label: "Customers", icon: Users, module: "customers" },
+  { to: "/agents", label: "Agents", icon: UserRound, module: "agents" },
+  { to: "/analytics", label: "Analytics", icon: PieChart, module: "analytics" },
+  { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
+  { to: "/templates", label: "Templates", icon: FileText, module: "templates" },
+  { to: "/automations", label: "Automations", icon: Zap, module: "automations" },
+  { to: "/billing", label: "Billing", icon: CreditCard, module: "billing" },
+  {
+    to: "/workspace/user-management",
+    label: "User management",
+    icon: Users,
+    module: "userManagement",
+  },
+  { to: "/workspace/profile", label: "Settings", icon: Settings, module: "settings" },
 ];
 
 function tenantRoleLabel(roleName) {
@@ -52,7 +60,7 @@ function tenantRoleLabel(roleName) {
   return roleName;
 }
 
-function NavItem({ item }) {
+function NavItem({ item, onNavigate }) {
   const Icon = item.icon;
   return (
     <NavLink
@@ -61,6 +69,7 @@ function NavItem({ item }) {
       className={({ isActive }) =>
         `app-nav__item${isActive ? " is-active" : ""}`
       }
+      onClick={onNavigate}
     >
       <Icon size={18} strokeWidth={1.75} />
       <span>{item.label}</span>
@@ -68,30 +77,15 @@ function NavItem({ item }) {
   );
 }
 
-function ComingSoonNav({ item }) {
-  const Icon = item.icon;
-  return (
-    <button type="button" className="app-nav__item app-nav__item--soon" disabled>
-      <Icon size={18} strokeWidth={1.75} />
-      <span>{item.label}</span>
-    </button>
-  );
-}
-
 export default function AppShell() {
-  const {
-    user,
-    logout,
-    canManageUsers,
-    canManageSettings,
-    hasPermission,
-    refreshUser,
-  } = useAuth();
+  const { user, logout, hasAnyPermission, refreshUser } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [howtoDismissed, setHowtoDismissed] = useState(false);
   const [search, setSearch] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [agentPhone, setAgentPhone] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
   const [savingPhone, setSavingPhone] = useState(false);
@@ -100,6 +94,35 @@ export default function AppShell() {
   useEffect(() => {
     setHowtoDismissed(localStorage.getItem("hcp_howto_dismissed") === "1");
   }, []);
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!navOpen) return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(event) {
+      if (event.key === "Escape") setNavOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [navOpen]);
+
+  const visibleNav = useMemo(() => {
+    return TENANT_NAV.filter((item) => {
+      if (COMING_SOON_MODULES.has(item.module)) return false;
+      const keys = MODULE_ACCESS[item.module] || [];
+      if (!keys.length) return false;
+      return hasAnyPermission(keys);
+    });
+  }, [hasAnyPermission]);
+
+  const canCreateTicket = hasAnyPermission(["ticket:create", "ticket:read"]);
 
   async function handleLogout() {
     await logout();
@@ -116,6 +139,7 @@ export default function AppShell() {
     setSenderEmail(user?.metadata?.senderEmail || "");
     setPhoneMsg("");
     setProfileOpen(true);
+    setNavOpen(false);
   }
 
   async function saveAgentPhone(event) {
@@ -154,33 +178,41 @@ export default function AppShell() {
       .join("") || "U";
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
+    <div className={`app-shell${navOpen ? " is-nav-open" : ""}`}>
+      <button
+        type="button"
+        className={`app-nav-backdrop${navOpen ? " is-open" : ""}`}
+        aria-label="Close menu"
+        tabIndex={navOpen ? 0 : -1}
+        onClick={() => setNavOpen(false)}
+      />
+
+      <aside
+        className="app-sidebar"
+        aria-label="Primary"
+        id="app-mobile-nav"
+      >
         <div className="app-sidebar__scroll">
-          <SidebarBrand />
+          <div className="app-sidebar__brand-row">
+            <SidebarBrand variant="tenant" />
+            <button
+              type="button"
+              className="app-sidebar__close"
+              onClick={() => setNavOpen(false)}
+              aria-label="Close menu"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
           <nav className="app-nav" aria-label="Workspace">
-            {TENANT_NAV.map((item) => {
-              const key = item.key || item.to + item.label;
-              if (item.needsUsers && !canManageUsers) {
-                return <ComingSoonNav key={key} item={item} />;
-              }
-              if (item.needsSettings && !canManageSettings) {
-                return <ComingSoonNav key={key} item={item} />;
-              }
-              /**
-               * Pages the user may never open are hidden rather than disabled —
-               * a dead link in the sidebar is worse than no link.
-               */
-              if (item.needsPermission && !hasPermission(item.needsPermission)) {
-                return null;
-              }
-              return item.ready ? (
-                <NavItem key={key} item={item} />
-              ) : (
-                <ComingSoonNav key={key} item={item} />
-              );
-            })}
+            {visibleNav.map((item) => (
+              <NavItem
+                key={item.key || item.to + item.label}
+                item={item}
+                onNavigate={() => setNavOpen(false)}
+              />
+            ))}
           </nav>
         </div>
 
@@ -219,6 +251,16 @@ export default function AppShell() {
 
       <div className="app-main">
         <header className="app-topbar">
+          <button
+            type="button"
+            className="app-menu-btn"
+            aria-label="Open menu"
+            aria-expanded={navOpen}
+            aria-controls="app-mobile-nav"
+            onClick={() => setNavOpen(true)}
+          >
+            <Menu size={20} />
+          </button>
           <form className="app-search" onSubmit={handleSearchSubmit}>
             <Search size={16} strokeWidth={2} />
             <input
@@ -234,14 +276,16 @@ export default function AppShell() {
               <Bell size={18} />
               <span className="app-icon-btn__dot" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className="app-new-ticket"
-              onClick={() => navigate("/tickets/new")}
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              New Ticket
-            </button>
+            {canCreateTicket ? (
+              <button
+                type="button"
+                className="app-new-ticket"
+                onClick={() => navigate("/tickets/new")}
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                <span className="app-new-ticket__label">New Ticket</span>
+              </button>
+            ) : null}
           </div>
         </header>
         <main className="app-content">

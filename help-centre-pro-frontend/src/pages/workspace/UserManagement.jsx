@@ -209,8 +209,15 @@ export default function UserManagement() {
   if (loading) {
     return (
       <div className="um-page">
-        <h1 className="um-title">User Management</h1>
-        <p className="um-subtitle">Loading…</p>
+        <header className="um-hero">
+          <div className="um-hero__copy">
+            <span className="um-eyebrow">
+              <ShieldCheck size={12} /> Access control
+            </span>
+            <h1>User Management</h1>
+            <p>Loading workspace members and roles…</p>
+          </div>
+        </header>
         <div className="um-card um-skeleton-card">
           {[0, 1, 2].map((i) => (
             <div className="um-skeleton-row" key={i}>
@@ -236,14 +243,53 @@ export default function UserManagement() {
         </div>
       ) : null}
 
-      <h1 className="um-title">User Management</h1>
-      <p className="um-subtitle">
-        {members.length} user{members.length === 1 ? "" : "s"} · {fullAccessCount} admin
-        {fullAccessCount === 1 ? "" : "s"} with full platform access
-      </p>
+      <header className="um-hero">
+        <div className="um-hero__copy">
+          <span className="um-eyebrow">
+            <ShieldCheck size={12} /> Access control
+          </span>
+          <h1>User Management</h1>
+          <p>
+            {members.length} teammate{members.length === 1 ? "" : "s"} · {fullAccessCount}{" "}
+            with full workspace access. Assign an access level and every permission
+            outside that role stays locked.
+          </p>
+        </div>
+        <div className="um-hero__actions">
+          <button
+            type="button"
+            className="um-btn um-btn--ghost"
+            onClick={loadData}
+            title="Refresh members and roles"
+          >
+            <RefreshCw size={15} /> Refresh
+          </button>
+          <button
+            type="button"
+            className="um-btn um-btn--primary"
+            onClick={openCreateRole}
+            disabled={!canManageRoles}
+            title={
+              canManageRoles
+                ? "Create a custom role"
+                : "Your role doesn't allow managing roles"
+            }
+          >
+            <Plus size={15} /> New role
+          </button>
+        </div>
+      </header>
 
       <section className="um-card">
-        <h2 className="um-card__title">User Management</h2>
+        <div className="um-card__head">
+          <div>
+            <h2 className="um-card__title">Team members</h2>
+            <p className="um-card__sub">
+              Access level is the only source of truth — members cannot act beyond
+              their role.
+            </p>
+          </div>
+        </div>
 
         {loadError ? (
           <div className="um-empty">
@@ -331,18 +377,10 @@ export default function UserManagement() {
         <div>
           <h2 className="um-section-title">Roles &amp; Permissions</h2>
           <p className="um-subtitle">
-            {roles.length} roles · {totalPermissions} permissions available
+            {roles.length} roles · {totalPermissions} permissions in catalog. Modules with
+            zero grants stay invisible in the sidebar.
           </p>
         </div>
-        <button
-          type="button"
-          className="um-btn um-btn--primary"
-          onClick={openCreateRole}
-          disabled={!canManageRoles}
-          title={canManageRoles ? "Create a custom role" : "Your role doesn't allow managing roles"}
-        >
-          <Plus size={15} /> New role
-        </button>
       </div>
 
       {roles.length === 0 ? (

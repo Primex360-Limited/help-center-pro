@@ -1,9 +1,15 @@
 import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { PERMISSION_CATALOG } from "../../shared/constants/permissions.js";
 import { AUDIT_ACTION, USER_TYPE } from "../../shared/constants/system.js";
 import { PROVIDER_ROLE, isSuperAdminRoleName } from "../../shared/constants/roles.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
 import { normalizePermissionKey } from "../../shared/utils/permissionKey.js";
+
+/** Only catalog keys may be granted on a role — never invent capabilities. */
+const CATALOG_PERMISSION_KEYS = new Set(
+    PERMISSION_CATALOG.map((entry) => entry.key)
+);
 
 /**
  * Role + permission service (Postgres / Prisma, Phase-1 multi-tenancy).
@@ -179,14 +185,23 @@ function toRoleView(role) {
 }
 
 /**
- * Resolve permission keys to `Permission.id`s, creating catalog rows on demand
- * so custom roles may reference keys that are not in `PERMISSION_CATALOG`.
+ * Resolve permission keys to `Permission.id`s.
+ * Fail closed: keys outside `PERMISSION_CATALOG` are rejected so a role can
+ * never grant capabilities beyond the product access model.
  */
 async function resolvePermissionIds(permissionKeys, client = prisma) {
     const keys = normalizePermissionList(permissionKeys);
 
     if (!keys.length) {
         return [];
+    }
+
+    const unknown = keys.filter((key) => !CATALOG_PERMISSION_KEYS.has(key));
+    if (unknown.length) {
+        throw new AppError(
+            `Unknown permission${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`,
+            400
+        );
     }
 
     const existing = await client.permission.findMany({
@@ -206,7 +221,6 @@ async function resolvePermissionIds(permissionKeys, client = prisma) {
             permission = await client.permission.create({
                 data: { key, category: key.split(":")[0] || null }
             });
-
             permissionByKey.set(key, permission);
         }
 

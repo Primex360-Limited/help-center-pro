@@ -16,7 +16,8 @@ export async function resolveCustomerIdentity({
     customerEmail,
     customerPhone,
     customerName,
-    customerIp
+    customerIp,
+    tenantId
 } = {}) {
     const normalizedEmail = normalizeEmail(customerEmail);
     const normalizedPhone = normalizePhone(customerPhone);
@@ -26,7 +27,8 @@ export async function resolveCustomerIdentity({
     const existingCustomer = await findExistingTicketCustomer({
         customerEmail: normalizedEmail,
         customerPhone: normalizedPhone,
-        customerIp: normalizedIp
+        customerIp: normalizedIp,
+        tenantId
     });
 
     if (existingCustomer?.customerId) {

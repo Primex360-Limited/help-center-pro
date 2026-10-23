@@ -1,5 +1,6 @@
 import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
+import { requireTenantId } from "../tickets/helpers/tenant-scope.js";
 
 /**
  * Customers are derived from real ticket customer snapshots — there is no
@@ -76,8 +77,10 @@ function toCustomer(key, tickets) {
     };
 }
 
-async function loadGroupedCustomers() {
+async function loadGroupedCustomers(tenantId) {
+    const scopedTenantId = requireTenantId({ tenantId });
     const tickets = await prisma.ticket.findMany({
+        where: { tenantId: scopedTenantId },
         select: {
             id: true,
             ticketId: true,
@@ -110,8 +113,8 @@ async function loadGroupedCustomers() {
     return groups;
 }
 
-export async function listCustomers() {
-    const groups = await loadGroupedCustomers();
+export async function listCustomers(tenantId) {
+    const groups = await loadGroupedCustomers(tenantId);
     const customers = [...groups.entries()]
         .map(([key, tickets]) => toCustomer(key, tickets))
         .sort((a, b) => new Date(b.lastSeenAt) - new Date(a.lastSeenAt));
@@ -119,11 +122,11 @@ export async function listCustomers() {
     return { customers, total: customers.length };
 }
 
-export async function getCustomerProfile(encodedKey) {
+export async function getCustomerProfile(encodedKey, tenantId) {
     const key = decodeCustomerKey(encodedKey);
     if (!key) throw new AppError("Invalid customer identifier", 400);
 
-    const groups = await loadGroupedCustomers();
+    const groups = await loadGroupedCustomers(tenantId);
     const tickets = groups.get(key);
     if (!tickets?.length) throw new AppError("Customer not found", 404);
 

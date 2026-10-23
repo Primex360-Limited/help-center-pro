@@ -86,6 +86,7 @@ async function createEmailTicket({
     const ticket = await prisma.ticket.create({
         data: {
             ticketId,
+            tenantId: actor.tenantId,
             title,
             description,
             status,
@@ -226,6 +227,7 @@ async function createChatTicket({
     const ticket = await prisma.ticket.create({
         data: {
             ticketId,
+            tenantId: actor.tenantId,
             title,
             description,
             status,
@@ -319,6 +321,7 @@ async function createCallTicket({
     const ticket = await prisma.ticket.create({
         data: {
             ticketId,
+            tenantId: actor.tenantId,
             title,
             description,
             status,
@@ -424,10 +427,12 @@ async function createCallTicket({
  * Live Chat, Calls, and Top agents today can be tested with accurate data.
  */
 export async function seedDemoTickets() {
-    if (env.NODE_ENV === "production" && !env.SEED_DEMO_TICKETS) {
+    // Demo seeding is opt-in only. Never auto-seed workspace data.
+    if (!env.SEED_DEMO_TICKETS) {
         return null;
     }
-    if (!env.SEED_TEST_USER && !env.SEED_DEMO_TICKETS) {
+    if (env.NODE_ENV === "production") {
+        console.warn("[seedDemoTickets] Refusing to seed demo tickets in production");
         return null;
     }
 
@@ -708,6 +713,7 @@ export async function seedDemoTickets() {
         const t = await prisma.ticket.create({
             data: {
                 ticketId: `TK-${String(9 + idx).padStart(5, "0")}`,
+                tenantId: tenant.id,
                 title: `Resolved sample #${idx + 1}`,
                 description: "Seeded resolved ticket for Top agents today ranking.",
                 status: TICKET_STATUS.RESOLVED,

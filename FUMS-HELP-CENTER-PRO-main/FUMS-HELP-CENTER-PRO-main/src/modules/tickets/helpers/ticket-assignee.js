@@ -8,6 +8,7 @@ import {
 import { getUserById, getUsers } from "../../users/user.service.js";
 import { ONLINE_AGENT_WINDOW_MINUTES, TICKET_PERMISSIONS } from "../ticket.constants.js";
 import { buildUserSnapshot } from "../ticket.utils.js";
+import { requireTenantId } from "./tenant-scope.js";
 
 /**
  * Canonical (`resource:action`) form of the keys that make a user assignable.
@@ -83,8 +84,12 @@ export function canReceiveTicketAssignment(user) {
     return ASSIGNABLE_TICKET_PERMISSIONS.some((permission) => permissionSet.has(permission));
 }
 
-export async function getAssignableUserSnapshot(userId) {
-    const user = await getUserById(userId);
+export async function getAssignableUserSnapshot(userId, tenantId) {
+    const scopedTenantId = requireTenantId(
+        { tenantId },
+        "Workspace context is required to assign tickets"
+    );
+    const user = await getUserById(userId, scopedTenantId);
 
     if (user.status !== USER_STATUS.ACTIVE) {
         throw new AppError("Only active users can be assigned to tickets", 400);
@@ -97,8 +102,12 @@ export async function getAssignableUserSnapshot(userId) {
     return buildUserSnapshot(user);
 }
 
-export async function listOnlineAssignableUsers() {
-    const users = await getUsers();
+export async function listOnlineAssignableUsers(tenantId) {
+    const scopedTenantId = requireTenantId(
+        { tenantId },
+        "Workspace context is required to list agents"
+    );
+    const users = await getUsers(scopedTenantId);
 
     return users
         .filter((user) => user.status === USER_STATUS.ACTIVE)

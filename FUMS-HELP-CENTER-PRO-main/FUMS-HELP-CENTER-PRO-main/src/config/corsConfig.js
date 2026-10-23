@@ -6,6 +6,11 @@ const defaults = [
     "http://localhost:3006",
     "http://localhost:4008",
     "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3005",
+    "http://127.0.0.1:3006",
+    "http://127.0.0.1:4008",
+    "http://127.0.0.1:5173",
     "https://user-management-system-centralized.onrender.com",
     "https://help-center-pro-frontend.vercel.app",
     // Known Render Blueprint hosts (so Admin login works even if env sync was missed)

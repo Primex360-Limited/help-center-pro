@@ -1,4 +1,4 @@
-/* User management - team roster + role builder. Scoped under `um-`. */
+ï»¿/* User Management - Premium World-Class UI. Scoped under `um-`. */
 
 .um-page {
   display: flex;
@@ -1974,7 +1974,7 @@
 
 
 /* ============================================================
-   User Management — image-matched layout (2026 refresh)
+   User Management ï¿½ image-matched layout (2026 refresh)
    ============================================================ */
 .um-page { max-width: 1060px; margin: 0 auto; padding: 28px 28px 48px; }
 .um-title { font-size: 26px; font-weight: 700; color: #101828; margin: 0 0 4px; letter-spacing: -0.02em; }
@@ -2030,7 +2030,7 @@
 .um-skeleton-line { height: 12px; flex: 1; border-radius: 6px; background: #eaecf0; }
 .um-skeleton-line--short { flex: 0 0 120px; }
 
-/* Create/Edit Role — permission matrix (image-matched) */
+/* Create/Edit Role ï¿½ permission matrix (image-matched) */
 .um-modal--matrix { max-width: 540px; width: calc(100% - 32px); background: #fff; border-radius: 16px; padding: 26px 28px 20px; box-shadow: 0 24px 60px rgba(16,24,40,.28); max-height: 92vh; overflow-y: auto; }
 .um-matrix__title { font-size: 17px; font-weight: 700; color: #101828; margin: 0 0 18px; }
 .um-matrix__label { display: block; font-size: 12.5px; color: #667085; margin: 0 0 6px; }
@@ -2055,3 +2055,101 @@
 .um-matrix__submit { background: #1570ef; color: #fff; border: none; height: 38px; padding: 0 18px; border-radius: 9px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .um-matrix__submit:hover { background: #175cd3; }
 .um-matrix__submit:disabled, .um-matrix__cancel:disabled { opacity: .55; cursor: not-allowed; }
+
+.um-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.um-card__sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #667085;
+}
+
+.um-matrix__hint {
+  margin: -2px 0 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #667085;
+}
+
+.um-matrix__module {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.um-matrix__hidden-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f2f4f7;
+  color: #667085;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.um-matrix__row--locked td {
+  background: #fcfcfd;
+}
+
+.um-matrix__row--locked .um-matrix__module {
+  color: #667085;
+}
+
+@media (max-width: 640px) {
+  .um-modal--matrix {
+    width: min(100vw - 16px, 560px);
+    max-height: calc(100dvh - 16px);
+    margin: 8px;
+    padding: 18px 14px 16px;
+    overflow-y: auto;
+  }
+
+  .um-matrix th,
+  .um-matrix td {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+
+  .um-matrix th:first-child,
+  .um-matrix td:first-child {
+    padding-left: 10px;
+    min-width: 96px;
+  }
+
+  .um-matrix__footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .um-matrix__actions {
+    justify-content: flex-end;
+  }
+
+  .um-table th:nth-child(4),
+  .um-table td:nth-child(4) {
+    display: none;
+  }
+
+  .um-access-select {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .um-hero__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+

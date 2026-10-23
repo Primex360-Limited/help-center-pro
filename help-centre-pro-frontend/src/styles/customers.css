@@ -232,6 +232,26 @@
 @media (max-width: 760px) {
   .cust-stat-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .cust-page__header,
+  .customers-page__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cust-table-wrap,
+  .customers-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .cust-stat-grid {
+    grid-template-columns: 1fr;
   }
 }
 .cust-stat {

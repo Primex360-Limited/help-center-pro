@@ -100,7 +100,7 @@ export default function AdminShell() {
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <SidebarBrand />
+        <SidebarBrand variant="admin" />
         <div className="admin-sidebar__nav">
           <div>
             <p className="admin-nav-group__label">Business</p>
