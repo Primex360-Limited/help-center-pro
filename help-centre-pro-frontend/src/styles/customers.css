@@ -253,6 +253,146 @@
   .cust-stat-grid {
     grid-template-columns: 1fr;
   }
+
+  .cust-page {
+    padding: 16px 14px 32px;
+  }
+
+  .cust-title {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .cust-search {
+    height: 44px;
+    padding: 0 12px;
+    margin-bottom: 14px;
+  }
+
+  .cust-search input {
+    font-size: 16px; /* prevents iOS zoom */
+  }
+
+  .cust-card {
+    border-radius: 14px;
+  }
+
+  /* Convert table to card layout on mobile */
+  .cust-table thead {
+    display: none;
+  }
+
+  .cust-table,
+  .cust-table tbody,
+  .cust-table tr,
+  .cust-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .cust-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .cust-row {
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .cust-row:hover {
+    background: #f9fafb;
+  }
+
+  .cust-row td {
+    padding: 0;
+    border: none;
+    vertical-align: baseline;
+  }
+
+  .cust-row td:first-child {
+    margin-bottom: 10px;
+  }
+
+  .cust-customer-cell {
+    gap: 10px;
+  }
+
+  .cust-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+  }
+
+  .cust-name-wrap strong {
+    font-size: 15px;
+  }
+
+  .cust-active-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  /* Show email and phone as labeled fields */
+  .cust-row td:nth-child(2),
+  .cust-row td:nth-child(4) {
+    margin-bottom: 8px;
+  }
+
+  .cust-contact {
+    font-size: 14px;
+    gap: 8px;
+    display: flex;
+  }
+
+  .cust-contact svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Ticket count as a badge */
+  .cust-row td:nth-child(3) {
+    margin-bottom: 12px;
+  }
+
+  .cust-ticket-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #f2f4f7;
+    color: #344054;
+  }
+
+  /* Chevron positioned absolutely */
+  .cust-chevron {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    text-align: right;
+  }
+
+  .cust-empty {
+    padding: 20px 12px !important;
+    font-size: 13px;
+  }
+
+  .cust-loading,
+  .cust-error {
+    font-size: 14px;
+    padding: 14px;
+  }
 }
 .cust-stat {
   background: #fff;

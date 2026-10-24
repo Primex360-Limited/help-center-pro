@@ -821,4 +821,330 @@
   }
 }
 
+/* Premium mobile responsiveness for Agents page */
+@media (max-width: 768px) {
+  .agents-page {
+    gap: 18px;
+  }
+
+  .agents-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .agents-header h1 {
+    font-size: 24px;
+  }
+
+  .agents-header p {
+    font-size: 14px;
+  }
+
+  .admin-page-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .admin-page-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .agents-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .agents-kpi {
+    padding-left: 0;
+    padding-top: 52px;
+    min-height: 88px;
+  }
+
+  .agents-kpi__icon {
+    top: 14px;
+    left: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+
+  .admin-kpi__label {
+    font-size: 12px;
+  }
+
+  .admin-kpi__value {
+    font-size: 22px;
+  }
+
+  .admin-kpi__meta {
+    font-size: 11px;
+  }
+
+  .admin-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-filters__search {
+    width: 100%;
+  }
+
+  .admin-filters select {
+    width: 100%;
+    height: 44px;
+    font-size: 16px; /* prevents iOS zoom */
+  }
+
+  .agents-filters__count {
+    margin: 0;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .agents-banner {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
+
+  .agents-note {
+    font-size: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  /* Convert table to card layout on mobile */
+  .agents-table thead {
+    display: none;
+  }
+
+  .agents-table,
+  .agents-table tbody,
+  .agents-table tr,
+  .agents-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .agents-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .agents-table tr {
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 12px;
+    padding: 14px;
+    position: relative;
+  }
+
+  .agents-table td {
+    padding: 0;
+    border: none;
+    vertical-align: baseline;
+  }
+
+  /* Agent info cell */
+  .agents-table td:first-child {
+    margin-bottom: 12px;
+  }
+
+  .admin-workspace {
+    gap: 10px;
+  }
+
+  .admin-workspace__mark {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .admin-workspace__name {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .admin-workspace__meta {
+    font-size: 13px;
+    color: #667085;
+  }
+
+  /* Role and status */
+  .agents-table td:nth-child(2),
+  .agents-table td:nth-child(3) {
+    margin-bottom: 10px;
+  }
+
+  .agent-role-badge {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+
+  .agent-status-pill {
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .agent-status-pill::before {
+    width: 7px;
+    height: 7px;
+  }
+
+  .agents-table__hint {
+    margin-top: 4px;
+    font-size: 11px;
+  }
+
+  /* Stats - show as inline badges */
+  .agents-table td:nth-child(4),
+  .agents-table td:nth-child(5),
+  .agents-table td:nth-child(6) {
+    display: inline-flex;
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
+
+  .agents-stat {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .agents-stat--open {
+    color: #1570ef;
+  }
+
+  .agents-stat--resolved {
+    color: #039855;
+  }
+
+  /* Actions button positioned absolutely */
+  .agents-table__actions {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    text-align: right;
+  }
+
+  .agents-table__menu-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .admin-empty {
+    font-size: 13px;
+    padding: 20px 12px;
+  }
+
+  /* Menu adjustments */
+  .agent-menu {
+    width: 200px;
+  }
+
+  .agent-menu__header {
+    font-size: 12px;
+    padding: 4px 8px 8px;
+  }
+
+  .agent-menu__item {
+    padding: 8px 8px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .agents-page {
+    gap: 14px;
+  }
+
+  .agents-header h1 {
+    font-size: 20px;
+  }
+
+  .agents-header p {
+    font-size: 13px;
+  }
+
+  .agents-kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .agents-kpi {
+    min-height: 80px;
+    padding-top: 48px;
+  }
+
+  .agents-kpi__icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .admin-kpi__value {
+    font-size: 20px;
+  }
+
+  .admin-filters__search {
+    height: 44px;
+  }
+
+  .admin-filters__search input {
+    font-size: 16px;
+  }
+
+  .admin-filters select {
+    height: 44px;
+  }
+
+  .agents-table tbody {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .agents-table tr {
+    padding: 12px;
+  }
+
+  .admin-workspace__mark {
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+  }
+
+  .admin-workspace__name {
+    font-size: 14px;
+  }
+
+  .admin-workspace__meta {
+    font-size: 12px;
+  }
+
+  .agent-role-badge {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .agent-status-pill {
+    font-size: 11px;
+  }
+
+  .agents-stat {
+    font-size: 12px;
+  }
+
+  .agents-table__menu-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .agents-note {
+    font-size: 11px;
+  }
+}
+
 
