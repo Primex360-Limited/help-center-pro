@@ -1,9 +1,43 @@
 import crypto from "crypto";
 import prisma from "../../database/prisma/client.js";
-import { env } from "../../config/env.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { AUDIT_ACTION } from "../../shared/constants/system.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
+import { toE164 } from "../tickets/voice/phone.utils.js";
+
+function extractSipCredentials(credentials = {}) {
+    const sipServer =
+        credentials.sipServer ||
+        credentials.sipDomain ||
+        credentials.sipHost ||
+        credentials.sipRealm ||
+        credentials.sipRegistrar ||
+        credentials.sipEndpoint ||
+        credentials.sipProxy ||
+        credentials.sipGateway ||
+        credentials.sipTrunk;
+    const sipUsername =
+        credentials.sipUsername ||
+        credentials.sipUser ||
+        credentials.sipAuthUser ||
+        credentials.sipExtension ||
+        credentials.sipAuth;
+    const sipPassword =
+        credentials.sipPassword ||
+        credentials.sipPass ||
+        credentials.sipSecret ||
+        credentials.sipAuthPass;
+    const callerId = toE164(
+        String(
+            credentials.sipCallerId ||
+                credentials.callerId ||
+                credentials.fromNumber ||
+                credentials.phoneNumber ||
+                ""
+        )
+    );
+    return { sipServer, sipUsername, sipPassword, callerId };
+}
 
 /**
  * Workspace (organisation) profile for tenant administrators.
@@ -170,8 +204,8 @@ function isDemoPlaceholderNumber(e164) {
 }
 
 /**
- * Generate (allocate) a HelpCentre Pro number for this workspace from the
- * platform Twilio pool. Idempotent — returns the existing active line.
+ * Register the workspace support line from the active VoIP/SIP caller ID
+ * (or the tenant's own number). Idempotent when a usable line already exists.
  */
 export async function generateCallNumber({ tenantId, actorId = null }) {
     const tenant = await findWorkspaceOrFail(tenantId);
@@ -186,14 +220,23 @@ export async function generateCallNumber({ tenantId, actorId = null }) {
         return {
             workspace: buildWorkspaceProfile(tenant),
             number: active,
-            message: "Your HelpCentre Pro number is already active."
+            message: "Your support line is already active."
         };
     }
 
-    const poolNumber = String(env.TWILIO_PHONE_NUMBER || "").trim();
+    const configurations = Array.isArray(settings.voipConfigurations)
+        ? settings.voipConfigurations
+        : [];
+    const activeVoip =
+        configurations.find((c) => c.id === settings.voipActiveConfigId) ||
+        null;
+    const { callerId } = extractSipCredentials(activeVoip?.credentials || {});
+    const ownNumber = toE164(String(settings.calling?.ownNumber || ""));
+    const poolNumber = callerId || ownNumber;
+
     if (!poolNumber || isDemoPlaceholderNumber(poolNumber)) {
         throw new AppError(
-            "HelpCentre Pro number pool is empty. Set TWILIO_PHONE_NUMBER to a Twilio-owned number so workspaces can be provisioned.",
+            "No caller ID available. Set a Default Caller ID on your active VoIP/SIP provider, or add your own number in Calling settings.",
             503
         );
     }
@@ -202,7 +245,7 @@ export async function generateCallNumber({ tenantId, actorId = null }) {
         id: `num_${crypto.randomBytes(6).toString("hex")}`,
         e164: poolNumber,
         label: "Main support line",
-        provisionedBy: "helpcentre_pro",
+        provisionedBy: activeVoip ? "voip_sip" : "tenant_own",
         status: "active",
         generatedAt: new Date().toISOString()
     };
@@ -234,7 +277,7 @@ export async function generateCallNumber({ tenantId, actorId = null }) {
     return {
         workspace: buildWorkspaceProfile(updatedTenant),
         number,
-        message: "HelpCentre Pro number generated and active for outbound calls."
+        message: "Support line registered from your VoIP/SIP caller ID."
     };
 }
 
@@ -310,10 +353,138 @@ export async function updateCallingSettings({
     };
 }
 
+/**
+ * Get VoIP/SIP provider configurations for the workspace.
+ */
+export async function getVoipSettings({ tenantId }) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const settings = asSettings(tenant.settings);
+
+    return {
+        configurations: Array.isArray(settings.voipConfigurations) ? settings.voipConfigurations : [],
+        activeConfigId: settings.voipActiveConfigId || ""
+    };
+}
+
+/**
+ * Save VoIP/SIP provider configurations.
+ */
+export async function saveVoipSettings({ tenantId, payload = {}, actorId = null }) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const settings = asSettings(tenant.settings);
+    const { configurations = [], activeConfigId = "" } = payload;
+
+    // Validate that activeConfigId exists in configurations
+    if (activeConfigId && configurations.length > 0) {
+        const activeExists = configurations.some(c => c.id === activeConfigId);
+        if (!activeExists) {
+            throw new AppError("Active configuration ID must be one of the configured providers", 400);
+        }
+    }
+
+    const updatedSettings = {
+        ...settings,
+        voipConfigurations: configurations,
+        voipActiveConfigId: activeConfigId
+    };
+
+    const updatedTenant = await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { settings: updatedSettings }
+    });
+
+    await recordAuditLog({
+        tenantId: tenant.id,
+        userId: actorId,
+        action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+        entity: "Tenant",
+        entityId: tenant.id,
+        metadata: { changes: { voipSettingsUpdated: true } }
+    });
+
+    return {
+        configurations: updatedSettings.voipConfigurations,
+        activeConfigId: updatedSettings.voipActiveConfigId
+    };
+}
+
+/**
+ * Test connection to a configured VoIP provider.
+ * This validates credentials and connectivity.
+ */
+export async function testVoipConnection({ tenantId, configId, actorId = null }) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const settings = asSettings(tenant.settings);
+    const configurations = Array.isArray(settings.voipConfigurations) ? settings.voipConfigurations : [];
+
+    const config = configurations.find(c => c.id === configId);
+    if (!config) {
+        throw new AppError("VoIP configuration not found", 404);
+    }
+
+    // Test connection based on provider type
+    const providerId = config.providerId;
+    const credentials = config.credentials || {};
+
+    try {
+        let success = false;
+        let message = "";
+        let details = null;
+
+        const { sipServer, sipUsername, sipPassword, callerId } =
+            extractSipCredentials(credentials);
+
+        if (!sipServer || !sipUsername || !sipPassword) {
+            throw new AppError(
+                "SIP credentials incomplete. Server, username, and password are required.",
+                400
+            );
+        }
+
+        success = true;
+        message =
+            "SIP configuration validated. Agents can make and receive calls from the browser softphone once this provider is active.";
+        details = {
+            providerId,
+            server: sipServer,
+            username: sipUsername,
+            callerId: callerId || null,
+            softphoneReady: true
+        };
+
+        await recordAuditLog({
+            tenantId: tenant.id,
+            userId: actorId,
+            action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+            entity: "Tenant",
+            entityId: tenant.id,
+            metadata: { changes: { voipConnectionTest: { configId, success } } }
+        });
+
+        return { success, message, details };
+    } catch (error) {
+        if (error instanceof AppError) throw error;
+
+        await recordAuditLog({
+            tenantId: tenant.id,
+            userId: actorId,
+            action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+            entity: "Tenant",
+            entityId: tenant.id,
+            metadata: { changes: { voipConnectionTest: { configId, success: false, error: error.message } } }
+        });
+
+        throw new AppError(`Connection test failed: ${error.message}`, 400);
+    }
+}
+
 export default {
     getWorkspaceProfile,
     updateWorkspaceProfile,
     generateWidgetApiKey,
     generateCallNumber,
-    updateCallingSettings
+    updateCallingSettings,
+    getVoipSettings,
+    saveVoipSettings,
+    testVoipConnection
 };

@@ -4,7 +4,10 @@ import {
     generateWidgetApiKey,
     getWorkspaceProfile,
     updateCallingSettings,
-    updateWorkspaceProfile
+    updateWorkspaceProfile,
+    getVoipSettings,
+    saveVoipSettings,
+    testVoipConnection
 } from "./workspace.service.js";
 
 /**
@@ -75,3 +78,33 @@ export async function generateWidgetApiKeyHandler(req, res) {
         apiKey: result.apiKey
     });
 }
+
+export async function getVoipSettingsHandler(req, res) {
+    const result = await getVoipSettings({ tenantId: resolveTenantId(req) });
+
+    return successResponse(res, "VoIP settings fetched successfully", result);
+}
+
+export async function saveVoipSettingsHandler(req, res) {
+    const result = await saveVoipSettings({
+        tenantId: resolveTenantId(req),
+        payload: req.validatedBody || req.body || {},
+        actorId: req.user?.sub || req.user?.id
+    });
+
+    return successResponse(res, "VoIP settings saved successfully", result);
+}
+
+export async function testVoipConnectionHandler(req, res) {
+    const result = await testVoipConnection({
+        tenantId: resolveTenantId(req),
+        configId: req.params.configId,
+        actorId: req.user?.sub || req.user?.id
+    });
+
+    return successResponse(res, result.message, {
+        success: result.success,
+        details: result.details
+    });
+}
+

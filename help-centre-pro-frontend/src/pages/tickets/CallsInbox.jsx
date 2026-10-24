@@ -37,8 +37,10 @@ import TemplatePicker, {
 import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
 import {
   InCallBar,
+  IncomingCallBanner,
   useBrowserCall,
 } from "../../components/calls/BrowserCall.jsx";
+import voipService from "../../services/voipService.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { formatTicketId, statusLabel } from "../../utils/format.js";
 import {
@@ -88,10 +90,14 @@ export default function CallsInbox() {
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [dialTo, setDialTo] = useState("");
+  const [dialRegion, setDialRegion] = useState("NG");
   const [placing, setPlacing] = useState(false);
   const [recordingBlobUrl, setRecordingBlobUrl] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [incomingSession, setIncomingSession] = useState(null);
+  const [answeringInbound, setAnsweringInbound] = useState(false);
+  const [softphoneReady, setSoftphoneReady] = useState(false);
   const audioRef = useRef(null);
   const composerRef = useRef(null);
 
@@ -327,15 +333,93 @@ export default function CallsInbox() {
   }, [selectedId, tickets, ticketDetail]);
 
   const browserCall = useBrowserCall({
-    onEnded: () => {
-      if (selectedId) {
+    onEnded: ({ ticketId } = {}) => {
+      const tid = ticketId || selectedId;
+      if (tid) {
+        setSelectedId(tid);
+        setParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("ticket", tid);
+          return next;
+        });
         setTimeout(() => {
-          loadDetail(selectedId);
+          loadDetail(tid);
           loadCalls();
-        }, 1500);
+        }, 800);
+      } else {
+        loadCalls();
       }
     },
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootSoftphone() {
+      try {
+        await voipService.initialize({ force: true });
+        if (cancelled) return;
+        setSoftphoneReady(true);
+        setBanner((prev) => prev || "Softphone registered — ready to make and receive calls.");
+      } catch (err) {
+        if (!cancelled) {
+          setSoftphoneReady(false);
+          console.warn("Softphone not ready:", err?.message || err);
+        }
+      }
+    }
+
+    const onIncoming = (session) => {
+      setIncomingSession(session);
+      setBanner("Incoming call…");
+    };
+
+    voipService.on("incoming", onIncoming);
+    bootSoftphone();
+
+    return () => {
+      cancelled = true;
+      voipService.off("incoming", onIncoming);
+    };
+  }, []);
+
+  async function handleAcceptIncoming() {
+    if (!incomingSession) return;
+    setAnsweringInbound(true);
+    setDetailError("");
+    try {
+      const data = await browserCall.answerIncoming(incomingSession);
+      setIncomingSession(null);
+      const tid = data?.ticketId;
+      if (tid) {
+        setSelectedId(tid);
+        setShowThread(true);
+        setParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("ticket", tid);
+          return next;
+        });
+        await loadDetail(tid);
+        await loadCalls();
+      }
+      setBanner("Inbound call answered via your VoIP/SIP provider.");
+    } catch (err) {
+      setDetailError(err.message || "Unable to answer call");
+    } finally {
+      setAnsweringInbound(false);
+    }
+  }
+
+  async function handleRejectIncoming() {
+    if (!incomingSession) return;
+    try {
+      await voipService.rejectCall(incomingSession);
+    } catch {
+      /* ignore */
+    }
+    setIncomingSession(null);
+    setBanner("Incoming call declined.");
+  }
 
   async function handlePlaceCall() {
     const to = (dialTo || customerPhone(selectedTicket) || "").trim();
@@ -353,21 +437,23 @@ export default function CallsInbox() {
         customerName: customerName(selectedTicket),
         customerEmail: customerEmail(selectedTicket) || undefined,
         title: selectedTicket.title,
-        defaultRegion: "NG",
+        defaultRegion: dialRegion || "NG",
       });
       const data = result?.data || result;
 
-      if (data?.mode === "browser_pstn") {
+      if (data?.mode === "browser_sip") {
         setBanner("Connecting you from this device…");
         await browserCall.start({
           to: data.to || to,
           ticketId: data.ticketId || selectedTicket.ticketId,
           from: data.from,
+          callSid: data.callSid,
         });
-        setBanner("On call via your HelpCentre Pro line.");
+        setBanner("On call via your VoIP/SIP provider.");
       } else {
         setBanner(
-          data?.message || "Calling customer from your HelpCentre Pro line…"
+          data?.message ||
+            "Configure an active VoIP/SIP provider in Settings to place calls."
         );
       }
       await loadDetail(selectedTicket.ticketId);
@@ -578,10 +664,20 @@ export default function CallsInbox() {
         </aside>
 
         <section className="ch-detail">
+          <IncomingCallBanner
+            session={incomingSession}
+            onAccept={handleAcceptIncoming}
+            onReject={handleRejectIncoming}
+            accepting={answeringInbound}
+          />
+          <InCallBar call={browserCall} />
           {banner ? (
             <p className="ch-alert ch-alert--success ch-notice-banner">
               {banner}
             </p>
+          ) : null}
+          {softphoneReady ? (
+            <p className="ch-softphone-ready">Softphone online · ready for inbound</p>
           ) : null}
           <div className="ch-detail__empty">
             Select a call to view recording, transcript, and details
@@ -708,8 +804,27 @@ export default function CallsInbox() {
                   className="ch-input"
                   value={dialTo}
                   onChange={(e) => setDialTo(e.target.value)}
-                  placeholder="+1 (555) 123-4567"
+                  placeholder="+234 803 000 0000 or 0803…"
                 />
+              </div>
+              <div className="ch-field" style={{ marginBottom: 0, minWidth: 140 }}>
+                <label htmlFor="dial-region">Country</label>
+                <select
+                  id="dial-region"
+                  className="ch-select ch-select--premium"
+                  value={dialRegion}
+                  onChange={(e) => setDialRegion(e.target.value)}
+                  title="Used when the number has no +country code"
+                >
+                  <option value="NG">Nigeria (+234)</option>
+                  <option value="GH">Ghana (+233)</option>
+                  <option value="KE">Kenya (+254)</option>
+                  <option value="ZA">South Africa (+27)</option>
+                  <option value="US">US / Canada (+1)</option>
+                  <option value="GB">United Kingdom (+44)</option>
+                  <option value="AE">UAE (+971)</option>
+                  <option value="IN">India (+91)</option>
+                </select>
               </div>
               <button
                 type="button"
@@ -721,8 +836,21 @@ export default function CallsInbox() {
                 {placing ? "Calling…" : "Place call"}
               </button>
             </div>
+            <p className="ch-dial-hint">
+              Prefer full international format (+234…, +1…, +44…). Local numbers
+              use the Country selector. Your active SIP trunk must allow that destination.
+            </p>
 
+            <IncomingCallBanner
+              session={incomingSession}
+              onAccept={handleAcceptIncoming}
+              onReject={handleRejectIncoming}
+              accepting={answeringInbound}
+            />
             <InCallBar call={browserCall} />
+            {softphoneReady && !browserCall.active ? (
+              <p className="ch-softphone-ready">Softphone online · ready for inbound</p>
+            ) : null}
 
             <div className="ch-audio">
               <button

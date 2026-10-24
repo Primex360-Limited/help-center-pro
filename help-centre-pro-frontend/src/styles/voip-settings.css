@@ -1,0 +1,381 @@
+/* VoIP Settings Page Styles */
+
+.voip-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 48px 24px;
+  text-align: center;
+  color: #667085;
+}
+
+.voip-empty svg {
+  color: #d0d5dd;
+}
+
+.voip-empty__sub {
+  font-size: 14px;
+  color: #98a2b3;
+}
+
+.voip-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.voip-config-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1.5px solid #eaecf0;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.voip-config-card:hover {
+  border-color: #d0d5dd;
+}
+
+.voip-config-card.is-active {
+  border-color: #1570ef;
+  background: #f5f9ff;
+  box-shadow: 0 0 0 3px rgba(21, 112, 239, 0.08);
+}
+
+.voip-config-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.voip-config-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.voip-config-card__provider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.voip-config-card__provider svg {
+  color: #1570ef;
+  flex-shrink: 0;
+}
+
+.voip-config-card__provider div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.voip-config-card__provider strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: #101828;
+}
+
+.voip-config-card__provider span {
+  font-size: 12px;
+  color: #667085;
+}
+
+.voip-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.voip-badge--active {
+  background: #dcfae6;
+  color: #027a48;
+}
+
+.voip-config-card__meta {
+  font-size: 13px;
+  color: #98a2b3;
+}
+
+.voip-config-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.voip-btn--danger:hover {
+  color: #b42318;
+  background: #fef3f2;
+}
+
+.voip-test-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.voip-test-result.is-success {
+  background: #dcfae6;
+  color: #027a48;
+}
+
+.voip-test-result.is-error {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.voip-form-card {
+  margin-top: 18px;
+}
+
+.voip-form-card--open {
+  border: 1.5px solid #1570ef;
+  box-shadow: 0 0 0 4px rgba(21, 112, 239, 0.08);
+}
+
+.voip-provider-info--action {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.voip-provider-info--action:hover:not(:disabled) {
+  border-color: #1570ef;
+  box-shadow: 0 8px 20px rgba(21, 112, 239, 0.1);
+  transform: translateY(-1px);
+}
+
+.voip-provider-info--action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.voip-capability--cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #eff8ff;
+  color: #1570ef;
+}
+
+.voip-provider-select {
+  position: relative;
+}
+
+.voip-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.voip-feature-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: #f2f4f7;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475467;
+}
+
+.voip-provider-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #1570ef;
+  text-decoration: none;
+}
+
+.voip-provider-link:hover {
+  text-decoration: underline;
+}
+
+.voip-field-group {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #eaecf0;
+}
+
+.voip-field-group h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #101828;
+}
+
+.voip-required {
+  color: #f04438;
+  margin-left: 2px;
+}
+
+.voip-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #344054;
+  cursor: pointer;
+}
+
+.voip-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: #1570ef;
+}
+
+.voip-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #eaecf0;
+}
+
+.voip-catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.voip-catalog-filters .ch-input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.voip-catalog-filters .ch-select {
+  flex: 0 1 200px;
+}
+
+.voip-providers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  max-height: 640px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.voip-provider-info {
+  padding: 14px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.voip-provider-info__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.voip-provider-info__header strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #101828;
+}
+
+.voip-category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.voip-category-badge--nigeria {
+  background: #fef0c7;
+  color: #b54708;
+}
+
+.voip-category-badge--global {
+  background: #e0eaff;
+  color: #175cd3;
+}
+
+.voip-category-badge--custom {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.voip-provider-info__desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #667085;
+  line-height: 1.4;
+}
+
+.voip-provider-info__features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.voip-capability {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: #dcfae6;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #027a48;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .voip-config-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .voip-config-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .voip-providers-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .voip-form-actions {
+    flex-direction: column;
+  }
+
+  .voip-form-actions button {
+    width: 100%;
+  }
+}

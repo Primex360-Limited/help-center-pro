@@ -6,16 +6,17 @@ import { bindTenantToUser } from "../../tenants/tenant.middleware.js";
 import { requirePermission } from "../../roles/rbac.middleware.js";
 import { TICKET_PERMISSIONS } from "../ticket.constants.js";
 import {
-    browserOutboundTwimlHandler,
-    connectCustomerTwimlHandler,
+    completeSipCallHandler,
     downloadRecordingHandler,
     getVoiceTokenHandler,
-    outboundCustomerTwimlHandler,
     placeOutboundCallHandler,
-    twilioRecordingWebhookHandler,
-    twilioStatusWebhookHandler
+    startInboundSipCallHandler
 } from "./voice.controller.js";
-import { placeOutboundCallSchema } from "./voice.validation.js";
+import {
+    completeSipCallSchema,
+    placeOutboundCallSchema,
+    startInboundSipCallSchema
+} from "./voice.validation.js";
 
 const voiceRoutes = express.Router();
 
@@ -28,8 +29,7 @@ voiceRoutes.get(
 );
 
 /**
- * Place outbound call from the workspace HelpCentre Pro / Twilio line.
- * Agents only supply the customer number — caller ID comes from settings.
+ * Place outbound call via the tenant's active VoIP/SIP softphone.
  */
 voiceRoutes.post(
     "/tickets/voice/outbound",
@@ -40,62 +40,36 @@ voiceRoutes.post(
     asyncHandler(placeOutboundCallHandler)
 );
 
+/**
+ * Log an inbound SIP call answered in the browser softphone.
+ */
+voiceRoutes.post(
+    "/tickets/voice/inbound",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission(TICKET_PERMISSIONS.MESSAGE),
+    validate(startInboundSipCallSchema),
+    asyncHandler(startInboundSipCallHandler)
+);
+
+/**
+ * Complete a SIP call (duration / status / optional recording URL).
+ */
+voiceRoutes.post(
+    "/tickets/voice/complete",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission(TICKET_PERMISSIONS.MESSAGE),
+    validate(completeSipCallSchema),
+    asyncHandler(completeSipCallHandler)
+);
+
 voiceRoutes.get(
     "/tickets/voice/recordings/:ticketId",
     requireAuth,
     bindTenantToUser,
     requirePermission(TICKET_PERMISSIONS.VIEW),
     asyncHandler(downloadRecordingHandler)
-);
-
-voiceRoutes.post(
-    "/tickets/voice/twiml/connect-customer",
-    asyncHandler(connectCustomerTwimlHandler)
-);
-voiceRoutes.get(
-    "/tickets/voice/twiml/connect-customer",
-    asyncHandler(connectCustomerTwimlHandler)
-);
-
-/**
- * TwiML App Voice URL for browser softphone calls.
- * Point your Twilio TwiML App's Voice URL here (POST).
- */
-voiceRoutes.post(
-    "/tickets/voice/twiml/browser-outbound",
-    asyncHandler(browserOutboundTwimlHandler)
-);
-voiceRoutes.get(
-    "/tickets/voice/twiml/browser-outbound",
-    asyncHandler(browserOutboundTwimlHandler)
-);
-
-voiceRoutes.post(
-    "/tickets/voice/twiml/outbound-customer",
-    asyncHandler(outboundCustomerTwimlHandler)
-);
-voiceRoutes.get(
-    "/tickets/voice/twiml/outbound-customer",
-    asyncHandler(outboundCustomerTwimlHandler)
-);
-
-voiceRoutes.post(
-    "/tickets/voice/twiml/outbound",
-    asyncHandler(outboundCustomerTwimlHandler)
-);
-voiceRoutes.get(
-    "/tickets/voice/twiml/outbound",
-    asyncHandler(outboundCustomerTwimlHandler)
-);
-
-voiceRoutes.post(
-    "/tickets/voice/webhooks/status",
-    asyncHandler(twilioStatusWebhookHandler)
-);
-
-voiceRoutes.post(
-    "/tickets/voice/webhooks/recording",
-    asyncHandler(twilioRecordingWebhookHandler)
 );
 
 export default voiceRoutes;

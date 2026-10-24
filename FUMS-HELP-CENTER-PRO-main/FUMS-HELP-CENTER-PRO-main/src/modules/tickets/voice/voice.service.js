@@ -1,4 +1,3 @@
-import twilio from "twilio";
 import { env } from "../../../config/env.js";
 import prisma from "../../../database/prisma/client.js";
 import { AppError } from "../../../shared/errors/AppError.js";
@@ -13,17 +12,78 @@ import { createTicket } from "../ticket.service.js";
 import { addEventToTicket, getTicketThread } from "../timeline/timeline.service.js";
 import { findTicketByPublicId } from "../ticket.repository.js";
 import { mapTicketEventResponse } from "../helpers/map-ticket-event-response.js";
-import {
-    createVoiceAccessToken,
-    getTwilioClient,
-    getTwilioPhoneNumber,
-    isBrowserVoiceConfigured,
-    isTwilioConfigured
-} from "./twilio.client.js";
 import { isLikelyMobileE164, toE164 } from "./phone.utils.js";
+import {
+    contentTypeForPath,
+    isLocalRecordingRef,
+    resolveLocalRecording,
+    saveCallRecordingDataUrl
+} from "./recording.storage.js";
+import fs from "fs/promises";
 
-function publicApiBase() {
-    return (env.PUBLIC_API_URL || `http://localhost:${env.PORT}`).replace(/\/$/, "");
+async function loadActiveVoipConfig(tenantId) {
+    if (!tenantId) return null;
+    const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { settings: true }
+    });
+    const settings =
+        tenant?.settings && typeof tenant.settings === "object"
+            ? tenant.settings
+            : {};
+    const configurations = Array.isArray(settings.voipConfigurations)
+        ? settings.voipConfigurations
+        : [];
+    const activeConfigId = settings.voipActiveConfigId || "";
+    if (!activeConfigId) return null;
+    const active = configurations.find((c) => c.id === activeConfigId);
+    if (!active || active.enabled === false) return null;
+    return active;
+}
+
+function extractSipCallerId(credentials = {}) {
+    return (
+        toE164(
+            String(
+                credentials.sipCallerId ||
+                    credentials.callerId ||
+                    credentials.fromNumber ||
+                    credentials.phoneNumber ||
+                    ""
+            )
+        ) || null
+    );
+}
+
+function assertSipCredentials(credentials = {}) {
+    const host =
+        credentials.sipServer ||
+        credentials.sipDomain ||
+        credentials.sipHost ||
+        credentials.sipRealm ||
+        credentials.sipRegistrar ||
+        credentials.sipEndpoint ||
+        credentials.sipProxy ||
+        credentials.sipGateway ||
+        credentials.sipTrunk;
+    const user =
+        credentials.sipUsername ||
+        credentials.sipUser ||
+        credentials.sipAuthUser ||
+        credentials.sipExtension ||
+        credentials.sipAuth;
+    const password =
+        credentials.sipPassword ||
+        credentials.sipPass ||
+        credentials.sipSecret ||
+        credentials.sipAuthPass;
+    if (!host || !user || !password) {
+        throw new AppError(
+            "Your active VoIP/SIP provider is missing server, username, or password. Update it in Settings → VoIP/SIP.",
+            400
+        );
+    }
+    return { host, user, password };
 }
 
 function agentActor(actor) {
@@ -36,9 +96,9 @@ function agentActor(actor) {
 }
 
 /**
- * HelpCentre Pro line for this tenant (settings callNumbers) or platform Twilio number.
+ * Resolve outbound caller ID from workspace calling settings or SIP config.
  */
-async function resolveTenantFromNumber(actor) {
+async function resolveTenantFromNumber(actor, voipCredentials = null) {
     if (actor?.tenantId) {
         const tenant = await prisma.tenant.findUnique({
             where: { id: actor.tenantId },
@@ -53,7 +113,6 @@ async function resolveTenantFromNumber(actor) {
                 ? settings.calling
                 : {};
 
-        // Tenant's existing number wins when selected (HCP line paused).
         if (calling.mode === "own" && calling.ownNumber) {
             const own = toE164(String(calling.ownNumber));
             if (own) return own;
@@ -62,7 +121,6 @@ async function resolveTenantFromNumber(actor) {
         const numbers = Array.isArray(settings.callNumbers)
             ? settings.callNumbers
             : [];
-        // Skip fictional demo placeholders (e.g. +1 555-01xx) — Twilio rejects them.
         const usable = numbers.filter(
             (n) =>
                 n?.e164 &&
@@ -79,37 +137,12 @@ async function resolveTenantFromNumber(actor) {
         }
     }
 
-    return toE164(getTwilioPhoneNumber() || "") || getTwilioPhoneNumber();
+    return extractSipCallerId(voipCredentials || {});
 }
 
 /**
- * Optional silent agent bridge (profile / env only — never collected in the UI).
- */
-async function resolveAgentPhone(actor) {
-    if (actor?.userId) {
-        const user = await prisma.user.findUnique({
-            where: { id: actor.userId },
-            select: { phoneNumber: true, metadata: true }
-        });
-        const fromProfile = toE164(user?.phoneNumber || "");
-        if (fromProfile) return fromProfile;
-
-        const metaPhone =
-            user?.metadata && typeof user.metadata === "object"
-                ? user.metadata.agentPhone || user.metadata.phone
-                : null;
-        const fromMeta = toE164(String(metaPhone || ""));
-        if (fromMeta) return fromMeta;
-    }
-
-    return toE164(env.TWILIO_AGENT_FALLBACK_NUMBER || "") || null;
-}
-
-/**
- * Place a real PSTN outbound call from the HelpCentre Pro / Twilio line
- * to any customer number (MTN, Airtel, Glo, 9mobile, international).
- *
- * Uses the provisioned workspace number as caller ID — agents do not enter it.
+ * Place an outbound call via the tenant's active VoIP/SIP provider (browser softphone).
+ * No paid CPaaS — tenants bring their own SIP credentials.
  */
 export async function placeOutboundCall({
     to,
@@ -120,13 +153,6 @@ export async function placeOutboundCall({
     defaultRegion = "NG",
     actor
 }) {
-    if (!isTwilioConfigured()) {
-        throw new AppError(
-            "Twilio is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to place real phone calls.",
-            503
-        );
-    }
-
     const customerNumber = toE164(to, { defaultRegion });
     if (!customerNumber || !isLikelyMobileE164(customerNumber)) {
         throw new AppError(
@@ -135,30 +161,37 @@ export async function placeOutboundCall({
         );
     }
 
-    const fromNumber = await resolveTenantFromNumber(actor);
-    if (!fromNumber) {
+    const tenantId = actor?.tenantId || null;
+    const activeVoip = await loadActiveVoipConfig(tenantId);
+    if (!activeVoip) {
         throw new AppError(
-            "No HelpCentre Pro call number is provisioned for this workspace yet.",
+            "No VoIP/SIP provider is active. Add a SIP provider in Settings → VoIP/SIP and set it as active.",
             503
         );
     }
 
-    if (fromNumber === customerNumber) {
+    assertSipCredentials(activeVoip.credentials || {});
+    const voipProvider = activeVoip.providerId;
+    const voipCredentials = activeVoip.credentials || {};
+    const fromNumber =
+        (await resolveTenantFromNumber(actor, voipCredentials)) ||
+        extractSipCallerId(voipCredentials);
+
+    if (fromNumber && fromNumber === customerNumber) {
         throw new AppError("Customer number cannot match your support line", 400);
     }
 
-    const tenantId = actor?.tenantId || null;
     let ticket = ticketId
         ? await findTicketByPublicId(ticketId, {
-            ...(tenantId ? { tenantId } : {})
-        })
+              ...(tenantId ? { tenantId } : {})
+          })
         : null;
 
     if (!ticket) {
         ticket = await createTicket(
             {
                 title: title || `Outbound call to ${customerName || customerNumber}`,
-                description: `Outbound PSTN call to ${customerNumber} from ${fromNumber}.`,
+                description: `Outbound call to ${customerNumber}${fromNumber ? ` from ${fromNumber}` : ""} via ${voipProvider}.`,
                 priority: TICKET_PRIORITY.MEDIUM,
                 tenantId,
                 channel: TICKET_CHANNEL.PHONE,
@@ -179,75 +212,7 @@ export async function placeOutboundCall({
         });
     }
 
-    const statusCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/status`;
-    const agentNumber = await resolveAgentPhone(actor);
-
-    // 1) Agent handset on profile → ring agent first, then dial customer (any carrier).
-    if (agentNumber && agentNumber !== customerNumber) {
-        const connectUrl =
-            `${publicApiBase()}/api/v1/tickets/voice/twiml/connect-customer` +
-            `?to=${encodeURIComponent(customerNumber)}` +
-            `&ticketId=${encodeURIComponent(ticket.ticketId)}` +
-            `&from=${encodeURIComponent(fromNumber)}`;
-
-        const call = await getTwilioClient().calls.create({
-            to: agentNumber,
-            from: fromNumber,
-            url: connectUrl,
-            method: "POST",
-            statusCallback,
-            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-            statusCallbackMethod: "POST"
-        });
-
-        await addEventToTicket(
-            ticket.ticketId,
-            {
-                channel: TICKET_CHANNEL.PHONE,
-                customerName: customerName || ticket.customerName,
-                customerEmail: customerEmail || ticket.customerEmail,
-                customerPhone: customerNumber,
-                call: {
-                    direction: CALL_DIRECTION.OUTBOUND,
-                    duration: 0
-                },
-                eventMetadata: {
-                    provider: "twilio",
-                    callMode: "pstn_bridge",
-                    callSid: call.sid,
-                    callStatus: call.status,
-                    from: fromNumber,
-                    agentPhone: agentNumber,
-                    to: customerNumber,
-                    direction: CALL_DIRECTION.OUTBOUND,
-                    note: "Agent handset rings first; customer dialed on answer."
-                }
-            },
-            agentActor(actor)
-        );
-
-        return {
-            ticketId: ticket.ticketId,
-            callSid: call.sid,
-            status: call.status,
-            mode: "pstn_bridge",
-            from: fromNumber,
-            agentPhone: agentNumber,
-            to: customerNumber,
-            message:
-                "Your phone will ring first — answer to talk to the customer."
-        };
-    }
-
-    // 2) No agent number → agent talks from the browser via the HCP Twilio line.
-    //    The PSTN leg is created by the Voice SDK when the agent connects;
-    //    TwiML (browser-outbound) dials the customer with the HCP caller ID.
-    if (!isBrowserVoiceConfigured()) {
-        throw new AppError(
-            "Add your agent phone number in your profile to call from your handset, or configure browser voice (TWILIO_API_KEY_SID, TWILIO_API_KEY_SECRET, TWILIO_TWIML_APP_SID) to call from this device.",
-            503
-        );
-    }
+    const callSid = `sip_out_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     await addEventToTicket(
         ticket.ticketId,
@@ -261,15 +226,14 @@ export async function placeOutboundCall({
                 duration: 0
             },
             eventMetadata: {
-                provider: "twilio",
-                callMode: "browser_pstn",
-                callSid: null,
-                callStatus: "initiated_browser",
+                provider: voipProvider,
+                callMode: "browser_sip",
+                callSid,
+                callStatus: "initiated",
                 from: fromNumber,
-                agentPhone: null,
                 to: customerNumber,
                 direction: CALL_DIRECTION.OUTBOUND,
-                note: "Browser voice via HelpCentre Pro line (no agent handset)."
+                note: "Browser softphone via tenant VoIP/SIP provider."
             }
         },
         agentActor(actor)
@@ -277,136 +241,291 @@ export async function placeOutboundCall({
 
     return {
         ticketId: ticket.ticketId,
-        callSid: null,
-        status: "initiated_browser",
-        mode: "browser_pstn",
+        callSid,
+        status: "initiated",
+        mode: "browser_sip",
+        provider: voipProvider,
         from: fromNumber,
         to: customerNumber,
-        message: "Connecting you from this device via your HelpCentre Pro line…"
+        message: "Connecting from this device via your configured VoIP/SIP provider…"
     };
 }
 
 /**
- * TwiML for browser softphone calls — dials the customer PSTN number
- * with the workspace HelpCentre Pro line as caller ID. Recorded both ways.
- * Invoked via the TwiML App Voice URL when the agent connects from the browser.
+ * Create/update an inbound call ticket when the softphone answers a SIP INVITE.
  */
-export function buildBrowserOutboundTwiml({ to, ticketId, from }) {
-    const customerNumber = toE164(to, { defaultRegion: "NG" });
-    const response = new twilio.twiml.VoiceResponse();
-
-    if (!customerNumber) {
-        response.say(
-            { voice: "alice" },
-            "Sorry, that number is invalid. Goodbye."
+export async function startInboundSipCall({
+    from,
+    to = null,
+    ticketId = null,
+    customerName = null,
+    customerEmail = null,
+    title = null,
+    defaultRegion = "NG",
+    callSid = null,
+    actor
+}) {
+    const tenantId = actor?.tenantId || null;
+    const activeVoip = await loadActiveVoipConfig(tenantId);
+    if (!activeVoip) {
+        throw new AppError(
+            "No VoIP/SIP provider is active. Configure one in Settings → VoIP/SIP.",
+            503
         );
-        response.hangup();
-        return response.toString();
+    }
+    assertSipCredentials(activeVoip.credentials || {});
+
+    const callerNumber =
+        toE164(from, { defaultRegion }) || String(from || "").trim();
+    if (!callerNumber) {
+        throw new AppError("Caller number is required for inbound calls.", 400);
     }
 
-    const callerId = toE164(from || "") || getTwilioPhoneNumber();
-    const recordingCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/recording`;
-    const statusCallback =
-        `${publicApiBase()}/api/v1/tickets/voice/webhooks/status` +
-        (ticketId ? `?ticketId=${encodeURIComponent(ticketId)}` : "");
-    const recordingCallbackWithTicket =
-        recordingCallback +
-        (ticketId ? `?ticketId=${encodeURIComponent(ticketId)}` : "");
+    const voipProvider = activeVoip.providerId;
+    const fromNumber =
+        to ||
+        (await resolveTenantFromNumber(actor, activeVoip.credentials || {})) ||
+        extractSipCallerId(activeVoip.credentials || {});
+    const sid =
+        callSid ||
+        `sip_in_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
-    const dial = response.dial({
-        callerId,
-        record: "record-from-answer-dual",
-        recordingStatusCallback: recordingCallbackWithTicket,
-        recordingStatusCallbackMethod: "POST",
-        timeout: 60,
-        answerOnBridge: true
+    let ticket = ticketId
+        ? await findTicketByPublicId(ticketId, {
+              ...(tenantId ? { tenantId } : {})
+          })
+        : null;
+
+    if (!ticket) {
+        ticket = await createTicket(
+            {
+                title: title || `Inbound call from ${customerName || callerNumber}`,
+                description: `Inbound call from ${callerNumber}${fromNumber ? ` to ${fromNumber}` : ""}.`,
+                priority: TICKET_PRIORITY.MEDIUM,
+                tenantId,
+                channel: TICKET_CHANNEL.PHONE,
+                customerName: customerName || callerNumber,
+                customerEmail: customerEmail || undefined,
+                customerPhone: callerNumber,
+                call: {
+                    direction: CALL_DIRECTION.INBOUND,
+                    duration: 0
+                }
+            },
+            agentActor(actor)
+        );
+    }
+
+    await addEventToTicket(
+        ticket.ticketId,
+        {
+            channel: TICKET_CHANNEL.PHONE,
+            customerName: customerName || ticket.customerName,
+            customerEmail: customerEmail || ticket.customerEmail,
+            customerPhone: callerNumber,
+            call: {
+                direction: CALL_DIRECTION.INBOUND,
+                duration: 0
+            },
+            eventMetadata: {
+                provider: voipProvider,
+                callMode: "browser_sip",
+                callSid: sid,
+                callStatus: "in-progress",
+                from: callerNumber,
+                to: fromNumber,
+                direction: CALL_DIRECTION.INBOUND,
+                note: "Inbound call answered on browser softphone."
+            }
+        },
+        agentActor(actor)
+    );
+
+    return {
+        ticketId: ticket.ticketId,
+        callSid: sid,
+        status: "in-progress",
+        mode: "browser_sip",
+        provider: voipProvider,
+        from: callerNumber,
+        to: fromNumber,
+        message: "Inbound call ticket created."
+    };
+}
+
+/**
+ * Finalize a SIP call on the ticket (duration, status, recording, transcript, quality).
+ */
+export async function completeSipCall({
+    ticketId,
+    callSid = null,
+    durationSeconds = 0,
+    status = "completed",
+    recordingUrl = null,
+    recordingDataUrl = null,
+    transcript = null,
+    quality = null,
+    summary = null,
+    actor
+}) {
+    if (!ticketId) {
+        throw new AppError("ticketId is required", 400);
+    }
+
+    const tenantId = actor?.tenantId || null;
+    const ticket = await findTicketByPublicId(ticketId, {
+        ...(tenantId ? { tenantId } : {})
+    });
+    if (!ticket) {
+        throw new AppError("Ticket not found", 404);
+    }
+
+    const duration = Math.max(0, Math.floor(Number(durationSeconds) || 0));
+    const normalizedStatus = String(status || "completed").toLowerCase();
+
+    const event = await prisma.ticketEvent.findFirst({
+        where: {
+            ticketRefId: ticket.id,
+            channel: TICKET_CHANNEL.PHONE,
+            ...(callSid
+                ? { metadata: { path: ["callSid"], equals: callSid } }
+                : {})
+        },
+        include: { call: true, ticket: true },
+        orderBy: { createdAt: "desc" }
     });
 
-    dial.number(
-        {
-            statusCallback,
-            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-            statusCallbackMethod: "POST"
-        },
-        customerNumber
-    );
-
-    return response.toString();
-}
-
-/**
- * TwiML when agent answers — dials the customer on the PSTN.
- */
-export function buildConnectCustomerTwiml({ to, ticketId, from }) {
-    const customerNumber = toE164(to, { defaultRegion: "NG" });
-    const response = new twilio.twiml.VoiceResponse();
-
-    if (!customerNumber) {
-        response.say(
-            { voice: "alice" },
-            "Sorry, the customer number is invalid. Goodbye."
-        );
-        response.hangup();
-        return response.toString();
+    if (!event) {
+        throw new AppError("Call event not found for this ticket", 404);
     }
 
-    const fromNumber = toE164(from || "") || getTwilioPhoneNumber();
-    const recordingCallback = `${publicApiBase()}/api/v1/tickets/voice/webhooks/recording`;
+    let storedRecordingUrl = recordingUrl || null;
+    if (recordingDataUrl) {
+        const saved = await saveCallRecordingDataUrl({
+            tenantId: tenantId || ticket.tenantId || "platform",
+            ticketId: ticket.ticketId,
+            callSid: callSid || event.metadata?.callSid,
+            dataUrl: recordingDataUrl
+        });
+        storedRecordingUrl = saved.ref;
+    }
 
-    response.say(
-        { voice: "alice" },
-        "Connecting you to the customer. This call may be recorded for quality."
-    );
+    const existingMeta =
+        event.metadata && typeof event.metadata === "object" ? event.metadata : {};
+    const nextTranscript = Array.isArray(transcript)
+        ? transcript
+        : Array.isArray(existingMeta.transcript)
+          ? existingMeta.transcript
+          : [];
 
-    const dial = response.dial({
-        callerId: fromNumber,
-        record: "record-from-answer-dual",
-        recordingStatusCallback: recordingCallback,
-        recordingStatusCallbackMethod: "POST",
-        timeout: 45,
-        answerOnBridge: true
+    if (summary && String(summary).trim()) {
+        nextTranscript.push({
+            speaker: "Agent",
+            role: "summary",
+            text: String(summary).trim(),
+            time: formatDurationLabel(duration)
+        });
+    }
+
+    const metadata = {
+        ...existingMeta,
+        callSid: callSid || existingMeta.callSid || null,
+        callStatus: normalizedStatus,
+        completedAt: new Date().toISOString(),
+        ...(storedRecordingUrl ? { recordingUrl: storedRecordingUrl } : {}),
+        transcript: nextTranscript,
+        ...(quality && typeof quality === "object" ? { quality } : {})
+    };
+
+    await prisma.ticketEvent.update({
+        where: { id: event.id },
+        data: { metadata }
     });
 
-    dial.number(
-        {
-            statusCallback: `${publicApiBase()}/api/v1/tickets/voice/webhooks/status`,
-            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
-            statusCallbackMethod: "POST"
-        },
-        customerNumber
-    );
+    if (event.call?.id) {
+        await prisma.ticketCall.update({
+            where: { id: event.call.id },
+            data: {
+                duration,
+                ...(storedRecordingUrl ? { recordingUrl: storedRecordingUrl } : {})
+            }
+        });
 
-    if (ticketId) {
-        response.pause({ length: 0 });
+        await prisma.ticketCallLog.create({
+            data: {
+                callId: event.call.id,
+                eventType:
+                    normalizedStatus === "completed" ||
+                    normalizedStatus === "ended"
+                        ? CALL_EVENT_TYPE.CALL_HANGUP
+                        : CALL_EVENT_TYPE.CALL_PICKED,
+                actor: CALL_ACTOR.AGENT,
+                direction:
+                    event.call.direction === CALL_DIRECTION.INBOUND
+                        ? CALL_DIRECTION.INBOUND
+                        : CALL_DIRECTION.OUTBOUND
+            }
+        });
     }
 
-    return response.toString();
+    const thread = await getTicketThread(ticket.ticketId);
+    return {
+        ticketId: ticket.ticketId,
+        callSid: metadata.callSid,
+        status: normalizedStatus,
+        duration,
+        recordingUrl: storedRecordingUrl,
+        hasTranscript: nextTranscript.length > 0,
+        event:
+            thread.find((row) => row.id === event.id) ||
+            mapTicketEventResponse(event)
+    };
+}
+
+function formatDurationLabel(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 /**
- * TwiML when the customer answers a direct outbound call from the HCP line.
+ * Softphone readiness for the agent (SIP registration happens in the browser).
  */
-export function buildOutboundCustomerTwiml({ ticketId } = {}) {
-    const response = new twilio.twiml.VoiceResponse();
-    response.say(
-        { voice: "alice" },
-        "Hello, this is a call from support. Please stay on the line."
-    );
-    // Keep the line open so the conversation can continue / be recorded.
-    response.pause({ length: 600 });
-    if (ticketId) {
-        response.pause({ length: 0 });
+export async function getAgentVoiceToken(actor) {
+    const identity = `agent_${actor.userId || "user"}`;
+    const activeVoip = await loadActiveVoipConfig(actor?.tenantId || null);
+    let sipReady = false;
+    if (activeVoip) {
+        try {
+            assertSipCredentials(activeVoip.credentials || {});
+            sipReady = true;
+        } catch {
+            sipReady = false;
+        }
     }
-    return response.toString();
-}
 
-/** @deprecated Prefer buildConnectCustomerTwiml / buildOutboundCustomerTwiml. */
-export function buildOutboundTwiml() {
-    return buildOutboundCustomerTwiml({});
+    const fromNumber = activeVoip
+        ? await resolveTenantFromNumber(actor, activeVoip.credentials || {})
+        : null;
+
+    return {
+        identity,
+        token: null,
+        configured: sipReady,
+        browserConfigured: sipReady,
+        pstnEnabled: false,
+        mode: "browser_sip",
+        provider: activeVoip?.providerId || null,
+        providerName: activeVoip?.name || activeVoip?.providerId || null,
+        from: fromNumber,
+        message: sipReady
+            ? "VoIP/SIP softphone ready. Calls use your active provider."
+            : "Configure and activate a VoIP/SIP provider in Settings → VoIP/SIP."
+    };
 }
 
 /**
- * Stream a Twilio recording through the API (authenticated download / playback).
+ * Stream a call recording (local softphone upload or remote HTTPS URL).
  */
 export async function streamTicketRecording(ticketId, res, tenantId = null) {
     const ticket = await findTicketByPublicId(ticketId, {
@@ -443,225 +562,49 @@ export async function streamTicketRecording(ticketId, res, tenantId = null) {
         throw new AppError("No recording available for this ticket", 404);
     }
 
-    if (!isTwilioConfigured()) {
-        throw new AppError("Twilio is not configured", 503);
+    const url = String(recordingUrl);
+
+    if (isLocalRecordingRef(url)) {
+        const absolute = await resolveLocalRecording(url);
+        const buffer = await fs.readFile(absolute);
+        const contentType = contentTypeForPath(absolute);
+        const ext = contentType.split("/")[1] || "webm";
+        res.setHeader("Content-Type", contentType);
+        res.setHeader(
+            "Content-Disposition",
+            `inline; filename="${ticket.ticketId}-recording.${ext}"`
+        );
+        res.setHeader("Cache-Control", "private, max-age=300");
+        res.send(buffer);
+        return { streamed: true, ticketId: ticket.ticketId, source: "local" };
     }
 
-    const mediaUrl = String(recordingUrl).endsWith(".mp3")
-        ? String(recordingUrl)
-        : `${recordingUrl}.mp3`;
+    if (!/^https?:\/\//i.test(url)) {
+        throw new AppError("Recording URL is not fetchable", 400);
+    }
 
-    const auth = Buffer.from(
-        `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`
-    ).toString("base64");
-
-    const upstream = await fetch(mediaUrl, {
-        headers: { Authorization: `Basic ${auth}` }
-    });
-
+    const upstream = await fetch(url);
     if (!upstream.ok) {
-        throw new AppError("Unable to fetch recording from Twilio", 502);
+        throw new AppError("Unable to fetch recording", 502);
     }
 
     const contentType = upstream.headers.get("content-type") || "audio/mpeg";
     res.setHeader("Content-Type", contentType);
     res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${ticket.ticketId}-recording.mp3"`
+        `inline; filename="${ticket.ticketId}-recording.mp3"`
     );
     res.setHeader("Cache-Control", "private, max-age=300");
 
     const buffer = Buffer.from(await upstream.arrayBuffer());
     res.send(buffer);
-    return { streamed: true, ticketId: ticket.ticketId };
-}
-
-export async function getAgentVoiceToken(actor) {
-    const identity = `agent_${actor.userId || "user"}`;
-    const token = createVoiceAccessToken({ identity });
-    const fromNumber = await resolveTenantFromNumber(actor);
-    return {
-        identity,
-        token,
-        configured: isTwilioConfigured(),
-        browserConfigured: isBrowserVoiceConfigured(),
-        pstnEnabled: isTwilioConfigured(),
-        from: fromNumber,
-        twimlAppVoiceUrl: `${publicApiBase()}/api/v1/tickets/voice/twiml/browser-outbound`
-    };
-}
-
-async function findCallEventForWebhook({ callSid, parentCallSid, ticketId }) {
-    const event = await prisma.ticketEvent.findFirst({
-        where: {
-            channel: TICKET_CHANNEL.PHONE,
-            OR: [
-                { metadata: { path: ["callSid"], equals: callSid } },
-                {
-                    metadata: {
-                        path: ["callSid"],
-                        equals: parentCallSid || ""
-                    }
-                }
-            ]
-        },
-        include: {
-            call: true,
-            ticket: true
-        }
-    });
-    if (event) return event;
-
-    // Browser calls: match by ticketId carried on the callback URL.
-    if (ticketId) {
-        const ticket = await findTicketByPublicId(ticketId);
-        if (ticket) {
-            return prisma.ticketEvent.findFirst({
-                where: {
-                    ticketRefId: ticket.id,
-                    channel: TICKET_CHANNEL.PHONE
-                },
-                include: {
-                    call: true,
-                    ticket: true
-                },
-                orderBy: { createdAt: "desc" }
-            });
-        }
-    }
-
-    return null;
-}
-
-export async function handleTwilioStatusWebhook(body = {}) {
-    const callSid = body.CallSid || body.ParentCallSid;
-    if (!callSid) {
-        return { ignored: true };
-    }
-
-    const duration = body.CallDuration ? Number(body.CallDuration) : null;
-    const status = body.CallStatus || null;
-
-    const event = await findCallEventForWebhook({
-        callSid,
-        parentCallSid: body.ParentCallSid,
-        ticketId: body.ticketId
-    });
-
-    if (!event) {
-        return { matched: false, callSid, status };
-    }
-
-    const metadata = {
-        ...(event.metadata && typeof event.metadata === "object" ? event.metadata : {}),
-        callSid: event.metadata?.callSid || callSid,
-        lastChildCallSid: body.CallSid,
-        callStatus: status,
-        provider: "twilio",
-        from: body.From || event.metadata?.from,
-        to: body.To || event.metadata?.to
-    };
-
-    await prisma.ticketEvent.update({
-        where: { id: event.id },
-        data: { metadata }
-    });
-
-    if (event.call?.id && duration != null && !Number.isNaN(duration)) {
-        await prisma.ticketCall.update({
-            where: { id: event.call.id },
-            data: { duration }
-        });
-
-        await prisma.ticketCallLog.create({
-            data: {
-                callId: event.call.id,
-                eventType:
-                    status === "completed"
-                        ? CALL_EVENT_TYPE.CALL_HANGUP
-                        : status === "in-progress" || status === "answered"
-                          ? CALL_EVENT_TYPE.CALL_PICKED
-                          : CALL_EVENT_TYPE.CALL_RECEIVED,
-                actor: CALL_ACTOR.SYSTEM,
-                direction: CALL_DIRECTION.OUTBOUND
-            }
-        });
-    }
-
-    return {
-        matched: true,
-        ticketId: event.ticket?.ticketId,
-        callSid,
-        status,
-        duration
-    };
-}
-
-export async function handleTwilioRecordingWebhook(body = {}) {
-    const callSid = body.CallSid || body.ParentCallSid;
-    const recordingUrl = body.RecordingUrl ? `${body.RecordingUrl}.mp3` : null;
-    const recordingSid = body.RecordingSid || null;
-    const duration = body.RecordingDuration
-        ? Number(body.RecordingDuration)
-        : null;
-
-    if (!callSid || !recordingUrl) {
-        return { ignored: true };
-    }
-
-    const event = await findCallEventForWebhook({
-        callSid,
-        parentCallSid: body.ParentCallSid,
-        ticketId: body.ticketId
-    });
-
-    if (!event?.call?.id) {
-        return { matched: false, callSid };
-    }
-
-    const metadata = {
-        ...(event.metadata && typeof event.metadata === "object" ? event.metadata : {}),
-        callSid: event.metadata?.callSid || callSid,
-        recordingSid,
-        recordingUrl,
-        callStatus: "completed",
-        provider: "twilio",
-        callMode: event.metadata?.callMode || "pstn_bridge"
-    };
-
-    await prisma.ticketEvent.update({
-        where: { id: event.id },
-        data: { metadata }
-    });
-
-    await prisma.ticketCall.update({
-        where: { id: event.call.id },
-        data: {
-            recordingUrl,
-            ...(duration != null && !Number.isNaN(duration) ? { duration } : {})
-        }
-    });
-
-    const thread = await getTicketThread(event.ticket.ticketId);
-
-    return {
-        matched: true,
-        ticketId: event.ticket.ticketId,
-        recordingUrl,
-        event:
-            thread.find((row) => row.id === event.id) ||
-            mapTicketEventResponse(event)
-    };
+    return { streamed: true, ticketId: ticket.ticketId, source: "remote" };
 }
 
 export default {
     placeOutboundCall,
-    buildConnectCustomerTwiml,
-    buildBrowserOutboundTwiml,
-    buildOutboundCustomerTwiml,
-    buildOutboundTwiml,
+    startInboundSipCall,
+    completeSipCall,
     getAgentVoiceToken,
-    handleTwilioStatusWebhook,
-    handleTwilioRecordingWebhook,
     streamTicketRecording
 };

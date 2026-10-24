@@ -10,9 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@twilio/voice-sdk": "^2.18.5",
     "firebase": "^11.10.0",
     "i18next": "^26.4.5",
+    "jssip": "^3.13.9",
     "lucide-react": "^1.54.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

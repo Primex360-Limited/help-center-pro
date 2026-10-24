@@ -9,7 +9,10 @@ import {
     generateWidgetApiKeyHandler,
     getWorkspaceProfileHandler,
     updateCallingSettingsHandler,
-    updateWorkspaceProfileHandler
+    updateWorkspaceProfileHandler,
+    getVoipSettingsHandler,
+    saveVoipSettingsHandler,
+    testVoipConnectionHandler
 } from "./workspace.controller.js";
 import {
     updateCallingSettingsSchema,
@@ -144,6 +147,97 @@ workspaceRoutes.patch(
     requirePermission("settings:write"),
     validate(updateCallingSettingsSchema),
     asyncHandler(updateCallingSettingsHandler)
+);
+
+/**
+ * @openapi
+ * /workspace/voip:
+ *   get:
+ *     tags: [Workspace]
+ *     summary: Get VoIP/SIP provider configurations
+ *     description: Requires settings:read. Returns all configured VoIP providers and the active one.
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: VoIP settings fetched successfully
+ *       403:
+ *         description: Forbidden
+ */
+workspaceRoutes.get(
+    "/workspace/voip",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission("settings:read"),
+    asyncHandler(getVoipSettingsHandler)
+);
+
+/**
+ * @openapi
+ * /workspace/voip:
+ *   patch:
+ *     tags: [Workspace]
+ *     summary: Save VoIP/SIP provider configurations
+ *     description: Requires settings:write. Saves provider configurations and sets active provider.
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               configurations:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *               activeConfigId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: VoIP settings saved successfully
+ *       403:
+ *         description: Forbidden
+ */
+workspaceRoutes.patch(
+    "/workspace/voip",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission("settings:write"),
+    asyncHandler(saveVoipSettingsHandler)
+);
+
+/**
+ * @openapi
+ * /workspace/voip/test/{configId}:
+ *   post:
+ *     tags: [Workspace]
+ *     summary: Test connection to a VoIP provider
+ *     description: Requires settings:write. Validates credentials and connectivity.
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: configId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Connection test result
+ *       403:
+ *         description: Forbidden
+ */
+workspaceRoutes.post(
+    "/workspace/voip/test/:configId",
+    requireAuth,
+    bindTenantToUser,
+    requirePermission("settings:write"),
+    asyncHandler(testVoipConnectionHandler)
 );
 
 export default workspaceRoutes;

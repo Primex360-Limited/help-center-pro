@@ -43,6 +43,7 @@ export default function LogPhoneCall() {
   const navigate = useNavigate();
   const [callType, setCallType] = useState("incoming");
   const [phone, setPhone] = useState("");
+  const [dialRegion, setDialRegion] = useState("NG");
   const [recentCalls, setRecentCalls] = useState([]);
   const [recentSelect, setRecentSelect] = useState("");
   const [customers, setCustomers] = useState([]);
@@ -60,12 +61,12 @@ export default function LogPhoneCall() {
   const isOutgoing = callType === "outgoing";
   const [browserTicketId, setBrowserTicketId] = useState("");
   const browserCall = useBrowserCall({
-    onEnded: () => {
-      if (browserTicketId) {
-        navigate(
-          `/tickets/calls?ticket=${encodeURIComponent(browserTicketId)}`,
-          { replace: true }
-        );
+    onEnded: ({ ticketId } = {}) => {
+      const tid = ticketId || browserTicketId;
+      if (tid) {
+        navigate(`/tickets/calls?ticket=${encodeURIComponent(tid)}`, {
+          replace: true,
+        });
       }
     },
   });
@@ -208,21 +209,22 @@ export default function LogPhoneCall() {
         customerName: name.trim() || undefined,
         customerEmail: email.trim() || undefined,
         title: `Outbound call to ${name.trim() || phone.trim()}`,
-        defaultRegion: "NG",
+        defaultRegion: dialRegion || "NG",
       });
       const data = result?.data || result;
       const ticketId = data?.ticketId;
       localStorage.removeItem(DRAFT_KEY);
 
-      if (data?.mode === "browser_pstn" && ticketId) {
+      if (data?.mode === "browser_sip" && ticketId) {
         setBrowserTicketId(ticketId);
         setNotice("Connecting you from this device…");
         await browserCall.start({
           to: data.to || phone.trim(),
           ticketId,
           from: data.from,
+          callSid: data.callSid,
         });
-        setNotice("On call via your HelpCentre Pro line.");
+        setNotice("On call via your VoIP/SIP provider.");
         return;
       }
 
@@ -235,7 +237,7 @@ export default function LogPhoneCall() {
           state: {
             notice:
               data?.message ||
-              "Calling customer from your HelpCentre Pro line…",
+              "Configure an active VoIP/SIP provider in Settings to place calls.",
           },
         }
       );
@@ -357,7 +359,7 @@ export default function LogPhoneCall() {
                     className="ch-input"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1 (555) 123-4567"
+                    placeholder="+234 803 000 0000 or 0803…"
                     required
                   />
                   <button
@@ -369,6 +371,24 @@ export default function LogPhoneCall() {
                     Look up customer
                   </button>
                 </div>
+              </div>
+              <div className="ch-field">
+                <label htmlFor="call-region">Country (for local numbers)</label>
+                <select
+                  id="call-region"
+                  className="ch-select"
+                  value={dialRegion}
+                  onChange={(e) => setDialRegion(e.target.value)}
+                >
+                  <option value="NG">Nigeria (+234)</option>
+                  <option value="GH">Ghana (+233)</option>
+                  <option value="KE">Kenya (+254)</option>
+                  <option value="ZA">South Africa (+27)</option>
+                  <option value="US">US / Canada (+1)</option>
+                  <option value="GB">United Kingdom (+44)</option>
+                  <option value="AE">UAE (+971)</option>
+                  <option value="IN">India (+91)</option>
+                </select>
               </div>
               <div className="ch-field">
                 <label htmlFor="recent-calls">Recent calls</label>

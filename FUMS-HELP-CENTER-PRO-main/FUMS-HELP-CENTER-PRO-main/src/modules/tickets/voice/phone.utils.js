@@ -1,5 +1,5 @@
 /**
- * Normalize phone numbers to E.164 so Twilio can place real PSTN calls
+ * Normalize phone numbers to E.164 for SIP/PSTN dialing
  * on any carrier worldwide (MTN, Airtel, Glo, 9mobile, EE, Verizon, etc.).
  * Any `+<country><number>` or `00<country><number>` is accepted as-is;
  * bare national numbers use `defaultRegion` (defaults to NG).

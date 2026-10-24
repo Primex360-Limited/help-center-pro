@@ -203,7 +203,7 @@ export async function getOnlineAgents() {
   });
 }
 
-/** Twilio Voice JS capability token for browser softphone. */
+/** Softphone readiness for the tenant's active VoIP/SIP provider. */
 export async function getVoiceToken() {
   return apiRequest("/tickets/voice/token", {
     method: "GET",
@@ -212,7 +212,7 @@ export async function getVoiceToken() {
 }
 
 /**
- * Place a real PSTN outbound call from the HelpCentre Pro / Twilio line.
+ * Start an outbound call ticket, then connect via browser SIP softphone.
  * Body: { to, ticketId?, customerName?, customerEmail?, title?, defaultRegion? }
  */
 export async function placeOutboundCall(payload) {
@@ -224,7 +224,29 @@ export async function placeOutboundCall(payload) {
 }
 
 /**
- * Fetch call recording as a Blob (Twilio media is proxied with auth).
+ * Log an inbound SIP call answered in the browser softphone.
+ */
+export async function startInboundSipCall(payload) {
+  return apiRequest("/tickets/voice/inbound", {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });
+}
+
+/**
+ * Complete a SIP call on the ticket (duration / status / recording URL).
+ */
+export async function completeSipCall(payload) {
+  return apiRequest("/tickets/voice/complete", {
+    method: "POST",
+    auth: true,
+    body: payload,
+  });
+}
+
+/**
+ * Fetch call recording as a Blob when the ticket stores a public HTTPS URL.
  */
 export async function fetchTicketRecordingBlob(ticketId) {
   const token = getStoredToken();

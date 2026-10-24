@@ -38,3 +38,26 @@ export async function updateCallingSettings(payload) {
     body: payload,
   });
 }
+
+/** Get VoIP/SIP provider configurations for the workspace. */
+export async function getVoipSettings() {
+  return apiRequest("/workspace/voip", { auth: true });
+}
+
+/** Save VoIP/SIP provider configurations. */
+export async function saveVoipSettings(payload) {
+  return apiRequest("/workspace/voip", {
+    method: "PATCH",
+    auth: true,
+    body: payload,
+  });
+}
+
+/** Test connection to a configured VoIP provider. */
+export async function testVoipConnection(configId) {
+  return apiRequest(`/workspace/voip/test/${configId}`, {
+    method: "POST",
+    auth: true,
+  });
+}
+

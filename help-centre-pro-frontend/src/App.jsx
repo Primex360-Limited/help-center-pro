@@ -36,6 +36,7 @@ import UserManagement from "./pages/workspace/UserManagement.jsx";
 import WorkspaceProfile from "./pages/workspace/WorkspaceProfile.jsx";
 import EmailSettings from "./pages/workspace/EmailSettings.jsx";
 import EmailOAuthCallback from "./pages/workspace/EmailOAuthCallback.jsx";
+import VoipSettings from "./pages/workspace/VoipSettings.jsx";
 
 export default function App() {
   // Tenant host: never expose admin signup/login/shell (and never leak admin URL).
@@ -251,6 +252,17 @@ export default function App() {
                 tenantOnly
               >
                 <EmailSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workspace/voip-settings"
+            element={
+              <ProtectedRoute
+                anyOfPermissions={["settings:read", "settings:write"]}
+                tenantOnly
+              >
+                <VoipSettings />
               </ProtectedRoute>
             }
           />
@@ -554,6 +566,17 @@ export default function App() {
               tenantOnly
             >
               <EmailSettings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspace/voip-settings"
+          element={
+            <ProtectedRoute
+              anyOfPermissions={["settings:read", "settings:write"]}
+              tenantOnly
+            >
+              <VoipSettings />
             </ProtectedRoute>
           }
         />

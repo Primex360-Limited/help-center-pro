@@ -727,8 +727,8 @@ export default function WorkspaceProfile() {
                 aria-label="Your existing business number"
               />
               <p className="workspace-field__hint">
-                Customers see this number. Twilio must own or verify it as a
-                caller ID, otherwise calls fall back to the HCP line.
+                Customers see this number. Prefer the Default Caller ID on your
+                active VoIP/SIP provider, or enter your own verified SIP/PSTN line here.
               </p>
             </div>
           ) : null}
