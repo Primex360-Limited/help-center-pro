@@ -5,6 +5,7 @@ import { findTicketByPublicId, updateTicketStatusWithHistory } from "../ticket.r
 import { isValidStatusTransition } from "./status.rules.js";
 import { mapTicketResponse } from "../helpers/map-ticket-response.js";
 import { requireTenantId } from "../helpers/tenant-scope.js";
+import { dispatchTicketStatusUpdatedWebhook } from "../../webhooks/webhook.dispatcher.js";
 
 export async function updateTicketStatus(ticketId, status, actor) {
     const tenantId = requireTenantId({ tenantId: actor?.tenantId });
@@ -25,6 +26,7 @@ export async function updateTicketStatus(ticketId, status, actor) {
         );
     }
 
+    const previousStatus = ticket.status;
     const updatedTicket = await updateTicketStatusWithHistory({
         ticketRefId: ticket.id,
         status,
@@ -41,7 +43,12 @@ export async function updateTicketStatus(ticketId, status, actor) {
         }
     });
 
-    return mapTicketResponse(updatedTicket);
+    const dto = mapTicketResponse(updatedTicket);
+    dispatchTicketStatusUpdatedWebhook(
+        { ...updatedTicket, ...dto, tenantId },
+        previousStatus
+    );
+    return dto;
 }
 
 export async function updateTicketPriority(ticketId, priority, actor) {

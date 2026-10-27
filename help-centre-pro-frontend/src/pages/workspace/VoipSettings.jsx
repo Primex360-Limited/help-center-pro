@@ -18,7 +18,6 @@ import {
   saveVoipSettings,
   testVoipConnection,
 } from "../../api/workspace.api.js";
-import SettingsTabs from "../../components/workspace/SettingsTabs.jsx";
 import {
   VOIP_PROVIDERS,
   PROVIDER_CATEGORIES,
@@ -375,7 +374,6 @@ export default function VoipSettings() {
   if (loading) {
     return (
       <div className="workspace-page">
-        <SettingsTabs />
         <div className="admin-page-header">
           <div>
             <h1 className="admin-page-title" style={{ marginBottom: 4 }}>
@@ -394,7 +392,6 @@ export default function VoipSettings() {
 
   return (
     <div className="workspace-page">
-      <SettingsTabs />
       <div className="admin-page-header">
         <div>
           <h1 className="admin-page-title" style={{ marginBottom: 4 }}>

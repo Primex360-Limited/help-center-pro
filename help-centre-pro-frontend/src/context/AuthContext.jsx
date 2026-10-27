@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import * as authApi from "../api/auth.api.js";
-import { getStoredToken, setStoredToken } from "../api/client.js";
+import { clearStoredAuth, getStoredToken } from "../api/client.js";
 import { normalizeLanguageCode } from "../constants/profileOptions.js";
 import i18n from "../i18n/config.js";
 import { rememberOnboardedAccount } from "../utils/onboarding.js";
@@ -67,7 +67,7 @@ export function AuthProvider({ children }) {
       applyUserLanguage(nextUser);
       return nextUser;
     } catch {
-      setStoredToken(null);
+      clearStoredAuth();
       setUser(null);
       return null;
     } finally {
@@ -79,8 +79,18 @@ export function AuthProvider({ children }) {
     refreshUser();
   }, [refreshUser]);
 
-  const login = useCallback(async (email, password, options) => {
-    const result = await authApi.login({ email, password }, options);
+  const login = useCallback(async (email, password, options = {}) => {
+    const { portal, tenantId, tenantSlug, ...rest } = options;
+    const result = await authApi.login(
+      {
+        email,
+        password,
+        ...(tenantId ? { tenantId } : {}),
+        ...(tenantSlug ? { tenantSlug } : {}),
+        ...rest,
+      },
+      portal ? { portal } : {}
+    );
     const nextUser = normalizeUser(result?.data?.user);
     setUser(nextUser);
     rememberOnboardingState(nextUser);

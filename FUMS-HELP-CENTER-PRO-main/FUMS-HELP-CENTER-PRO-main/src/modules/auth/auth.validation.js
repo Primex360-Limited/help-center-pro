@@ -31,7 +31,10 @@ export const workspaceSignupSchema = z
 
 export const loginSchema = z.object({
     email: z.string().email(),
-    password: z.string().min(1, "Password is required")
+    password: z.string().min(1, "Password is required"),
+    /** Disambiguate when the same email exists in several workspaces. */
+    tenantId: z.string().uuid().optional().nullable(),
+    tenantSlug: z.string().trim().min(1).max(80).optional().nullable()
 });
 
 export const verifyEmailSchema = z.object({

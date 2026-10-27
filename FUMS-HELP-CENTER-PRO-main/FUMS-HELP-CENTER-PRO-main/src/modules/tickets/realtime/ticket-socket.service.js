@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import prisma from "../../../database/prisma/client.js";
-import allowedCors from "../../../config/corsConfig.js";
+import { isAllowedCorsOrigin } from "../../../config/corsConfig.js";
 import { USER_STATUS } from "../../../shared/constants/system.js";
 import { isUuid } from "../../../shared/utils/uuid.js";
 import { verifyAccessToken } from "../../auth/auth.utils.js";
@@ -504,7 +504,12 @@ function handleTyping(io, socket, payload = {}) {
 export function initializeTicketRealtime(httpServer) {
     const io = new Server(httpServer, {
         cors: {
-            origin: allowedCors,
+            origin: (origin, callback) => {
+                if (isAllowedCorsOrigin(origin)) {
+                    return callback(null, true);
+                }
+                return callback(null, false);
+            },
             credentials: true
         }
     });

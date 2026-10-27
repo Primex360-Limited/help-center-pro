@@ -34,4 +34,36 @@ const allowedCors = [
     ].filter(Boolean))
 ];
 
+/**
+ * Vite binds 0.0.0.0 in local dev, so agents often open the app via a LAN /
+ * Tailscale IP. Those origins are not in the static allowlist — allow them
+ * only outside production so login does not fail with a opaque network error.
+ */
+export function isDevLocalOrigin(origin) {
+    if (env.NODE_ENV === "production" || !origin) return false;
+    try {
+        const url = new URL(origin);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+        const host = url.hostname;
+        if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+            return true;
+        }
+        // RFC1918 + link-local + Tailscale CGNAT
+        if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+        if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+        if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+        if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host)) {
+            return true;
+        }
+        return false;
+    } catch {
+        return false;
+    }
+}
+
+export function isAllowedCorsOrigin(origin) {
+    if (!origin) return true;
+    return allowedCors.includes(origin) || isDevLocalOrigin(origin);
+}
+
 export default allowedCors;

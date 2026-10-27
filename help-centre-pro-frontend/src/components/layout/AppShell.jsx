@@ -42,7 +42,7 @@ const TENANT_NAV = [
   { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
   { to: "/templates", label: "Templates", icon: FileText, module: "templates" },
   { to: "/automations", label: "Automations", icon: Zap, module: "automations" },
-  { to: "/billing", label: "Billing", icon: CreditCard, module: "billing" },
+  { to: "/workspace/settings/billing", label: "Billing", icon: CreditCard, module: "billing" },
   {
     to: "/workspace/user-management",
     label: "User management",
@@ -62,12 +62,24 @@ function tenantRoleLabel(roleName) {
 
 function NavItem({ item, onNavigate }) {
   const Icon = item.icon;
+  const { pathname } = useLocation();
+  const onBilling =
+    pathname.startsWith("/workspace/settings/billing") || pathname === "/billing";
+  const onSettingsArea =
+    pathname === "/workspace/profile" ||
+    pathname.startsWith("/workspace/settings/") ||
+    pathname.startsWith("/workspace/email-settings") ||
+    pathname.startsWith("/workspace/voip-settings");
+  const forceActive =
+    (item.module === "billing" && onBilling) ||
+    (item.module === "settings" && onSettingsArea && !onBilling);
+
   return (
     <NavLink
       to={item.to}
       end={item.end}
       className={({ isActive }) =>
-        `app-nav__item${isActive ? " is-active" : ""}`
+        `app-nav__item${isActive || forceActive ? " is-active" : ""}`
       }
       onClick={onNavigate}
     >

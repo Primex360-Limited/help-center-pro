@@ -1,6 +1,7 @@
 import { API_BASE, API_URL, PORTAL_MODE } from "../config/env.js";
 
 const TOKEN_KEY = "hcp_access_token";
+const REFRESH_KEY = "hcp_refresh_token";
 
 export function getStoredToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -11,12 +12,78 @@ export function setStoredToken(token) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+export function getStoredRefreshToken() {
+  return localStorage.getItem(REFRESH_KEY);
+}
+
+export function setStoredRefreshToken(token) {
+  if (token) localStorage.setItem(REFRESH_KEY, token);
+  else localStorage.removeItem(REFRESH_KEY);
+}
+
+export function clearStoredAuth() {
+  setStoredToken(null);
+  setStoredRefreshToken(null);
+}
+
+let refreshInFlight = null;
+
+async function refreshAccessToken() {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = getStoredRefreshToken();
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Portal":
+        PORTAL_MODE === "admin"
+          ? "admin"
+          : PORTAL_MODE === "tenant"
+            ? "tenant"
+            : "combined",
+    };
+
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+    });
+
+    const text = await response.text();
+    let payload = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+
+    if (!response.ok) {
+      clearStoredAuth();
+      return null;
+    }
+
+    const accessToken = payload?.data?.accessToken;
+    const nextRefresh = payload?.data?.refreshToken;
+    if (accessToken) setStoredToken(accessToken);
+    if (nextRefresh) setStoredRefreshToken(nextRefresh);
+    return accessToken || null;
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
+}
+
 export async function apiRequest(path, options = {}) {
   const {
     method = "GET",
     body,
     auth = false,
     headers = {},
+    _retried = false,
   } = options;
 
   const portalHeader =
@@ -29,7 +96,10 @@ export async function apiRequest(path, options = {}) {
   };
 
   if (auth) {
-    const token = getStoredToken();
+    let token = getStoredToken();
+    if (!token && !_retried) {
+      token = await refreshAccessToken();
+    }
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
@@ -46,6 +116,20 @@ export async function apiRequest(path, options = {}) {
     throw new Error(
       `Unable to reach the API (${target}). Confirm the backend is live on port 4008 and CORS allows this site.`
     );
+  }
+
+  // Expired/missing access token — refresh once and retry.
+  if (
+    auth &&
+    !_retried &&
+    response.status === 401 &&
+    path !== "/auth/refresh" &&
+    path !== "/auth/login"
+  ) {
+    const renewed = await refreshAccessToken();
+    if (renewed) {
+      return apiRequest(path, { ...options, _retried: true });
+    }
   }
 
   let payload = null;
@@ -66,6 +150,15 @@ export async function apiRequest(path, options = {}) {
 
     if (typeof message === "string") {
       message = sanitizeApiErrorMessage(message, response.status);
+    }
+
+    if (
+      response.status === 401 &&
+      /authorization token is required|invalid or expired access token/i.test(
+        String(message)
+      )
+    ) {
+      message = "Your session expired. Please sign in again and retry.";
     }
 
     const error = new Error(message);

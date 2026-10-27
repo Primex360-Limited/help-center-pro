@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AdminShell from "./components/admin/AdminShell.jsx";
 import AppShell from "./components/layout/AppShell.jsx";
 import ProtectedRoute from "./components/layout/ProtectedRoute.jsx";
+import SettingsLayout from "./components/workspace/SettingsLayout.jsx";
 import { isAdminPortal, isTenantPortal } from "./config/env.js";
 import AcceptInvitation from "./pages/auth/AcceptInvitation.jsx";
 import ChangePassword from "./pages/auth/ChangePassword.jsx";
@@ -21,6 +22,9 @@ import AdminLogin from "./pages/admin/AdminLogin.jsx";
 import PlatformOverview from "./pages/admin/PlatformOverview.jsx";
 import PlatformHowto from "./pages/admin/PlatformHowto.jsx";
 import Tenants from "./pages/admin/Tenants.jsx";
+import IntegrationDocs from "./pages/docs/IntegrationDocs.jsx";
+import PrivacyPolicy from "./pages/docs/PrivacyPolicy.jsx";
+import TermsOfService from "./pages/docs/TermsOfService.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import CallsInbox from "./pages/tickets/CallsInbox.jsx";
 import CreateEmailTicket from "./pages/tickets/CreateEmailTicket.jsx";
@@ -32,11 +36,58 @@ import Tickets from "./pages/tickets/Tickets.jsx";
 import Customers from "./pages/customers/Customers.jsx";
 import CustomerProfile from "./pages/customers/CustomerProfile.jsx";
 import Templates from "./pages/templates/Templates.jsx";
+import ApiTokensSettings from "./pages/workspace/ApiTokensSettings.jsx";
+import BillingSettings from "./pages/workspace/BillingSettings.jsx";
+import BillingUpgrade from "./pages/workspace/BillingUpgrade.jsx";
+import ConfigurationSettings from "./pages/workspace/ConfigurationSettings.jsx";
 import UserManagement from "./pages/workspace/UserManagement.jsx";
+import WebhookSettings from "./pages/workspace/WebhookSettings.jsx";
 import WorkspaceProfile from "./pages/workspace/WorkspaceProfile.jsx";
 import EmailSettings from "./pages/workspace/EmailSettings.jsx";
 import EmailOAuthCallback from "./pages/workspace/EmailOAuthCallback.jsx";
 import VoipSettings from "./pages/workspace/VoipSettings.jsx";
+
+const SETTINGS_PERMS = ["settings:read", "settings:write"];
+
+/** Nested settings routes shared by tenant-only and combined trees. */
+function SettingsRoutes() {
+  return (
+    <Route
+      element={
+        <ProtectedRoute anyOfPermissions={SETTINGS_PERMS} tenantOnly>
+          <SettingsLayout />
+        </ProtectedRoute>
+      }
+    >
+      <Route path="/workspace/profile" element={<WorkspaceProfile />} />
+      <Route
+        path="/workspace/settings/general"
+        element={<Navigate to="/workspace/profile" replace />}
+      />
+      <Route path="/workspace/settings/api-tokens" element={<ApiTokensSettings />} />
+      <Route path="/workspace/settings/webhooks" element={<WebhookSettings />} />
+      <Route path="/workspace/settings/billing" element={<BillingSettings />} />
+      <Route
+        path="/workspace/settings/billing/upgrade"
+        element={<BillingUpgrade />}
+      />
+      <Route
+        path="/workspace/settings/integrations"
+        element={<Navigate to="/docs/integration" replace />}
+      />
+      <Route
+        path="/workspace/settings/configuration"
+        element={<ConfigurationSettings />}
+      />
+      <Route path="/workspace/email-settings" element={<EmailSettings />} />
+      <Route path="/workspace/voip-settings" element={<VoipSettings />} />
+      <Route
+        path="/billing"
+        element={<Navigate to="/workspace/settings/billing" replace />}
+      />
+    </Route>
+  );
+}
 
 export default function App() {
   // Tenant host: never expose admin signup/login/shell (and never leak admin URL).
@@ -218,17 +269,6 @@ export default function App() {
             }
           />
           <Route
-            path="/workspace/profile"
-            element={
-              <ProtectedRoute
-                anyOfPermissions={["settings:read", "settings:write"]}
-                tenantOnly
-              >
-                <WorkspaceProfile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/workspace/user-management"
             element={
               <ProtectedRoute
@@ -244,33 +284,12 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/workspace/email-settings"
-            element={
-              <ProtectedRoute
-                anyOfPermissions={["settings:read", "settings:write"]}
-                tenantOnly
-              >
-                <EmailSettings />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/workspace/voip-settings"
-            element={
-              <ProtectedRoute
-                anyOfPermissions={["settings:read", "settings:write"]}
-                tenantOnly
-              >
-                <VoipSettings />
-              </ProtectedRoute>
-            }
-          />
+          {SettingsRoutes()}
           <Route
             path="/settings/email/callback/:provider"
             element={
               <ProtectedRoute
-                anyOfPermissions={["settings:read", "settings:write"]}
+                anyOfPermissions={SETTINGS_PERMS}
                 tenantOnly
               >
                 <EmailOAuthCallback />
@@ -279,6 +298,9 @@ export default function App() {
           />
         </Route>
 
+        <Route path="/docs/integration" element={<IntegrationDocs />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
         <Route path="/admin/*" element={<PortalAccessDenied />} />
         <Route path="*" element={<Navigate to="/signup" replace />} />
       </Routes>
@@ -333,6 +355,8 @@ export default function App() {
         <Route path="/tickets/*" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="/agents" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="/automations/*" element={<PortalAccessDenied title="Workspace portal only" />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -532,17 +556,6 @@ export default function App() {
           }
         />
         <Route
-          path="/workspace/profile"
-          element={
-            <ProtectedRoute
-              anyOfPermissions={["settings:read", "settings:write"]}
-              tenantOnly
-            >
-              <WorkspaceProfile />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/workspace/user-management"
           element={
             <ProtectedRoute
@@ -558,41 +571,20 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/workspace/email-settings"
-          element={
-            <ProtectedRoute
-              anyOfPermissions={["settings:read", "settings:write"]}
-              tenantOnly
-            >
-              <EmailSettings />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspace/voip-settings"
-          element={
-            <ProtectedRoute
-              anyOfPermissions={["settings:read", "settings:write"]}
-              tenantOnly
-            >
-              <VoipSettings />
-            </ProtectedRoute>
-          }
-        />
+        {SettingsRoutes()}
         <Route
           path="/settings/email/callback/:provider"
           element={
-            <ProtectedRoute
-              anyOfPermissions={["settings:read", "settings:write"]}
-              tenantOnly
-            >
+            <ProtectedRoute anyOfPermissions={SETTINGS_PERMS} tenantOnly>
               <EmailOAuthCallback />
             </ProtectedRoute>
           }
         />
       </Route>
 
+      <Route path="/docs/integration" element={<IntegrationDocs />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
       <Route path="*" element={<Navigate to="/signup" replace />} />
     </Routes>
   );

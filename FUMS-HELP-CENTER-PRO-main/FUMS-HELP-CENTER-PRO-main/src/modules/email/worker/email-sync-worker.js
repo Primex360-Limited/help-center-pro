@@ -29,9 +29,9 @@ async function syncAccount(account) {
     console.log(`[Email Sync] Syncing account: ${account.email} (${account.provider})`);
     
     const result = await syncEmailAccount(account, {
-      folder: "INBOX",
       limit: SYNC_BATCH_SIZE,
-      since: account.lastSyncedAt
+      // First successful sync should look further back so existing inbox mail appears.
+      fullLookback: !account.lastSyncedAt
     });
     
     workerStats.totalSyncs++;

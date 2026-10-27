@@ -42,6 +42,8 @@ function getTransporter() {
 
 export async function sendPlatformEmail({
     to,
+    cc,
+    bcc,
     subject,
     html,
     text,
@@ -80,6 +82,8 @@ export async function sendPlatformEmail({
     const info = await getTransporter().sendMail({
         from: sender,
         to,
+        ...(cc ? { cc } : {}),
+        ...(bcc ? { bcc } : {}),
         subject,
         ...(html ? { html } : {}),
         ...(text ? { text } : {}),

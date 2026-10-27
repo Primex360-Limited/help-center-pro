@@ -11,13 +11,13 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { emailAccountsApi } from "../../api/email-accounts.api.js";
 import {
   createTicket,
   listTickets,
   replyTicketEmail,
 } from "../../api/tickets.api.js";
-import { getWorkspaceProfile } from "../../api/workspace.api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
   avatarTone,
@@ -38,10 +38,28 @@ function htmlToPlain(html) {
   return (el.innerText || el.textContent || "").trim();
 }
 
+function accountLabel(account) {
+  if (!account?.email) return "";
+  const name = account.displayName?.trim();
+  const provider =
+    account.provider === "gmail"
+      ? "Gmail"
+      : account.provider === "outlook"
+        ? "Outlook"
+        : "Mailbox";
+  const def = account.isDefault ? " · Default" : "";
+  return name
+    ? `${name} <${account.email}> (${provider}${def})`
+    : `${account.email} (${provider}${def})`;
+}
+
 export default function CreateEmailTicket() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const editorRef = useRef(null);
+  const prefilledTo = (searchParams.get("to") || "").trim();
+  const prefilledName = (searchParams.get("name") || "").trim();
 
   const userName =
     user?.name ||
@@ -49,38 +67,68 @@ export default function CreateEmailTicket() {
     user?.email ||
     "Support agent";
 
-  const [fromEmail, setFromEmail] = useState("Support@company.com");
+  const [mailboxes, setMailboxes] = useState([]);
+  const [mailboxesLoading, setMailboxesLoading] = useState(true);
+  const [fromAccountId, setFromAccountId] = useState("");
   const [customers, setCustomers] = useState([]);
-  const [toQuery, setToQuery] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [toQuery, setToQuery] = useState(prefilledTo);
+  const [selectedCustomer, setSelectedCustomer] = useState(() =>
+    prefilledTo
+      ? {
+          email: prefilledTo,
+          name: prefilledName || prefilledTo.split("@")[0],
+          phone: "",
+        }
+      : null
+  );
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [ccOpen, setCcOpen] = useState(false);
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
   const [subject, setSubject] = useState("");
-  const [signature] = useState(() => defaultSignature(userName));
+  const [signature, setSignature] = useState(() => {
+    try {
+      const saved = localStorage.getItem("hcp.emailSignature");
+      if (saved) return saved;
+    } catch {
+      /* ignore */
+    }
+    return defaultSignature(userName);
+  });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const selectedMailbox = useMemo(
+    () => mailboxes.find((a) => a.id === fromAccountId) || null,
+    [mailboxes, fromAccountId]
+  );
+  const fromEmail = selectedMailbox?.email || "";
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setMailboxesLoading(true);
       try {
-        const result = await getWorkspaceProfile();
-        const profile = result?.data?.workspace || result?.data?.profile || result?.data;
-        const candidate =
-          profile?.supportEmail ||
-          (profile?.supportEmailConnected ? profile?.supportEmail : null) ||
-          import.meta.env.VITE_SUPPORT_EMAIL;
-        if (!cancelled && candidate) {
-          setFromEmail(String(candidate));
-        } else if (!cancelled) {
-          setFromEmail("Connect your email in Settings");
-        }
+        const result = await emailAccountsApi.list();
+        if (cancelled) return;
+        const list = (result?.data || [])
+          .filter((a) => a?.email && a.isActive !== false)
+          .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)));
+        setMailboxes(list);
+        const preferred =
+          list.find((a) => a.isDefault)?.id || list[0]?.id || "";
+        setFromAccountId((prev) => {
+          if (prev && list.some((a) => a.id === prev)) return prev;
+          return preferred;
+        });
       } catch {
-        const envEmail = import.meta.env.VITE_SUPPORT_EMAIL;
-        if (!cancelled && envEmail) setFromEmail(String(envEmail));
+        if (!cancelled) {
+          setMailboxes([]);
+          setFromAccountId("");
+        }
+      } finally {
+        if (!cancelled) setMailboxesLoading(false);
       }
     })();
     return () => {
@@ -114,6 +162,7 @@ export default function CreateEmailTicket() {
       if (draft.bcc) setBcc(draft.bcc);
       if (draft.toQuery) setToQuery(draft.toQuery);
       if (draft.selectedCustomer) setSelectedCustomer(draft.selectedCustomer);
+      if (draft.fromAccountId) setFromAccountId(draft.fromAccountId);
       if (draft.ccOpen) setCcOpen(true);
       if (draft.bodyHtml && editorRef.current) {
         editorRef.current.innerHTML = draft.bodyHtml;
@@ -154,6 +203,7 @@ export default function CreateEmailTicket() {
       bcc,
       toQuery,
       selectedCustomer,
+      fromAccountId,
       ccOpen,
       bodyHtml,
       savedAt: new Date().toISOString(),
@@ -163,13 +213,36 @@ export default function CreateEmailTicket() {
     setError("");
   }
 
+  function persistSignature(next) {
+    setSignature(next);
+    try {
+      localStorage.setItem("hcp.emailSignature", next);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function buildHtmlBody(bodyHtml, sig) {
+    const sigHtml = String(sig || "")
+      .split("\n")
+      .map((line) =>
+        line.trim() === "---"
+          ? '<hr style="border:none;border-top:1px solid #e4e7ec;margin:16px 0;" />'
+          : `<div>${line.replace(/</g, "&lt;").replace(/>/g, "&gt;") || "<br/>"}</div>`
+      )
+      .join("");
+    return `<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#101828;">${bodyHtml}${sigHtml ? `<div style="margin-top:20px;color:#475467;font-size:13px;">${sigHtml}</div>` : ""}</div>`;
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
     setNotice("");
 
-    const bodyText = htmlToPlain(editorRef.current?.innerHTML || "");
-    const fullBody = [bodyText, signature].filter(Boolean).join("\n\n");
+    const bodyHtml = editorRef.current?.innerHTML || "";
+    const bodyText = htmlToPlain(bodyHtml);
+    const fullBody = [bodyText, signature.trim()].filter(Boolean).join("\n\n");
+    const fullHtml = buildHtmlBody(bodyHtml, signature.trim());
     const email = selectedCustomer?.email || toQuery.trim();
     const name = selectedCustomer?.name || "";
 
@@ -183,6 +256,12 @@ export default function CreateEmailTicket() {
     }
     if (!email || !email.includes("@")) {
       setError("Select or enter a valid customer email.");
+      return;
+    }
+    if (!fromAccountId || !fromEmail.includes("@")) {
+      setError(
+        "Connect a mailbox in Settings → Configuration, then choose it in From."
+      );
       return;
     }
 
@@ -208,38 +287,40 @@ export default function CreateEmailTicket() {
       const ticket = result?.data?.ticket;
       const ticketId = ticket?.ticketId || ticket?.id;
 
-      if (ticketId) {
-        try {
-          await replyTicketEmail(ticketId, {
-            body: fullBody,
-            toEmail: email,
-            subject: subject.trim(),
-          });
-        } catch {
-          /* ticket created; outbound send may be unavailable */
-        }
+      if (!ticketId) {
+        throw new Error("Ticket was created without an id.");
       }
 
+      const replyPayload = {
+        body: fullBody,
+        html: fullHtml,
+        toEmail: email,
+        subject: subject.trim(),
+        emailAccountId: fromAccountId,
+      };
+      if (cc.trim()) replyPayload.cc = cc.trim();
+      if (bcc.trim()) replyPayload.bcc = bcc.trim();
+
+      await replyTicketEmail(ticketId, replyPayload);
+
       localStorage.removeItem(DRAFT_KEY);
-      navigate(
-        ticketId
-          ? `/tickets/emails?ticket=${encodeURIComponent(ticketId)}`
-          : "/tickets/emails",
-        {
-          replace: true,
-          state: {
-            notice: ticketId
-              ? `Email ticket ${ticketId} created`
-              : "Email ticket created",
-          },
-        }
-      );
+      navigate(`/tickets/emails?ticket=${encodeURIComponent(ticketId)}`, {
+        replace: true,
+        state: {
+          notice: `Email sent from ${fromEmail} — ticket ${ticketId} created`,
+        },
+      });
     } catch (err) {
-      setError(err.message || "Unable to send email ticket");
+      setError(
+        err.message ||
+          "Unable to send email. Check your mailbox in Settings → Configuration."
+      );
     } finally {
       setSubmitting(false);
     }
   }
+
+  const noMailbox = !mailboxesLoading && mailboxes.length === 0;
 
   return (
     <div className="ch-page ch-form-page">
@@ -256,13 +337,54 @@ export default function CreateEmailTicket() {
         {notice ? <p className="ch-alert ch-alert--info">{notice}</p> : null}
 
         <div className="ch-field">
-          <label htmlFor="email-from">From</label>
-          <input
-            id="email-from"
-            className="ch-input"
-            value={fromEmail}
-            readOnly
-          />
+          <div className="ch-field__label-row">
+            <label htmlFor="email-from">From</label>
+            {noMailbox ? (
+              <Link to="/workspace/settings/configuration" className="ch-link">
+                Connect mailbox →
+              </Link>
+            ) : (
+              <Link to="/workspace/settings/configuration" className="ch-link">
+                Manage mailboxes →
+              </Link>
+            )}
+          </div>
+          {mailboxesLoading ? (
+            <input
+              id="email-from"
+              className="ch-input"
+              value="Loading mailboxes…"
+              readOnly
+              disabled
+            />
+          ) : noMailbox ? (
+            <div className="ch-from-empty">
+              <input
+                id="email-from"
+                className="ch-input"
+                value="Connect your email in Settings"
+                readOnly
+              />
+              <p className="ch-field-hint">
+                Integrate Gmail, Outlook, or a custom mailbox under Settings →
+                Configuration, then return here to choose your From address.
+              </p>
+            </div>
+          ) : (
+            <select
+              id="email-from"
+              className="ch-select ch-select--premium"
+              value={fromAccountId}
+              onChange={(e) => setFromAccountId(e.target.value)}
+              required
+            >
+              {mailboxes.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {accountLabel(account)}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="ch-field">
@@ -449,7 +571,26 @@ export default function CreateEmailTicket() {
               data-placeholder="Write your message here..."
               suppressContentEditableWarning
             />
-            <pre className="ch-signature">{signature}</pre>
+            <div className="ch-signature-block">
+              <div className="ch-signature-block__head">
+                <span>Email signature</span>
+                <button
+                  type="button"
+                  className="ch-link"
+                  onClick={() => persistSignature(defaultSignature(userName))}
+                >
+                  Reset default
+                </button>
+              </div>
+              <textarea
+                className="ch-signature-editor"
+                value={signature}
+                onChange={(e) => persistSignature(e.target.value)}
+                rows={4}
+                aria-label="Editable email signature"
+                placeholder={"---\nBest regards,\nYour name\nSupport team"}
+              />
+            </div>
           </div>
         </div>
 
@@ -474,7 +615,7 @@ export default function CreateEmailTicket() {
             <button
               type="submit"
               className="ch-btn ch-btn--primary"
-              disabled={submitting}
+              disabled={submitting || noMailbox}
             >
               <Send size={16} aria-hidden="true" />
               {submitting ? "Sending..." : "Send Email"}

@@ -9,6 +9,13 @@ import {
     saveVoipSettings,
     testVoipConnection
 } from "./workspace.service.js";
+import { getApiKeys, regenerateApiKeys } from "./api-keys.service.js";
+import { getWebhooks, saveWebhooks } from "./webhooks.service.js";
+import {
+    getBilling,
+    initializePaystackPayment,
+    verifyPaystackPayment
+} from "./billing.service.js";
 
 /**
  * `req.tenantId` is authoritative when `requireAuth` + `bindTenantToUser` are
@@ -21,6 +28,10 @@ function resolveTenantId(req) {
     }
 
     return req.user?.tenant_id ?? null;
+}
+
+function resolveActorId(req) {
+    return req.user?.sub || req.user?.id;
 }
 
 export async function getWorkspaceProfileHandler(req, res) {
@@ -99,12 +110,72 @@ export async function testVoipConnectionHandler(req, res) {
     const result = await testVoipConnection({
         tenantId: resolveTenantId(req),
         configId: req.params.configId,
-        actorId: req.user?.sub || req.user?.id
+        actorId: resolveActorId(req)
     });
 
     return successResponse(res, result.message, {
         success: result.success,
         details: result.details
+    });
+}
+
+export async function getApiKeysHandler(req, res) {
+    const result = await getApiKeys({ tenantId: resolveTenantId(req) });
+    return successResponse(res, "API keys fetched successfully", result);
+}
+
+export async function regenerateApiKeysHandler(req, res) {
+    const result = await regenerateApiKeys({
+        tenantId: resolveTenantId(req),
+        mode: req.validatedParams?.mode || req.params.mode,
+        actorId: resolveActorId(req)
+    });
+    return successResponse(res, result.message, {
+        mode: result.mode,
+        publicKey: result.publicKey,
+        secretKey: result.secretKey
+    });
+}
+
+export async function getWebhooksHandler(req, res) {
+    const result = await getWebhooks({ tenantId: resolveTenantId(req) });
+    return successResponse(res, "Webhooks fetched successfully", result);
+}
+
+export async function saveWebhooksHandler(req, res) {
+    const result = await saveWebhooks({
+        tenantId: resolveTenantId(req),
+        payload: req.validatedBody || req.body || {},
+        actorId: resolveActorId(req)
+    });
+    return successResponse(res, result.message, {
+        webhooks: result.webhooks
+    });
+}
+
+export async function getBillingHandler(req, res) {
+    const result = await getBilling({ tenantId: resolveTenantId(req) });
+    return successResponse(res, "Billing fetched successfully", result);
+}
+
+export async function initializePaystackHandler(req, res) {
+    const result = await initializePaystackPayment({
+        tenantId: resolveTenantId(req),
+        email: req.validatedBody?.email,
+        actorId: resolveActorId(req)
+    });
+    return successResponse(res, "Paystack transaction initialized", result);
+}
+
+export async function verifyPaystackHandler(req, res) {
+    const result = await verifyPaystackPayment({
+        tenantId: resolveTenantId(req),
+        reference: req.validatedBody?.reference,
+        actorId: resolveActorId(req)
+    });
+    return successResponse(res, result.message, {
+        billing: result.billing,
+        tenant: result.tenant
     });
 }
 

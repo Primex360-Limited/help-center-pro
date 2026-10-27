@@ -1,8 +1,15 @@
+import crypto from "crypto";
 import nodemailer from "nodemailer";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
 import { ImapFlow } from "imapflow";
 import { getEmailAccountTokens } from "../email-account.service.js";
 import { AppError } from "../../../shared/errors/AppError.js";
+import {
+    isZohoMailbox,
+    sanitizeMailboxSecret,
+    zohoSmtpHostCandidates
+} from "../mailbox-credentials.util.js";
+import prisma from "../../../database/prisma/client.js";
 
 /**
  * SMTP Service — sends mail directly through the agent's connected mailbox
@@ -17,6 +24,42 @@ import { AppError } from "../../../shared/errors/AppError.js";
 
 export function isPasswordAccount(account) {
     return account?.provider === "custom";
+}
+
+/**
+ * Port 465 = implicit TLS (secure: true).
+ * Port 587/25/2525 = STARTTLS (secure: false).
+ * Fixes Zoho smtppro:465 saved with secure:false → "Unexpected socket close".
+ */
+export function inferSmtpSecure(port, explicit) {
+    const p = Number(port);
+    if (p === 465) return true;
+    if (p === 587 || p === 25 || p === 2525) return false;
+    if (explicit === true || explicit === false) return explicit;
+    return false;
+}
+
+export function inferImapSecure(port, explicit) {
+    const p = Number(port);
+    if (p === 993) return true;
+    if (p === 143) return false;
+    if (explicit === true || explicit === false) return explicit;
+    return true;
+}
+
+function isTlsMismatchError(error) {
+    const msg = String(error?.message || error || "").toLowerCase();
+    return (
+        msg.includes("socket close") ||
+        msg.includes("econnreset") ||
+        msg.includes("wrong version number") ||
+        msg.includes("ssl") ||
+        msg.includes("tls") ||
+        msg.includes("eproto") ||
+        msg.includes("disconnected") ||
+        msg.includes("connection closed") ||
+        msg.includes("unexpected")
+    );
 }
 
 /** Refresh OAuth tokens when close to expiry (Gmail / Outlook accounts). */
@@ -34,7 +77,9 @@ export async function ensureFreshAccessToken(account) {
             return refreshGmailToken(account.id);
         }
         if (account.provider === "outlook") {
-            const { refreshOutlookToken } = await import("../oauth/outlook.oauth.service.js");
+            const { refreshOutlookToken } = await import(
+                "../oauth/outlook.oauth.service.js"
+            );
             return refreshOutlookToken(account.id);
         }
     } catch (error) {
@@ -53,13 +98,22 @@ export async function getAccountSecret(account) {
             400
         );
     }
-    return tokens.accessToken;
+    return isPasswordAccount(account)
+        ? sanitizeMailboxSecret(tokens.accessToken)
+        : tokens.accessToken;
 }
 
-export function buildImapAuth(account, secret) {
-    return isPasswordAccount(account)
-        ? { user: account.email, pass: secret }
-        : { user: account.email, accessToken: secret };
+export function buildImapAuth(account, secret, { loginMethod } = {}) {
+    if (!isPasswordAccount(account)) {
+        return { user: account.email, accessToken: secret };
+    }
+    const auth = { user: account.email, pass: secret };
+    // Zoho frequently rejects AUTHENTICATE PLAIN; LOGIN is reliable.
+    if (loginMethod) auth.loginMethod = loginMethod;
+    else if (/zoho/i.test(`${account.imapHost || ""} ${account.smtpHost || ""}`)) {
+        auth.loginMethod = "LOGIN";
+    }
+    return auth;
 }
 
 function buildSmtpAuth(account, secret) {
@@ -68,27 +122,67 @@ function buildSmtpAuth(account, secret) {
         : { type: "OAuth2", user: account.email, accessToken: secret };
 }
 
-async function createSmtpTransporter(account, { verify = false } = {}) {
-    const secret = await getAccountSecret(account);
-
-    const transporter = nodemailer.createTransport({
+function buildTransporterOptions(account, secret, secure) {
+    const port = Number(account.smtpPort) || (secure ? 465 : 587);
+    const options = {
         host: account.smtpHost,
-        port: account.smtpPort,
-        secure: account.smtpSecure,
+        port,
+        secure: Boolean(secure),
         auth: buildSmtpAuth(account, secret),
-        tls: { rejectUnauthorized: false },
-        // Prevent "Sending…" from hanging forever on a dead SMTP host.
-        connectionTimeout: 12_000,
-        greetingTimeout: 12_000,
-        socketTimeout: 25_000
-    });
+        tls: {
+            rejectUnauthorized: false,
+            minVersion: "TLSv1.2"
+        },
+        connectionTimeout: 20_000,
+        greetingTimeout: 20_000,
+        socketTimeout: 45_000,
+        // One-shot send — avoid pooled sockets that die mid-flight.
+        pool: false
+    };
 
-    // Only verify on explicit connection tests — verifying on every reply
-    // doubles latency and is the main cause of stuck Send buttons.
+    // STARTTLS on submission ports
+    if (!secure && (port === 587 || port === 25 || port === 2525)) {
+        options.requireTLS = true;
+    }
+
+    return options;
+}
+
+async function createSmtpTransporter(account, { verify = false, secureOverride } = {}) {
+    const secret = await getAccountSecret(account);
+    const secure =
+        secureOverride !== undefined
+            ? Boolean(secureOverride)
+            : inferSmtpSecure(account.smtpPort, account.smtpSecure);
+
+    const transporter = nodemailer.createTransport(
+        buildTransporterOptions(account, secret, secure)
+    );
+
     if (verify) {
         await transporter.verify();
     }
-    return transporter;
+    return { transporter, secure };
+}
+
+async function withSmtpRetry(account, run) {
+    const preferred = inferSmtpSecure(account.smtpPort, account.smtpSecure);
+    try {
+        return await run(preferred);
+    } catch (firstError) {
+        if (!isPasswordAccount(account) || !isTlsMismatchError(firstError)) {
+            throw firstError;
+        }
+        const alternate = !preferred;
+        console.warn(
+            `[SMTP] ${account.email}: ${firstError.message} — retrying with secure=${alternate}`
+        );
+        try {
+            return await run(alternate);
+        } catch (secondError) {
+            throw secondError;
+        }
+    }
 }
 
 /** Locate the Sent mailbox path (\Sent special-use, with common fallbacks). */
@@ -98,7 +192,13 @@ export async function findSentMailboxPath(client) {
         (b) => b.specialUse === "\\Sent" || b.flags?.has?.("\\Sent")
     );
     if (bySpecialUse) return bySpecialUse.path;
-    const candidates = ["Sent", "Sent Items", "Sent Mail", "[Gmail]/Sent Mail", "INBOX.Sent"];
+    const candidates = [
+        "Sent",
+        "Sent Items",
+        "Sent Mail",
+        "[Gmail]/Sent Mail",
+        "INBOX.Sent"
+    ];
     const match = boxes.find((b) =>
         candidates.some((c) => c.toLowerCase() === b.path.toLowerCase())
     );
@@ -115,12 +215,14 @@ export async function appendToSentFolder(account, rawMessage) {
         return { appended: false, reason: "provider_auto_files_sent" };
     }
     const secret = await getAccountSecret(account);
+    const secure = inferImapSecure(account.imapPort, account.imapSecure);
     const client = new ImapFlow({
         host: account.imapHost,
-        port: account.imapPort,
-        secure: account.imapSecure,
+        port: Number(account.imapPort) || 993,
+        secure,
         auth: buildImapAuth(account, secret),
-        logger: false
+        logger: false,
+        tls: { rejectUnauthorized: false, minVersion: "TLSv1.2" }
     });
     client.on("error", (err) => {
         console.error(`[IMAP Sent] ${account.email}:`, err?.message || err);
@@ -148,55 +250,201 @@ async function buildRawMessage(mailOptions) {
     });
 }
 
+function escapeHtml(value = "") {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/** Wrap plain text as a minimal UTF-8 HTML document for multipart/alternative. */
+export function plainTextToHtml(text = "") {
+    const escaped = escapeHtml(text).replace(/\r\n|\r|\n/g, "<br>\n");
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;line-height:1.5;color:#111">${escaped}</body></html>`;
+}
+
+function extractEmailDomain(fromAddress) {
+    const match = String(fromAddress || "").match(/@([^\s>]+)/);
+    return match?.[1]?.replace(/[>;]+$/, "") || null;
+}
+
+function formatAddressList(value) {
+    if (!value) return undefined;
+    if (Array.isArray(value)) {
+        const list = value.map((v) => String(v).trim()).filter(Boolean);
+        return list.length ? list.join(", ") : undefined;
+    }
+    const trimmed = String(value).trim();
+    return trimmed || undefined;
+}
+
+function buildTransactionalHeaders({
+    fromAddress,
+    listUnsubscribeEmail,
+    extraHeaders = {},
+    bulk = false,
+    autoSubmitted = false
+}) {
+    const headers = {
+        "X-Mailer": "HelpCentre Pro",
+        ...extraHeaders
+    };
+
+    if (listUnsubscribeEmail) {
+        headers["List-Unsubscribe"] =
+            `<mailto:${listUnsubscribeEmail}?subject=unsubscribe>`;
+        headers["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+    }
+
+    if (bulk) {
+        headers.Precedence = "bulk";
+    }
+    if (autoSubmitted) {
+        headers["Auto-Submitted"] = "auto-generated";
+    }
+
+    const domain = extractEmailDomain(fromAddress);
+    if (domain && !headers["Message-ID"] && !headers.messageId) {
+        headers["Message-ID"] =
+            `<${crypto.randomBytes(12).toString("hex")}@${domain}>`;
+    }
+
+    return headers;
+}
+
+function friendlySmtpError(error, account = {}) {
+    const msg = String(error?.message || error || "");
+    if (isTlsMismatchError(error)) {
+        return `${msg}. Check SMTP port and encryption: use 465 with SSL, or 587 with STARTTLS. For Zoho custom domains use smtppro.zoho.com.`;
+    }
+    if (/auth|invalid credentials|535|534/i.test(msg)) {
+        if (isZohoMailbox(account)) {
+            return "Zoho SMTP login failed. Use an Application-specific Password from accounts.zoho.com → Security, full email as username, and smtppro.zoho.com:465 for custom domains.";
+        }
+        return `${msg}. Use an app password (not your normal login password) and the full email as username.`;
+    }
+    return msg;
+}
+
 /**
  * Send email via the account's SMTP server.
+ * Accepts cc, bcc, html; builds multipart text+html when possible.
  */
 export async function sendEmailViaSmtp(account, emailData) {
-    const { to, subject, text, html, inReplyTo, references, attachments = [] } = emailData;
+    const {
+        to,
+        cc,
+        bcc,
+        subject,
+        text,
+        html,
+        inReplyTo,
+        references,
+        attachments = [],
+        headers: extraHeaders = {},
+        listUnsubscribeEmail = null,
+        bulk = false,
+        autoSubmitted = false
+    } = emailData;
 
-    let transporter = null;
     try {
-        transporter = await createSmtpTransporter(account);
+        return await withSmtpRetry(account, async (secure) => {
+            let transporter = null;
+            try {
+                ({ transporter } = await createSmtpTransporter(account, {
+                    secureOverride: secure
+                }));
 
-        const mailOptions = {
-            from: account.displayName
-                ? `"${String(account.displayName).replace(/"/g, "")}" <${account.email}>`
-                : account.email,
-            to: Array.isArray(to) ? to.join(", ") : to,
-            subject,
-            ...(text ? { text } : {}),
-            ...(html ? { html } : {}),
-            ...(inReplyTo ? { inReplyTo } : {}),
-            ...(references ? { references } : {}),
-            ...(attachments.length > 0 ? { attachments } : {})
-        };
+                const fromAddress = account.displayName
+                    ? `"${String(account.displayName).replace(/"/g, "")}" <${account.email}>`
+                    : account.email;
 
-        const info = await transporter.sendMail(mailOptions);
+                let plainText = text || undefined;
+                let htmlBody = html || undefined;
 
-        // Append to Sent in the background so a slow IMAP host never blocks
-        // the agent UI on "Sending…". Gmail/Outlook already file SMTP mail.
-        if (isPasswordAccount(account)) {
-            buildRawMessage({ ...mailOptions, messageId: info.messageId })
-                .then((raw) => appendToSentFolder(account, raw))
-                .catch((appendError) => {
-                    console.warn(
-                        `Sent-folder append failed for ${account.email}:`,
-                        appendError.message
-                    );
+                if (htmlBody && !plainText) {
+                    plainText = String(htmlBody)
+                        .replace(/<style[\s\S]*?<\/style>/gi, "")
+                        .replace(/<[^>]+>/g, " ")
+                        .replace(/\s+/g, " ")
+                        .trim();
+                }
+                if (plainText && !htmlBody) {
+                    htmlBody = plainTextToHtml(plainText);
+                }
+
+                const headers = buildTransactionalHeaders({
+                    fromAddress,
+                    listUnsubscribeEmail:
+                        listUnsubscribeEmail || account.email || null,
+                    extraHeaders,
+                    bulk,
+                    autoSubmitted
                 });
-        }
 
-        return {
-            success: true,
-            messageId: info.messageId,
-            response: info.response,
-            sentFolder: { appended: isPasswordAccount(account), deferred: true }
-        };
+                const messageIdHeader = headers["Message-ID"];
+                if (messageIdHeader) {
+                    delete headers["Message-ID"];
+                }
+
+                const mailOptions = {
+                    from: fromAddress,
+                    to: formatAddressList(to),
+                    ...(formatAddressList(cc)
+                        ? { cc: formatAddressList(cc) }
+                        : {}),
+                    ...(formatAddressList(bcc)
+                        ? { bcc: formatAddressList(bcc) }
+                        : {}),
+                    subject,
+                    ...(plainText ? { text: plainText } : {}),
+                    ...(htmlBody ? { html: htmlBody } : {}),
+                    ...(inReplyTo ? { inReplyTo } : {}),
+                    ...(references ? { references } : {}),
+                    ...(attachments.length > 0 ? { attachments } : {}),
+                    headers,
+                    ...(messageIdHeader ? { messageId: messageIdHeader } : {})
+                };
+
+                const info = await transporter.sendMail(mailOptions);
+
+                if (isPasswordAccount(account)) {
+                    buildRawMessage({ ...mailOptions, messageId: info.messageId })
+                        .then((raw) => appendToSentFolder(account, raw))
+                        .catch((appendError) => {
+                            console.warn(
+                                `Sent-folder append failed for ${account.email}:`,
+                                appendError.message
+                            );
+                        });
+                }
+
+                return {
+                    success: true,
+                    messageId: info.messageId,
+                    response: info.response,
+                    sentFolder: {
+                        appended: isPasswordAccount(account),
+                        deferred: true
+                    }
+                };
+            } finally {
+                if (transporter) {
+                    try {
+                        transporter.close();
+                    } catch {
+                        /* noop */
+                    }
+                }
+            }
+        });
     } catch (error) {
         console.error("SMTP send error:", error);
-        throw new AppError(`Failed to send email via your mailbox: ${error.message}`, 502);
-    } finally {
-        if (transporter) transporter.close();
+        throw new AppError(
+            `Failed to send email via your mailbox: ${friendlySmtpError(error)}`,
+            502
+        );
     }
 }
 
@@ -204,35 +452,95 @@ export async function sendEmailViaSmtp(account, emailData) {
  * Test SMTP connection
  */
 export async function testSmtpConnection(account) {
-    try {
-        const transporter = await createSmtpTransporter(account, { verify: true });
-        transporter.close();
-        return { success: true, message: "SMTP connection successful" };
-    } catch (error) {
-        return { success: false, message: error.message };
+    const hosts = isZohoMailbox(account)
+        ? zohoSmtpHostCandidates(account)
+        : [account.smtpHost];
+    let lastError = null;
+
+    for (const host of hosts) {
+        const attempt = { ...account, smtpHost: host };
+        try {
+            await withSmtpRetry(attempt, async (secure) => {
+                const { transporter } = await createSmtpTransporter(attempt, {
+                    verify: true,
+                    secureOverride: secure
+                });
+                transporter.close();
+                return true;
+            });
+            if (account.id && host && host !== account.smtpHost) {
+                try {
+                    await prisma.emailAccount.update({
+                        where: { id: account.id },
+                        data: { smtpHost: host }
+                    });
+                } catch {
+                    /* non-fatal */
+                }
+            }
+            const hostNote =
+                host && host !== account.smtpHost ? ` via ${host}` : "";
+            return {
+                success: true,
+                message: `SMTP connection successful${hostNote}`,
+                smtpHost: host
+            };
+        } catch (error) {
+            lastError = error;
+            console.warn(
+                `[SMTP] ${account.email} verify failed on ${host}: ${error.message}`
+            );
+        }
     }
+
+    return {
+        success: false,
+        message: friendlySmtpError(lastError, account)
+    };
 }
 
 /**
- * Send email with reply tracking
+ * Send email with reply tracking. Passes cc/bcc/html through when provided.
  */
-export async function sendReplyEmail(account, toEmail, subject, body, threadHeaders = {}) {
-    const { inReplyTo, references } = threadHeaders;
+export async function sendReplyEmail(
+    account,
+    toEmail,
+    subject,
+    body,
+    threadHeaders = {}
+) {
+    const {
+        inReplyTo,
+        references,
+        cc,
+        bcc,
+        html,
+        listUnsubscribeEmail
+    } = threadHeaders;
 
     return sendEmailViaSmtp(account, {
         to: toEmail,
+        cc,
+        bcc,
         subject,
         text: body,
-        html: undefined,
+        html,
         inReplyTo,
-        references
+        references,
+        listUnsubscribeEmail
     });
 }
 
 /**
  * Send email with attachments
  */
-export async function sendEmailWithAttachments(account, toEmail, subject, body, attachments) {
+export async function sendEmailWithAttachments(
+    account,
+    toEmail,
+    subject,
+    body,
+    attachments
+) {
     return sendEmailViaSmtp(account, {
         to: toEmail,
         subject,
@@ -249,5 +557,8 @@ export default {
     ensureFreshAccessToken,
     getAccountSecret,
     buildImapAuth,
-    isPasswordAccount
+    isPasswordAccount,
+    plainTextToHtml,
+    inferSmtpSecure,
+    inferImapSecure
 };

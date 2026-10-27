@@ -92,9 +92,12 @@ function resolvePreferScope(req) {
 }
 
 export async function login(req, res) {
+    const body = req.validatedBody || {};
     const result = await loginUser({
-        ...req.validatedBody,
-        tenantId: requestTenantId(req),
+        ...body,
+        // Host-resolved tenant wins; otherwise allow picker (tenantId/tenantSlug in body).
+        tenantId: requestTenantId(req) || body.tenantId || null,
+        tenantSlug: body.tenantSlug || null,
         deviceInfo: req.headers["user-agent"] || "unknown",
         ipAddress: req.ip,
         preferScope: resolvePreferScope(req)
@@ -113,7 +116,13 @@ export async function login(req, res) {
 }
 
 export async function refresh(req, res) {
-    const refreshToken = req.cookies?.refreshToken;
+    // Prefer httpOnly cookie; fall back to JSON body for SPA clients where
+    // localhost ↔ 127.0.0.1 is cross-site and cookies are not sent.
+    const refreshToken =
+        req.cookies?.refreshToken ||
+        req.body?.refreshToken ||
+        req.validatedBody?.refreshToken ||
+        null;
     const tokens = await refreshUserToken({ refreshToken });
 
     setAuthCookies(res, {
@@ -128,7 +137,10 @@ export async function refresh(req, res) {
 }
 
 export async function logout(req, res) {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken =
+        req.cookies?.refreshToken ||
+        req.body?.refreshToken ||
+        null;
 
     await logoutUser({ refreshToken });
     clearAuthCookies(res);

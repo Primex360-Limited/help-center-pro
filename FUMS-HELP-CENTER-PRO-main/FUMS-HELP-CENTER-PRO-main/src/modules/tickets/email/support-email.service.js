@@ -20,7 +20,10 @@ import {
     broadcastTicketEvent
 } from "../realtime/ticket-socket.service.js";
 import { mapTicketResponse } from "../helpers/map-ticket-response.js";
-import { getDefaultEmailAccount } from "../../email/email-account.service.js";
+import {
+    getDefaultEmailAccount,
+    getEmailAccount
+} from "../../email/email-account.service.js";
 import { sendReplyEmail } from "../../email/smtp/smtp.service.js";
 
 const SYSTEM_EMAIL_ACTOR = Object.freeze({
@@ -383,7 +386,27 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
     const userId = actor?.userId || actor?.id;
 
     let emailAccount = null;
-    if (userId) {
+    if (userId && data.emailAccountId) {
+        try {
+            emailAccount = await getEmailAccount(
+                data.emailAccountId,
+                userId,
+                tenantId
+            );
+        } catch {
+            throw new AppError(
+                "Selected mailbox was not found. Choose another From address or reconnect it in Settings → Configuration.",
+                400
+            );
+        }
+        if (emailAccount && emailAccount.isActive === false) {
+            throw new AppError(
+                "Selected mailbox is inactive. Choose another From address or reactivate it in Settings → Configuration.",
+                400
+            );
+        }
+    }
+    if (!emailAccount && userId) {
         try {
             emailAccount = await getDefaultEmailAccount(userId, tenantId);
         } catch {
@@ -396,10 +419,17 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
     let usedMailbox = false;
     let sentFolder = null;
 
+    const listUnsubscribeEmail =
+        sender.email || emailAccount?.email || undefined;
+
     if (emailAccount && emailAccount.isActive) {
         const smtpResult = await sendReplyEmail(emailAccount, toEmail, subject, body, {
             inReplyTo,
-            references
+            references,
+            cc: data.cc,
+            bcc: data.bcc,
+            html: data.html,
+            listUnsubscribeEmail
         });
         outboundEmail = { id: smtpResult.messageId, messageId: smtpResult.messageId };
         effectiveFrom = formatFromAddress(emailAccount.email, emailAccount.displayName || sender.name);
@@ -415,12 +445,20 @@ export async function replyToTicketByEmail(ticketId, data, actor) {
         }
         const platformResult = await sendPlatformEmail({
             to: toEmail,
+            cc: data.cc,
+            bcc: data.bcc,
             from: preferredFrom,
             replyTo: sender.email,
             subject,
             text: body,
             html: data.html,
             headers: {
+                "X-Mailer": "HelpCentre Pro",
+                ...(listUnsubscribeEmail
+                    ? {
+                          "List-Unsubscribe": `<mailto:${listUnsubscribeEmail}?subject=unsubscribe>`
+                      }
+                    : {}),
                 ...(inReplyTo ? { "In-Reply-To": inReplyTo } : {}),
                 ...(references ? { References: references } : {})
             }

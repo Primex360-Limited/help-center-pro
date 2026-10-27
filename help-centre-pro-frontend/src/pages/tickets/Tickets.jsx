@@ -20,7 +20,12 @@ import { listUsers } from "../../api/users.api.js";
 import ConfirmActionModal from "../../components/agents/ConfirmActionModal.jsx";
 import AssignTicketModal from "../../components/tickets/AssignTicketModal.jsx";
 import { formatTicketId, priorityLabel, statusLabel } from "../../utils/format.js";
-import { channelTicketPath } from "./channelUtils.js";
+import {
+  channelTicketPath,
+  isFreshTicket,
+  sortTicketsNewestFirst,
+  ticketActivityAt,
+} from "./channelUtils.js";
 import "../../styles/tickets.css";
 import "../../styles/admin.css";
 
@@ -126,12 +131,8 @@ function formatRelative(value) {
 }
 
 function lastActiveAt(ticket) {
-  return (
-    ticket.lastAgentResponseAt ||
-    ticket.lastCustomerResponseAt ||
-    ticket.updatedAt ||
-    ticket.createdAt
-  );
+  const ms = ticketActivityAt(ticket);
+  return ms ? new Date(ms).toISOString() : ticket.createdAt;
 }
 
 function agentDisplayName(user) {
@@ -300,7 +301,7 @@ export default function Tickets() {
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
 
-    return tickets.filter((ticket) => {
+    const rows = tickets.filter((ticket) => {
       const channel = ticketChannel(ticket);
       if (channelFilter && channel !== channelFilter) return false;
 
@@ -327,6 +328,7 @@ export default function Tickets() {
         .toLowerCase();
       return haystack.includes(q);
     });
+    return sortTicketsNewestFirst(rows);
   }, [tickets, searchQuery, channelFilter, dateFrom, dateTo]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
@@ -666,13 +668,43 @@ export default function Tickets() {
                   const selected = selectedIds.has(ticket.id);
 
                   return (
-                    <tr key={ticket.id} className={selected ? "is-selected" : undefined}>
+                    <tr
+                      key={ticket.id}
+                      className={`tickets-table__row${selected ? " is-selected" : ""}`}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Open ticket ${formatTicketId(ticket.ticketId)}`}
+                      onClick={(event) => {
+                        const target = event.target;
+                        if (
+                          target.closest(
+                            "input, button, a, .tickets-row-actions, label"
+                          )
+                        ) {
+                          return;
+                        }
+                        handleOpenTicket(ticket);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        if (
+                          event.target.closest(
+                            "input, button, a, .tickets-row-actions"
+                          )
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        handleOpenTicket(ticket);
+                      }}
+                    >
                       <td className="tickets-table__check">
                         <input
                           type="checkbox"
                           checked={selected}
                           onChange={() => toggleRow(ticket.id)}
                           aria-label={`Select ${ticket.ticketId}`}
+                          onClick={(event) => event.stopPropagation()}
                         />
                       </td>
                       <td>
@@ -681,6 +713,7 @@ export default function Tickets() {
                           className="tickets-table__id"
                           onClick={(event) => {
                             event.preventDefault();
+                            event.stopPropagation();
                             handleOpenTicket(ticket);
                           }}
                         >
@@ -728,7 +761,12 @@ export default function Tickets() {
                         {formatCreated(ticket.createdAt)}
                       </td>
                       <td className="tickets-table__muted">
-                        {formatRelative(lastActiveAt(ticket))}
+                        <span className="tickets-activity">
+                          {formatRelative(lastActiveAt(ticket))}
+                          {isFreshTicket(ticket) ? (
+                            <span className="ch-fresh-pill">New</span>
+                          ) : null}
+                        </span>
                       </td>
                       <td>
                         <div className="tickets-row-actions">
@@ -739,7 +777,10 @@ export default function Tickets() {
                             }`}
                             aria-label={`Actions for ${ticket.ticketId}`}
                             aria-expanded={menuTicketId === ticket.id}
-                            onClick={(event) => openMenu(ticket, event)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openMenu(ticket, event);
+                            }}
                           >
                             <MoreVertical size={16} />
                           </button>

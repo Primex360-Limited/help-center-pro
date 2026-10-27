@@ -1,4 +1,9 @@
-import { apiRequest, setStoredToken } from "./client.js";
+import {
+  apiRequest,
+  clearStoredAuth,
+  setStoredRefreshToken,
+  setStoredToken,
+} from "./client.js";
 
 export async function getPlatformStatus() {
   return apiRequest("/auth/platform-status", {
@@ -35,6 +40,9 @@ export async function login(payload, { portal } = {}) {
   if (result?.data?.accessToken) {
     setStoredToken(result.data.accessToken);
   }
+  if (result?.data?.refreshToken) {
+    setStoredRefreshToken(result.data.refreshToken);
+  }
 
   return result;
 }
@@ -43,7 +51,7 @@ export async function logout() {
   try {
     await apiRequest("/auth/logout", { method: "POST", auth: true });
   } finally {
-    setStoredToken(null);
+    clearStoredAuth();
   }
 }
 

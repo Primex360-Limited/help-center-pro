@@ -381,28 +381,44 @@
 
 .email-provider-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+@media (max-width: 640px) {
+  .email-provider-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .provider-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1.5rem;
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 0.75rem;
+  justify-content: center;
+  gap: 0.85rem;
+  min-height: 140px;
+  padding: 1.5rem 1rem;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   text-align: center;
 }
 
 .provider-card:hover {
-  border-color: #2563eb;
-  background: #eff6ff;
+  border-color: #84caff;
+  box-shadow: 0 0 0 3px rgba(46, 144, 250, 0.12);
+}
+
+.provider-card__logo {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .provider-card__icon {
@@ -411,7 +427,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem;
+  border-radius: 12px;
   font-size: 1.5rem;
   font-weight: 700;
 }
@@ -427,21 +443,76 @@
 }
 
 .provider-card__icon--custom {
-  background: #64748b;
+  background: #12b76a;
   color: white;
 }
 
-.provider-card h3 {
-  font-size: 1rem;
+.custom-mailbox-form__label {
+  display: block;
+  font-size: 13px;
   font-weight: 600;
+  color: #344054;
+  margin-bottom: 6px;
+}
+
+.custom-mailbox-form__input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #101828;
+  background: #fff;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.custom-mailbox-form__input--accent {
+  background: #eff8ff;
+}
+
+.custom-mailbox-form__hint {
+  font-size: 12.5px;
+  color: #667085;
+  margin: -4px 0 12px;
+  line-height: 1.45;
+}
+
+.custom-mailbox-form__hosts {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 8px;
+}
+
+.custom-mailbox-form__error {
+  color: #b42318;
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.custom-mailbox-form__ok {
+  color: #027a48;
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.custom-mailbox-form__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.provider-card h3 {
+  font-size: 0.95rem;
+  font-weight: 650;
   margin: 0;
-  color: #1e293b;
+  color: #101828;
 }
 
 .provider-card p {
-  font-size: 0.875rem;
-  margin: 0;
-  color: #64748b;
+  display: none;
 }
 
 .email-security-notice {

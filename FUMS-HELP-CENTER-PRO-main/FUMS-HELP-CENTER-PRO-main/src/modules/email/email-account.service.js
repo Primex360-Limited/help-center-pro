@@ -1,6 +1,7 @@
 import prisma from "../../database/prisma/client.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { encrypt, decrypt } from "../../shared/utils/encryption.util.js";
+import { sanitizeMailboxSecret } from "./mailbox-credentials.util.js";
 
 /**
  * Email Account Service
@@ -46,7 +47,12 @@ export async function createEmailAccount(userId, tenantId, data) {
   const { provider, email, displayName, accessToken, refreshToken, tokenExpiresAt, imapHost, imapPort, imapSecure, smtpHost, smtpPort, smtpSecure, isDefault } = data;
   // App password (custom IMAP/SMTP accounts) — stored encrypted in the
   // accessToken column; OAuth accounts store their access token there.
-  const secret = data.password || accessToken;
+  // Strip Zoho app-password display spaces / paste newlines before encrypt.
+  const rawSecret = data.password || accessToken;
+  const secret =
+    provider === EMAIL_PROVIDERS.CUSTOM
+      ? sanitizeMailboxSecret(rawSecret)
+      : rawSecret;
 
   // Validate provider
   if (!Object.values(EMAIL_PROVIDERS).includes(provider)) {
@@ -75,17 +81,48 @@ export async function createEmailAccount(userId, tenantId, data) {
     });
   }
 
-  // Use default IMAP/SMTP config if not provided
+  // Use default IMAP/SMTP config if not provided.
+  // Always derive secure from well-known ports so Zoho 465 / Outlook 587 work.
   const finalImapHost = imapHost || DEFAULT_IMAP_CONFIG[provider]?.host;
-  const finalImapPort = imapPort || DEFAULT_IMAP_CONFIG[provider]?.port;
-  const finalImapSecure = imapSecure !== undefined ? imapSecure : DEFAULT_IMAP_CONFIG[provider]?.secure;
+  const finalImapPort = imapPort || DEFAULT_IMAP_CONFIG[provider]?.port || 993;
   const finalSmtpHost = smtpHost || DEFAULT_SMTP_CONFIG[provider]?.host;
-  const finalSmtpPort = smtpPort || DEFAULT_SMTP_CONFIG[provider]?.port;
-  const finalSmtpSecure = smtpSecure !== undefined ? smtpSecure : DEFAULT_SMTP_CONFIG[provider]?.secure;
+  const finalSmtpPort = smtpPort || DEFAULT_SMTP_CONFIG[provider]?.port || 587;
+  const finalImapSecure =
+    Number(finalImapPort) === 993
+      ? true
+      : Number(finalImapPort) === 143
+        ? false
+        : imapSecure !== undefined
+          ? imapSecure
+          : DEFAULT_IMAP_CONFIG[provider]?.secure ?? true;
+  const finalSmtpSecure =
+    Number(finalSmtpPort) === 465
+      ? true
+      : Number(finalSmtpPort) === 587 ||
+          Number(finalSmtpPort) === 25 ||
+          Number(finalSmtpPort) === 2525
+        ? false
+        : smtpSecure !== undefined
+          ? smtpSecure
+          : DEFAULT_SMTP_CONFIG[provider]?.secure ?? false;
 
   // Encrypt tokens / app password
   const encryptedAccessToken = secret ? encrypt(secret) : null;
   const encryptedRefreshToken = refreshToken ? encrypt(refreshToken) : null;
+
+  // Zoho custom domains need imappro / smtppro — not the personal zoho hosts.
+  let resolvedImapHost = finalImapHost;
+  let resolvedSmtpHost = finalSmtpHost;
+  const emailLower = String(email || "").toLowerCase();
+  const isZohoPersonal = /@zoho\.(com|eu|in)$/i.test(emailLower);
+  if (!isZohoPersonal && emailLower.includes("@")) {
+    if (/^imap\.zoho\./i.test(String(resolvedImapHost || ""))) {
+      resolvedImapHost = "imappro.zoho.com";
+    }
+    if (/^smtp\.zoho\./i.test(String(resolvedSmtpHost || ""))) {
+      resolvedSmtpHost = "smtppro.zoho.com";
+    }
+  }
 
   const emailAccount = await prisma.emailAccount.create({
     data: {
@@ -97,13 +134,15 @@ export async function createEmailAccount(userId, tenantId, data) {
       accessToken: encryptedAccessToken,
       refreshToken: encryptedRefreshToken,
       tokenExpiresAt,
-      imapHost: finalImapHost,
+      imapHost: resolvedImapHost,
       imapPort: finalImapPort,
       imapSecure: finalImapSecure,
-      smtpHost: finalSmtpHost,
+      smtpHost: resolvedSmtpHost,
       smtpPort: finalSmtpPort,
       smtpSecure: finalSmtpSecure,
-      isDefault: isDefault || false
+      isDefault: isDefault || false,
+      syncEnabled: true,
+      isActive: true
     }
   });
 
@@ -208,16 +247,38 @@ export async function updateEmailAccount(accountId, userId, tenantId, data) {
 
   if (email !== undefined) updateData.email = email;
   if (displayName !== undefined) updateData.displayName = displayName;
-  if (data.password !== undefined && data.password) updateData.accessToken = encrypt(data.password);
-  if (accessToken !== undefined) updateData.accessToken = encrypt(accessToken);
+  if (data.password !== undefined && data.password) {
+    updateData.accessToken = encrypt(sanitizeMailboxSecret(data.password));
+  }
+  if (accessToken !== undefined) {
+    updateData.accessToken = encrypt(
+      existing.provider === EMAIL_PROVIDERS.CUSTOM
+        ? sanitizeMailboxSecret(accessToken)
+        : accessToken
+    );
+  }
   if (refreshToken !== undefined) updateData.refreshToken = encrypt(refreshToken);
   if (tokenExpiresAt !== undefined) updateData.tokenExpiresAt = tokenExpiresAt;
   if (imapHost !== undefined) updateData.imapHost = imapHost;
-  if (imapPort !== undefined) updateData.imapPort = imapPort;
-  if (imapSecure !== undefined) updateData.imapSecure = imapSecure;
+  if (imapPort !== undefined) {
+    updateData.imapPort = imapPort;
+    const p = Number(imapPort);
+    if (p === 993) updateData.imapSecure = true;
+    else if (p === 143) updateData.imapSecure = false;
+    else if (imapSecure !== undefined) updateData.imapSecure = imapSecure;
+  } else if (imapSecure !== undefined) {
+    updateData.imapSecure = imapSecure;
+  }
   if (smtpHost !== undefined) updateData.smtpHost = smtpHost;
-  if (smtpPort !== undefined) updateData.smtpPort = smtpPort;
-  if (smtpSecure !== undefined) updateData.smtpSecure = smtpSecure;
+  if (smtpPort !== undefined) {
+    updateData.smtpPort = smtpPort;
+    const p = Number(smtpPort);
+    if (p === 465) updateData.smtpSecure = true;
+    else if (p === 587 || p === 25 || p === 2525) updateData.smtpSecure = false;
+    else if (smtpSecure !== undefined) updateData.smtpSecure = smtpSecure;
+  } else if (smtpSecure !== undefined) {
+    updateData.smtpSecure = smtpSecure;
+  }
   if (isActive !== undefined) updateData.isActive = isActive;
   if (isDefault !== undefined) updateData.isDefault = isDefault;
   if (syncEnabled !== undefined) updateData.syncEnabled = syncEnabled;
@@ -246,9 +307,29 @@ export async function deleteEmailAccount(accountId, userId, tenantId) {
     throw new AppError("Email account not found", 404);
   }
 
+  const wasDefault = existing.isDefault;
+
   await prisma.emailAccount.delete({
     where: { id: accountId }
   });
+
+  // Promote another mailbox so the workspace always has a clear default.
+  if (wasDefault) {
+    const nextDefault = await prisma.emailAccount.findFirst({
+      where: {
+        userId,
+        ...(tenantId ? { tenantId } : {})
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    if (nextDefault) {
+      await prisma.emailAccount.update({
+        where: { id: nextDefault.id },
+        data: { isDefault: true }
+      });
+    }
+  }
 
   return { success: true, message: "Email account deleted successfully" };
 }
@@ -312,11 +393,16 @@ export async function getEmailAccountTokens(accountId) {
 /**
  * Update sync status for an email account
  */
-export async function updateEmailAccountSyncStatus(accountId, status, error = null) {
+export async function updateEmailAccountSyncStatus(
+  accountId,
+  status,
+  error = null,
+  { touchLastSyncedAt = status === "completed" } = {}
+) {
   await prisma.emailAccount.update({
     where: { id: accountId },
     data: {
-      lastSyncedAt: new Date(),
+      ...(touchLastSyncedAt ? { lastSyncedAt: new Date() } : {}),
       lastSyncStatus: status,
       syncError: error
     }

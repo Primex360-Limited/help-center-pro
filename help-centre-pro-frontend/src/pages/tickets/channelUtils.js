@@ -78,6 +78,42 @@ export function formatRelative(value) {
   return `${days}d ago`;
 }
 
+/** Most recent activity timestamp for inbox ordering (ms). */
+export function ticketActivityAt(ticket) {
+  const candidates = [
+    ticket?.updatedAt,
+    ticket?.lastCustomerResponseAt,
+    ticket?.lastAgentResponseAt,
+    ticket?.queuedAt,
+    ticket?.createdAt,
+  ];
+  let max = 0;
+  for (const value of candidates) {
+    if (!value) continue;
+    const ts = new Date(value).getTime();
+    if (!Number.isNaN(ts) && ts > max) max = ts;
+  }
+  return max;
+}
+
+/** Newest conversations first — premium inbox default everywhere. */
+export function sortTicketsNewestFirst(tickets = []) {
+  return [...tickets].sort((a, b) => {
+    const diff = ticketActivityAt(b) - ticketActivityAt(a);
+    if (diff !== 0) return diff;
+    const aId = String(a?.ticketId || a?.id || "");
+    const bId = String(b?.ticketId || b?.id || "");
+    return bId.localeCompare(aId);
+  });
+}
+
+/** True when activity landed in the last few minutes. */
+export function isFreshTicket(ticket, withinMs = 5 * 60 * 1000) {
+  const at = ticketActivityAt(ticket);
+  if (!at) return false;
+  return Date.now() - at <= withinMs;
+}
+
 export function formatDateTime(value) {
   if (!value) return "—";
   const date = new Date(value);

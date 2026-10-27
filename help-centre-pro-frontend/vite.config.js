@@ -14,15 +14,17 @@ export default defineConfig({
     hmr: {
       overlay: true,
     },
-    // Dev-only same-origin fallback when VITE_API_URL is unset.
+    // Same-origin proxy so auth cookies work (localhost ≠ 127.0.0.1 cross-site).
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:4008',
         changeOrigin: true,
+        secure: false,
       },
       '/health': {
         target: 'http://127.0.0.1:4008',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

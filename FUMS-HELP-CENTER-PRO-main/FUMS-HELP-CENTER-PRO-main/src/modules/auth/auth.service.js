@@ -892,6 +892,38 @@ async function resolveLoginTenant({ tenantId, tenantSlug }) {
     return null;
 }
 
+/** Build picker options when one email maps to several tenant users. */
+async function buildAmbiguousWorkspaceError(tenantUsers) {
+    const tenantIds = [
+        ...new Set(tenantUsers.map((u) => u.tenantId).filter(Boolean))
+    ];
+    const tenants = tenantIds.length
+        ? await prisma.tenant.findMany({
+              where: { id: { in: tenantIds } },
+              select: { id: true, name: true, slug: true, status: true }
+          })
+        : [];
+    const byId = new Map(tenants.map((t) => [t.id, t]));
+    const workspaces = tenantUsers
+        .map((u) => {
+            const tenant = byId.get(u.tenantId);
+            if (!tenant) return null;
+            return {
+                tenantId: tenant.id,
+                name: tenant.name,
+                slug: tenant.slug,
+                status: tenant.status
+            };
+        })
+        .filter(Boolean);
+
+    return new AppError(
+        "This email belongs to several workspaces. Choose which workspace to open.",
+        409,
+        [{ code: "WORKSPACE_AMBIGUOUS", workspaces }]
+    );
+}
+
 /**
  * Find the user behind a login attempt.
  *
@@ -945,10 +977,7 @@ async function resolveLoginUser({
             };
         }
         if (tenantUsers.length > 1) {
-            throw new AppError(
-                "This email belongs to several workspaces. Sign in from your workspace URL.",
-                409
-            );
+            throw await buildAmbiguousWorkspaceError(tenantUsers);
         }
     }
 
@@ -957,10 +986,7 @@ async function resolveLoginUser({
     }
 
     if (tenantUsers.length > 1) {
-        throw new AppError(
-            "This email belongs to several workspaces. Sign in from your workspace URL.",
-            409
-        );
+        throw await buildAmbiguousWorkspaceError(tenantUsers);
     }
 
     if (tenantUsers.length === 1) {

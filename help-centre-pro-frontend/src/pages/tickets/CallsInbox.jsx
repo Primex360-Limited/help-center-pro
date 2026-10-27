@@ -55,10 +55,13 @@ import {
   formatDuration,
   formatRelative,
   initialsFromName,
+  isFreshTicket,
   previewText,
   PRIORITY_OPTIONS,
+  sortTicketsNewestFirst,
   statusOptionsFor,
   statusTone,
+  ticketActivityAt,
   unwrapThread,
 } from "./channelUtils.js";
 import "../../styles/channels.css";
@@ -89,7 +92,9 @@ export default function CallsInbox() {
   const [banner, setBanner] = useState(location.state?.notice || "");
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [dialTo, setDialTo] = useState("");
+  const [dialTo, setDialTo] = useState(() =>
+    String(params.get("dial") || "").trim()
+  );
   const [dialRegion, setDialRegion] = useState("NG");
   const [placing, setPlacing] = useState(false);
   const [recordingBlobUrl, setRecordingBlobUrl] = useState("");
@@ -110,11 +115,7 @@ export default function CallsInbox() {
         page: 1,
         limit: 100,
       });
-      const rows = (result?.data?.tickets || []).sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt) -
-          new Date(a.updatedAt || a.createdAt)
-      );
+      const rows = sortTicketsNewestFirst(result?.data?.tickets || []);
       setTickets(rows);
     } catch (err) {
       setListError(err.message || "Unable to load call tickets");
@@ -176,21 +177,23 @@ export default function CallsInbox() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return tickets;
-    return tickets.filter((ticket) => {
-      const hay = [
-        ticket.ticketId,
-        ticket.title,
-        ticket.description,
-        ticket.customer?.name,
-        ticket.customer?.email,
-        ticket.customer?.phone,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
+    const list = !q
+      ? tickets
+      : tickets.filter((ticket) => {
+          const hay = [
+            ticket.ticketId,
+            ticket.title,
+            ticket.description,
+            ticket.customer?.name,
+            ticket.customer?.email,
+            ticket.customer?.phone,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return hay.includes(q);
+        });
+    return sortTicketsNewestFirst(list);
   }, [tickets, searchQuery]);
 
   const loadDetail = useCallback(async (ticketId) => {
@@ -323,6 +326,11 @@ export default function CallsInbox() {
   }
 
   useEffect(() => {
+    const dialParam = String(params.get("dial") || "").trim();
+    if (dialParam) {
+      setDialTo(dialParam);
+      return;
+    }
     if (!selectedId) return;
     const ticket =
       tickets.find((t) => t.ticketId === selectedId || t.id === selectedId) ||
@@ -330,7 +338,7 @@ export default function CallsInbox() {
     if (ticket) {
       setDialTo(customerPhone(ticket) || "");
     }
-  }, [selectedId, tickets, ticketDetail]);
+  }, [selectedId, tickets, ticketDetail, params]);
 
   const browserCall = useBrowserCall({
     onEnded: ({ ticketId } = {}) => {
@@ -645,9 +653,12 @@ export default function CallsInbox() {
                           <p className="ch-thread-row__name">{name}</p>
                           <span className="ch-thread-row__time">
                             {formatRelative(
-                              ticket.updatedAt || ticket.createdAt
+                              ticketActivityAt(ticket) || ticket.createdAt
                             )}
                           </span>
+                          {isFreshTicket(ticket) ? (
+                            <span className="ch-fresh-pill">New</span>
+                          ) : null}
                         </div>
                         <p className="ch-thread-row__preview">
                           <Phone size={12} aria-hidden="true" color="#6941c6" />

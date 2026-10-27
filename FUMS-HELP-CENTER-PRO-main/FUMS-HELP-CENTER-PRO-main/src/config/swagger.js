@@ -5,11 +5,12 @@ const options = {
         openapi: "3.0.0",
         info: {
             title: "Help Centre Pro API",
-            version: "1.0.0",
+            version: "1.2.0",
             description:
-                "Help Centre Pro multi-tenant customer support platform API — authentication, RBAC, invitations, tickets, and service health.",
+                "Help Centre Pro multi-tenant customer support platform API — authentication, RBAC, invitations, tickets, workspace settings (API keys, webhooks, billing), email accounts, public widget integration, and service health.\n\n**Production app:** https://helpcentre-pro-web.onrender.com\n\n**Production API:** https://helpcentre-pro-admin.onrender.com\n\n**Integrator guide:** https://helpcentre-pro-web.onrender.com/docs/integration",
             contact: {
                 name: "Help Centre Pro",
+                url: "https://helpcentre-pro-web.onrender.com",
             },
         },
         tags: [
@@ -29,8 +30,19 @@ const options = {
                     "Platform-wide content (How it works video) — Super Admin write, all tenants read"
             },
             { name: "Tickets", description: "Universal inbox ticketing" },
+            { name: "Workspace", description: "Tenant workspace profile, VoIP, API keys, webhooks, billing" },
+            { name: "Email", description: "Outbound/inbound mailbox accounts (Gmail, Outlook, custom IMAP/SMTP)" },
+            {
+                name: "Public Widget",
+                description:
+                    "External integrator endpoints — authenticate with X-HCP-API-Key (pk_*) or Authorization Bearer (sk_*)"
+            },
         ],
         servers: [
+            {
+                url: "https://helpcentre-pro-admin.onrender.com/api/v1",
+                description: "Production (Render)",
+            },
             {
                 url: "http://localhost:4008/api/v1",
                 description: "Local development",
@@ -38,10 +50,6 @@ const options = {
             {
                 url: "http://localhost:4008",
                 description: "Local root (health probes)",
-            },
-            {
-                url: "https://helpcentre-pro-api.onrender.com/api/v1",
-                description: "Production",
             },
         ],
         components: {
@@ -60,6 +68,13 @@ const options = {
                     type: "apiKey",
                     in: "cookie",
                     name: "refreshToken"
+                },
+                hcpApiKey: {
+                    type: "apiKey",
+                    in: "header",
+                    name: "X-HCP-API-Key",
+                    description:
+                        "Public or secret workspace API key (pk_test_ / pk_live_ / sk_test_ / sk_live_)",
                 },
             },
             schemas: {

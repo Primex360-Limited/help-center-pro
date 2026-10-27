@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
-  Building2,
   CalendarDays,
   CheckCircle2,
   CreditCard,
@@ -12,7 +11,6 @@ import {
   Loader2,
   Mail,
   Phone,
-  RotateCcw,
   Save,
   ShieldCheck,
   Trash2,
@@ -27,7 +25,6 @@ import {
   updateWorkspaceProfile,
 } from "../../api/workspace.api.js";
 import PremiumSelect from "../../components/auth/PremiumSelect.jsx";
-import SettingsTabs from "../../components/workspace/SettingsTabs.jsx";
 import { Link } from "react-router-dom";
 import { TIMEZONES } from "../../constants/profileOptions.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -35,8 +32,8 @@ import "../../styles/app.css";
 import "../../styles/auth.css";
 import "../../styles/admin.css";
 import "../../styles/workspace.css";
+import "../../styles/settings-premium.css";
 
-/** Mirrors the backend `workspace.validation.js` limits. */
 const MAX_LOGO_BYTES = 300 * 1024;
 const MAX_LOGO_DATA_URL_LENGTH = 400000;
 const MIN_NAME_LENGTH = 2;
@@ -57,6 +54,13 @@ const STATUS_LABELS = {
   suspended: "Suspended",
   inactive: "Inactive",
 };
+
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+];
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -97,12 +101,21 @@ function formatDate(value) {
   });
 }
 
+function readDefaultPriority(profile) {
+  return (
+    profile?.defaultTicketPriority ||
+    profile?.settings?.defaultTicketPriority ||
+    "medium"
+  );
+}
+
 function snapshotOf(profile) {
   return {
     name: profile?.name || "",
     timezone: profile?.timezone || "",
     logoUrl: profile?.logoUrl || "",
     supportEmail: profile?.supportEmail || "",
+    defaultTicketPriority: readDefaultPriority(profile),
   };
 }
 
@@ -116,11 +129,13 @@ export default function WorkspaceProfile() {
     timezone: "",
     logoUrl: "",
     supportEmail: "",
+    defaultTicketPriority: "medium",
   });
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
+  const [defaultTicketPriority, setDefaultTicketPriority] = useState("medium");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -147,6 +162,7 @@ export default function WorkspaceProfile() {
       setTimezone(snap.timezone);
       setLogoUrl(snap.logoUrl);
       setSupportEmail(snap.supportEmail);
+      setDefaultTicketPriority(snap.defaultTicketPriority);
       setCallingMode(next?.calling?.mode || "hcp");
       setHcpPaused(Boolean(next?.calling?.hcpPaused));
       setOwnNumber(next?.calling?.ownNumber || "");
@@ -178,8 +194,9 @@ export default function WorkspaceProfile() {
       name.trim() !== saved.name ||
       timezone.trim() !== saved.timezone ||
       logoUrl.trim() !== saved.logoUrl ||
-      supportEmail.trim() !== saved.supportEmail,
-    [name, timezone, logoUrl, supportEmail, saved]
+      supportEmail.trim() !== saved.supportEmail ||
+      defaultTicketPriority !== saved.defaultTicketPriority,
+    [name, timezone, logoUrl, supportEmail, defaultTicketPriority, saved]
   );
 
   const initials = initialsFrom(name || profile?.name);
@@ -191,6 +208,7 @@ export default function WorkspaceProfile() {
     setTimezone(saved.timezone);
     setLogoUrl(saved.logoUrl);
     setSupportEmail(saved.supportEmail);
+    setDefaultTicketPriority(saved.defaultTicketPriority);
     setLogoError("");
     setBanner("");
     setError("");
@@ -326,6 +344,13 @@ export default function WorkspaceProfile() {
     if (supportEmail.trim() !== saved.supportEmail) {
       payload.supportEmail = supportEmail.trim();
     }
+    if (defaultTicketPriority !== saved.defaultTicketPriority) {
+      payload.defaultTicketPriority = defaultTicketPriority;
+      payload.settings = {
+        ...(profile?.settings || {}),
+        defaultTicketPriority,
+      };
+    }
 
     if (!Object.keys(payload).length) {
       setBanner("Everything is already up to date.");
@@ -339,14 +364,75 @@ export default function WorkspaceProfile() {
       if (next) {
         setProfile(next);
         const snap = snapshotOf(next);
+        // If backend ignored priority, keep local choice in the form snapshot.
+        if (
+          defaultTicketPriority !== saved.defaultTicketPriority &&
+          readDefaultPriority(next) === saved.defaultTicketPriority
+        ) {
+          snap.defaultTicketPriority = defaultTicketPriority;
+        }
         setSaved(snap);
         setName(snap.name);
         setTimezone(snap.timezone);
         setLogoUrl(snap.logoUrl);
         setSupportEmail(snap.supportEmail);
+        setDefaultTicketPriority(snap.defaultTicketPriority);
+      } else {
+        setSaved((prev) => ({
+          ...prev,
+          name: trimmedName || prev.name,
+          timezone: trimmedTimezone || prev.timezone,
+          supportEmail: supportEmail.trim(),
+          defaultTicketPriority,
+          logoUrl: trimmedLogo,
+        }));
       }
       setBanner("Workspace settings saved.");
     } catch (err) {
+      // Retry without settings fields if backend rejects unknown keys.
+      const status = err?.status;
+      const msg = String(err?.message || "");
+      const looksLikeUnknownField =
+        status === 400 &&
+        /defaultTicketPriority|settings|validation|unknown|not allowed/i.test(msg);
+
+      if (looksLikeUnknownField && (payload.defaultTicketPriority || payload.settings)) {
+        const fallback = { ...payload };
+        delete fallback.defaultTicketPriority;
+        delete fallback.settings;
+        if (!Object.keys(fallback).length) {
+          setSaved((prev) => ({ ...prev, defaultTicketPriority }));
+          setBanner(
+            "Profile fields are up to date. Default priority is saved locally until the API accepts it."
+          );
+          setSaving(false);
+          return;
+        }
+        try {
+          const res2 = await updateWorkspaceProfile(fallback);
+          const next = res2?.data?.workspace || null;
+          if (next) {
+            setProfile(next);
+            const snap = snapshotOf(next);
+            snap.defaultTicketPriority = defaultTicketPriority;
+            setSaved(snap);
+            setName(snap.name);
+            setTimezone(snap.timezone);
+            setLogoUrl(snap.logoUrl);
+            setSupportEmail(snap.supportEmail);
+            setDefaultTicketPriority(defaultTicketPriority);
+          }
+          setBanner(
+            "Workspace settings saved. Default priority kept locally until the API accepts it."
+          );
+          setSaving(false);
+          return;
+        } catch (err2) {
+          setError(err2.message || "Failed to save workspace settings");
+          setSaving(false);
+          return;
+        }
+      }
       setError(err.message || "Failed to save workspace settings");
     } finally {
       setSaving(false);
@@ -355,124 +441,71 @@ export default function WorkspaceProfile() {
 
   if (loading) {
     return (
-      <div className="workspace-page">
-        <div className="admin-page-header">
-          <div>
-            <h1 className="admin-page-title" style={{ marginBottom: 4 }}>
-              Workspace Settings
-            </h1>
-            <p className="admin-kpi__meta">Loading your organisation profile...</p>
-          </div>
-        </div>
-        <div className="admin-card workspace-card workspace-card--loading" role="status">
-          <Loader2 className="workspace-spin" size={20} aria-hidden="true" />
-          Loading workspace settings...
-        </div>
+      <div className="settings-card" role="status">
+        <Loader2 className="settings-spin" size={18} /> Loading workspace settings…
       </div>
     );
   }
 
   return (
-    <div className="workspace-page">
-      <SettingsTabs />
-      <div className="admin-page-header">
-        <div>
-          <h1 className="admin-page-title" style={{ marginBottom: 4 }}>
-            Workspace Settings
-          </h1>
-          <p className="admin-kpi__meta">
-            Manage your organisation profile, brand logo and default timezone
-          </p>
-        </div>
-        <div className="admin-page-actions">
-          <button
-            type="button"
-            className="admin-btn admin-btn--ghost"
-            onClick={handleDiscard}
-            disabled={!dirty || saving}
-          >
-            <RotateCcw size={16} />
-            Discard
-          </button>
-          <button
-            type="button"
-            className="admin-btn admin-btn--primary"
-            onClick={handleSubmit}
-            disabled={saving || !dirty || Boolean(nameError) || !canWrite}
-            title={
-              canWrite
-                ? "Save organisation profile changes"
-                : "You need settings write access to save changes"
-            }
-          >
-            {saving ? (
-              <Loader2 className="workspace-spin" size={16} aria-hidden="true" />
-            ) : (
-              <Save size={16} />
-            )}
-            {saving ? "Saving..." : "Save changes"}
-          </button>
-        </div>
-      </div>
-
+    <div className="settings-stack">
       {banner ? (
-        <p className="workspace-banner" role="status">
+        <p className="settings-banner" role="status">
           <CheckCircle2 size={16} aria-hidden="true" />
           {banner}
         </p>
       ) : null}
 
       {error ? (
-        <p className="workspace-alert" role="alert">
+        <p className="settings-alert" role="alert">
           <AlertCircle size={16} aria-hidden="true" />
           {error}
         </p>
       ) : null}
 
       {!canWrite ? (
-        <p className="workspace-note" role="note">
+        <p className="settings-note" role="note">
           <ShieldCheck size={16} aria-hidden="true" />
           You can review these settings, but only a tenant admin can change them.
         </p>
       ) : null}
 
-
-      <div className="workspace-grid">
-        <section className="admin-card workspace-card">
-          <div className="admin-card__header">
-            <h2>Organisation profile</h2>
-            <p>Shown to your team and on outbound support emails.</p>
+      <section className="settings-card settings-card--form">
+        <form className="settings-form" onSubmit={handleSubmit} noValidate>
+          <div className="settings-field">
+            <label htmlFor="workspace-name">Workspace name</label>
+            <input
+              id="workspace-name"
+              type="text"
+              value={name}
+              maxLength={MAX_NAME_LENGTH}
+              placeholder="Help Center pro"
+              disabled={!canWrite}
+              onChange={(event) => setName(event.target.value)}
+            />
+            {nameError ? (
+              <p className="settings-field__error">{nameError}</p>
+            ) : null}
           </div>
 
-          <form className="workspace-form" onSubmit={handleSubmit} noValidate>
-            <div className="workspace-field">
-              <label htmlFor="workspace-name">Workspace name</label>
-              <div
-                className={`workspace-input${nameError ? " has-error" : ""}`}
-              >
-                <Building2 size={16} aria-hidden="true" />
-                <input
-                  id="workspace-name"
-                  type="text"
-                  value={name}
-                  maxLength={MAX_NAME_LENGTH}
-                  placeholder="Acme Support"
-                  disabled={!canWrite}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </div>
-              {nameError ? (
-                <p className="workspace-field__error">{nameError}</p>
-              ) : (
-                <p className="workspace-field__hint">
-                  {MIN_NAME_LENGTH}-{MAX_NAME_LENGTH} characters. Team members
-                  see this name across the workspace.
-                </p>
-              )}
-            </div>
+          <div className="settings-field">
+            <label htmlFor="ws-support-email">Support email</label>
+            <input
+              id="ws-support-email"
+              type="email"
+              value={supportEmail}
+              disabled={!canWrite}
+              placeholder="support@helpcenterpro.com"
+              onChange={(e) => {
+                setSupportEmail(e.target.value);
+                setBanner("");
+              }}
+            />
+          </div>
 
-            <div className="workspace-field">
-              <label htmlFor="workspace-timezone">Default timezone</label>
+          <div className="settings-form__row">
+            <div className="settings-field">
+              <label htmlFor="workspace-timezone">Timezone</label>
               <PremiumSelect
                 id="workspace-timezone"
                 value={timezone}
@@ -481,405 +514,393 @@ export default function WorkspaceProfile() {
                 placeholder="Select timezone"
                 disabled={!canWrite}
               />
-              <p className="workspace-field__hint">
-                Used for SLA timers, reporting windows and invitation expiry
-                notices.
-              </p>
             </div>
-          </form>
-        </section>
 
-        <section className="admin-card workspace-card">
-          <div className="admin-card__header">
-            <h2>Workspace logo</h2>
-            <p>PNG, JPG, WEBP, GIF or SVG up to 300KB.</p>
+            <div className="settings-field">
+              <label htmlFor="ws-default-priority">Default ticket priority</label>
+              <PremiumSelect
+                id="ws-default-priority"
+                value={defaultTicketPriority}
+                onChange={setDefaultTicketPriority}
+                options={PRIORITY_OPTIONS}
+                placeholder="Medium"
+                disabled={!canWrite}
+              />
+            </div>
           </div>
 
-          <div className="workspace-logo">
-            <div className="workspace-logo__preview" aria-hidden="true">
-              {logoUrl ? (
-                <img src={logoUrl} alt="" />
-              ) : (
-                <span>{initials}</span>
-              )}
+          <div className="settings-form__actions">
+            <button
+              type="submit"
+              className="settings-btn settings-btn--primary"
+              disabled={saving || !dirty || Boolean(nameError) || !canWrite}
+            >
+              {saving ? (
+                <Loader2 className="settings-spin" size={16} aria-hidden="true" />
+              ) : null}
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <details className="settings-advanced">
+        <summary className="settings-advanced__summary">
+          Advanced — logo, channels, calling &amp; workspace record
+        </summary>
+
+        <div className="workspace-grid" style={{ marginTop: 16 }}>
+          <section className="admin-card workspace-card">
+            <div className="admin-card__header">
+              <h2>Workspace logo</h2>
+              <p>PNG, JPG, WEBP, GIF or SVG up to 300KB.</p>
             </div>
 
-            <div className="workspace-logo__body">
-              <div className="workspace-logo__actions">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  className="workspace-logo__file"
-                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                  onChange={handleLogoPick}
-                  disabled={!canWrite}
-                  tabIndex={-1}
-                />
+            <div className="workspace-logo">
+              <div className="workspace-logo__preview" aria-hidden="true">
+                {logoUrl ? <img src={logoUrl} alt="" /> : <span>{initials}</span>}
+              </div>
+
+              <div className="workspace-logo__body">
+                <div className="workspace-logo__actions">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="workspace-logo__file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    onChange={handleLogoPick}
+                    disabled={!canWrite}
+                    tabIndex={-1}
+                  />
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--ghost"
+                    onClick={() => fileRef.current?.click()}
+                    disabled={!canWrite}
+                  >
+                    <Upload size={16} />
+                    Upload image
+                  </button>
+                  {logoUrl ? (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--ghost workspace-logo__remove"
+                      onClick={() => {
+                        setLogoUrl("");
+                        setLogoError("");
+                        setBanner("");
+                      }}
+                      disabled={!canWrite}
+                    >
+                      <Trash2 size={16} />
+                      Remove logo
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="workspace-logo__url">
+                  <Link2 size={16} aria-hidden="true" />
+                  <input
+                    type="url"
+                    value={logoUrlDraft}
+                    placeholder="https://cdn.example.com/logo.svg"
+                    disabled={!canWrite || isDataLogo}
+                    onChange={(event) => {
+                      setLogoError("");
+                      setBanner("");
+                      setLogoUrl(event.target.value);
+                    }}
+                  />
+                </div>
+                {logoError ? (
+                  <p className="workspace-field__error">{logoError}</p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <section className="admin-card workspace-card">
+            <div className="admin-card__header">
+              <h2>Channels</h2>
+              <p>Connect email and API keys under Configuration / API Token.</p>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Link
+                to="/workspace/settings/configuration"
+                className="admin-btn admin-btn--ghost"
+                style={{ textDecoration: "none" }}
+              >
+                <Mail size={14} />
+                Configuration
+              </Link>
+              <Link
+                to="/workspace/settings/api-tokens"
+                className="admin-btn admin-btn--ghost"
+                style={{ textDecoration: "none" }}
+              >
+                <KeyRound size={14} />
+                API tokens
+              </Link>
+            </div>
+          </section>
+        </div>
+
+        <section className="admin-card workspace-card" style={{ marginTop: 18 }}>
+          <div className="admin-card__header">
+            <h2>Calling line</h2>
+            <p>
+              HelpCentre Pro provides a number customers see when agents call.
+            </p>
+          </div>
+
+          <div className="workspace-field ws-calling-premium">
+            <label>
+              <Phone size={14} aria-hidden="true" /> Calling line
+              <span className="ws-calling-badge">
+                {callingMode === "own"
+                  ? "Your number active"
+                  : hcpPaused
+                    ? "HCP number paused"
+                    : "HelpCentre Pro number"}
+              </span>
+            </label>
+            {(profile?.callNumbers || []).length ? (
+              <ul className="ws-call-numbers">
+                {profile.callNumbers.map((num) => (
+                  <li key={num.id || num.e164}>
+                    <strong>{num.e164}</strong>
+                    {num.label ? ` — ${num.label}` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="workspace-field__hint">
+                No HCP number yet — generate one below.
+              </p>
+            )}
+            {canWrite ? (
+              <div className="ws-calling-actions">
                 <button
                   type="button"
                   className="admin-btn admin-btn--ghost"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={!canWrite}
+                  onClick={handleGenerateNumber}
+                  disabled={callingBusy}
                 >
-                  <Upload size={16} />
-                  Upload image
+                  {callingBusy ? (
+                    <Loader2 size={14} className="ws-spin" />
+                  ) : (
+                    <Phone size={14} />
+                  )}
+                  Generate HCP number
                 </button>
-                {logoUrl ? (
+                {(profile?.callNumbers || []).length ? (
                   <button
                     type="button"
-                    className="admin-btn admin-btn--ghost workspace-logo__remove"
-                    onClick={() => {
-                      setLogoUrl("");
-                      setLogoError("");
-                      setBanner("");
-                    }}
-                    disabled={!canWrite}
+                    className="admin-btn admin-btn--ghost"
+                    disabled={callingBusy}
+                    onClick={() =>
+                      handleCallingSave(
+                        {
+                          mode: hcpPaused ? "hcp" : callingMode,
+                          hcpPaused: !hcpPaused,
+                        },
+                        hcpPaused
+                          ? "HelpCentre Pro number resumed."
+                          : "HelpCentre Pro number paused."
+                      )
+                    }
                   >
-                    <Trash2 size={16} />
-                    Remove logo
+                    {hcpPaused ? "Resume HCP number" : "Pause HCP number"}
                   </button>
                 ) : null}
               </div>
-
-              <div className="workspace-logo__url">
-                <Link2 size={16} aria-hidden="true" />
+            ) : null}
+            <div className="ws-calling-modes" role="radiogroup" aria-label="Calling line">
+              <label className="ws-calling-mode">
                 <input
-                  type="url"
-                  value={logoUrlDraft}
-                  placeholder="https://cdn.example.com/logo.svg"
-                  disabled={!canWrite || isDataLogo}
-                  onChange={(event) => {
-                    setLogoError("");
-                    setBanner("");
-                    setLogoUrl(event.target.value);
-                  }}
+                  type="radio"
+                  name="calling-mode"
+                  checked={callingMode === "hcp"}
+                  onChange={() => setCallingMode("hcp")}
+                  disabled={!canWrite}
+                />
+                <span>
+                  <strong>Use HelpCentre Pro number</strong>
+                  <small>Customers see your generated HCP line.</small>
+                </span>
+              </label>
+              <label className="ws-calling-mode">
+                <input
+                  type="radio"
+                  name="calling-mode"
+                  checked={callingMode === "own"}
+                  onChange={() => setCallingMode("own")}
+                  disabled={!canWrite}
+                />
+                <span>
+                  <strong>Use my existing number</strong>
+                  <small>Pause HCP and call as your own business line.</small>
+                </span>
+              </label>
+            </div>
+            {callingMode === "own" ? (
+              <div className="ws-calling-own">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="e.g. +234 803 000 0000"
+                  value={ownNumber}
+                  onChange={(e) => setOwnNumber(e.target.value)}
+                  disabled={!canWrite || callingBusy}
+                  aria-label="Your existing business number"
                 />
               </div>
-              <p className="workspace-field__hint">
-                {isDataLogo
-                  ? "An uploaded image is in use. Remove it to link a hosted https logo instead."
-                  : "Or paste a public https image URL. Uploading a file replaces the URL."}
-              </p>
-
-              {logoError ? (
-                <p className="workspace-field__error">{logoError}</p>
-              ) : null}
-            </div>
-          </div>
-        </section>
-      </div>
-
-
-      <section className="admin-card workspace-card">
-        <div className="admin-card__header">
-          <h2>Channels &amp; integrations</h2>
-          <p>
-            Connect your mailbox for outbound email. Help Centre Pro provisions
-            call numbers. Generate an API key for your in-app chat widget so
-            customer details sync into tickets.
-          </p>
-        </div>
-
-        <div className="workspace-field" style={{ marginBottom: 18 }}>
-          <label htmlFor="ws-support-email">
-            <Mail size={14} aria-hidden="true" /> Connected support email
-          </label>
-          <input
-            id="ws-support-email"
-            type="email"
-            value={supportEmail}
-            disabled={!canWrite}
-            placeholder="support@yourcompany.com"
-            onChange={(e) => {
-              setSupportEmail(e.target.value);
-              setBanner("");
-            }}
-          />
-          <p className="workspace-field__hint">
-            Connect this mailbox in Settings → Email (app password or OAuth)
-            and agent replies are sent directly from it — delivered mail is
-            filed in Sent, and incoming customer mail syncs into tickets
-            automatically. Agents can override the sender in My profile.
-          </p>
-          <p className="workspace-field__hint ws-effective-line">
-            <strong>Effective sender:</strong>{" "}
-            {supportEmail.trim()
-              ? `${supportEmail.trim()} (your workspace address)`
-              : "HelpCentre Pro platform mailbox"}
-            {" · "}Agent connected mailbox in Settings → Email takes priority.
-          </p>
-          <Link
-            to="/workspace/email-settings"
-            className="admin-btn admin-btn--ghost"
-            style={{ marginTop: 10, display: "inline-flex", textDecoration: "none" }}
-          >
-            <Mail size={14} />
-            Manage Email Accounts — connect mailbox &amp; sync
-          </Link>
-        </div>
-
-        <div className="workspace-field ws-calling-premium" style={{ marginBottom: 18 }}>
-          <label>
-            <Phone size={14} aria-hidden="true" /> Calling line
-            <span className="ws-calling-badge">
-              {callingMode === "own"
-                ? "Your number active"
-                : hcpPaused
-                  ? "HCP number paused"
-                  : "HelpCentre Pro number"}
-            </span>
-          </label>
-          <p className="workspace-field__hint">
-            HelpCentre Pro provides a number customers see when agents call.
-            Each agent can also set a personal callback number under{" "}
-            <strong>My profile</strong>. Pause the HCP number anytime and use
-            your existing business number instead.
-          </p>
-          {(profile?.callNumbers || []).length ? (
-            <ul className="ws-call-numbers">
-              {profile.callNumbers.map((num) => (
-                <li key={num.id || num.e164}>
-                  <strong>{num.e164}</strong>
-                  {num.label ? ` — ${num.label}` : ""}
-                  {callingMode === "hcp" && !hcpPaused ? " · Active" : ""}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="workspace-field__hint">
-              No HCP number yet — generate one instantly below.
-            </p>
-          )}
-          {canWrite ? (
-            <div className="ws-calling-actions">
+            ) : null}
+            {canWrite ? (
               <button
                 type="button"
                 className="admin-btn admin-btn--ghost"
-                onClick={handleGenerateNumber}
-                disabled={callingBusy}
+                style={{ marginTop: 10 }}
+                disabled={
+                  callingBusy || (callingMode === "own" && !ownNumber.trim())
+                }
+                onClick={() =>
+                  handleCallingSave(
+                    {
+                      mode: callingMode,
+                      hcpPaused: callingMode === "own" ? true : hcpPaused,
+                      ownNumber: ownNumber.trim() || null,
+                    },
+                    callingMode === "own"
+                      ? "Your existing number is now the calling line."
+                      : "HelpCentre Pro number is now the calling line."
+                  )
+                }
               >
                 {callingBusy ? (
                   <Loader2 size={14} className="ws-spin" />
                 ) : (
-                  <Phone size={14} />
+                  <Save size={14} />
                 )}
-                Generate HCP number
+                Save calling line
               </button>
-              {(profile?.callNumbers || []).length ? (
+            ) : null}
+
+            <div className="workspace-field" style={{ marginTop: 16 }}>
+              <label>
+                <KeyRound size={14} aria-hidden="true" /> Legacy chat widget API key
+              </label>
+              <p className="workspace-field__hint">
+                Prefer Settings → API Token for test/live keys.{" "}
+                {profile?.widgetApiKeyPrefix
+                  ? `Active key prefix: ${profile.widgetApiKeyPrefix}`
+                  : "No legacy key yet."}
+              </p>
+              {revealedApiKey ? (
+                <p
+                  className="agents-banner"
+                  role="status"
+                  style={{ wordBreak: "break-all", marginTop: 8 }}
+                >
+                  {revealedApiKey}
+                </p>
+              ) : null}
+              {canWrite ? (
                 <button
                   type="button"
                   className="admin-btn admin-btn--ghost"
-                  disabled={callingBusy}
-                  onClick={() =>
-                    handleCallingSave(
-                      {
-                        mode: hcpPaused ? "hcp" : callingMode,
-                        hcpPaused: !hcpPaused,
-                      },
-                      hcpPaused
-                        ? "HelpCentre Pro number resumed."
-                        : "HelpCentre Pro number paused."
-                    )
-                  }
+                  style={{ marginTop: 10 }}
+                  disabled={apiKeyBusy}
+                  onClick={handleGenerateApiKey}
                 >
-                  {hcpPaused ? "Resume HCP number" : "Pause HCP number"}
+                  <KeyRound size={16} />
+                  {apiKeyBusy ? "Generating…" : "Generate API key"}
                 </button>
               ) : null}
             </div>
-          ) : null}
-          <div className="ws-calling-modes" role="radiogroup" aria-label="Calling line">
-            <label className="ws-calling-mode">
-              <input
-                type="radio"
-                name="calling-mode"
-                checked={callingMode === "hcp"}
-                onChange={() => setCallingMode("hcp")}
-                disabled={!canWrite}
-              />
-              <span>
-                <strong>Use HelpCentre Pro number</strong>
-                <small>Customers see your generated HCP line.</small>
+          </div>
+        </section>
+
+        <section
+          className="admin-card workspace-card workspace-card--meta"
+          style={{ marginTop: 18 }}
+        >
+          <div className="admin-card__header">
+            <h2>Workspace record</h2>
+            <p>Managed by Help Center Pro.</p>
+          </div>
+
+          <div className="workspace-meta">
+            <div className="workspace-meta__item">
+              <span className="workspace-meta__icon" aria-hidden="true">
+                <Hash size={16} />
               </span>
-            </label>
-            <label className="ws-calling-mode">
-              <input
-                type="radio"
-                name="calling-mode"
-                checked={callingMode === "own"}
-                onChange={() => setCallingMode("own")}
-                disabled={!canWrite}
-              />
-              <span>
-                <strong>Use my existing number</strong>
-                <small>Pause HCP and call as your own business line.</small>
+              <div>
+                <span>Workspace slug</span>
+                <strong>{profile?.slug || "—"}</strong>
+              </div>
+            </div>
+
+            <div className="workspace-meta__item">
+              <span className="workspace-meta__icon" aria-hidden="true">
+                <Globe2 size={16} />
               </span>
-            </label>
-          </div>
-          {callingMode === "own" ? (
-            <div className="ws-calling-own">
-              <input
-                type="tel"
-                inputMode="tel"
-                placeholder="e.g. +234 803 000 0000"
-                value={ownNumber}
-                onChange={(e) => setOwnNumber(e.target.value)}
-                disabled={!canWrite || callingBusy}
-                aria-label="Your existing business number"
-              />
-              <p className="workspace-field__hint">
-                Customers see this number. Prefer the Default Caller ID on your
-                active VoIP/SIP provider, or enter your own verified SIP/PSTN line here.
-              </p>
+              <div>
+                <span>Primary domain</span>
+                <strong>{profile?.primaryDomain || "Not connected"}</strong>
+              </div>
             </div>
-          ) : null}
-          {canWrite ? (
-            <button
-              type="button"
-              className="admin-btn admin-btn--ghost"
-              style={{ marginTop: 10 }}
-              disabled={
-                callingBusy || (callingMode === "own" && !ownNumber.trim())
-              }
-              onClick={() =>
-                handleCallingSave(
-                  {
-                    mode: callingMode,
-                    hcpPaused: callingMode === "own" ? true : hcpPaused,
-                    ownNumber: ownNumber.trim() || null,
-                  },
-                  callingMode === "own"
-                    ? "Your existing number is now the calling line."
-                    : "HelpCentre Pro number is now the calling line."
-                )
-              }
-            >
-              {callingBusy ? (
-                <Loader2 size={14} className="ws-spin" />
-              ) : (
-                <Save size={14} />
-              )}
-              Save calling line
-            </button>
-          ) : null}
-        </div>
 
-        <div className="workspace-field">
-          <label>
-            <KeyRound size={14} aria-hidden="true" /> Chat widget API key
-          </label>
-          <p className="workspace-field__hint">
-            {profile?.widgetApiKeyPrefix
-              ? `Active key prefix: ${profile.widgetApiKeyPrefix}`
-              : "No key yet. Generate one to embed in your app chat."}
-          </p>
-          {revealedApiKey ? (
-            <p
-              className="agents-banner"
-              role="status"
-              style={{ wordBreak: "break-all", marginTop: 8 }}
-            >
-              {revealedApiKey}
-            </p>
-          ) : null}
-          {canWrite ? (
-            <button
-              type="button"
-              className="admin-btn admin-btn--ghost"
-              style={{ marginTop: 10 }}
-              disabled={apiKeyBusy}
-              onClick={handleGenerateApiKey}
-            >
-              <KeyRound size={16} />
-              {apiKeyBusy ? "Generating…" : "Generate API key"}
-            </button>
-          ) : null}
-        </div>
-      </section>
+            <div className="workspace-meta__item">
+              <span className="workspace-meta__icon" aria-hidden="true">
+                <ShieldCheck size={16} />
+              </span>
+              <div>
+                <span>Status</span>
+                <strong>
+                  {STATUS_LABELS[String(profile?.status || "").toLowerCase()] ||
+                    profile?.status ||
+                    "—"}
+                </strong>
+              </div>
+            </div>
 
-      <section className="admin-card workspace-card workspace-card--meta">
-        <div className="admin-card__header">
-          <h2>Workspace record</h2>
-          <p>Managed by Help Center Pro. Contact support to change your plan.</p>
-        </div>
+            <div className="workspace-meta__item">
+              <span className="workspace-meta__icon" aria-hidden="true">
+                <CreditCard size={16} />
+              </span>
+              <div>
+                <span>Plan</span>
+                <strong>{profile?.plan || "—"}</strong>
+              </div>
+            </div>
 
-        <div className="workspace-meta">
-          <div className="workspace-meta__item">
-            <span className="workspace-meta__icon" aria-hidden="true">
-              <Hash size={16} />
-            </span>
-            <div>
-              <span>Workspace slug</span>
-              <strong>{profile?.slug || "—"}</strong>
+            <div className="workspace-meta__item">
+              <span className="workspace-meta__icon" aria-hidden="true">
+                <Users size={16} />
+              </span>
+              <div>
+                <span>Seat limit</span>
+                <strong>
+                  {profile?.seatLimit === null || profile?.seatLimit === undefined
+                    ? "Unlimited"
+                    : profile.seatLimit}
+                </strong>
+              </div>
+            </div>
+
+            <div className="workspace-meta__item">
+              <span className="workspace-meta__icon" aria-hidden="true">
+                <CalendarDays size={16} />
+              </span>
+              <div>
+                <span>Workspace created</span>
+                <strong>{formatDate(profile?.createdAt)}</strong>
+              </div>
             </div>
           </div>
-
-          <div className="workspace-meta__item">
-            <span className="workspace-meta__icon" aria-hidden="true">
-              <Globe2 size={16} />
-            </span>
-            <div>
-              <span>Primary domain</span>
-              <strong>{profile?.primaryDomain || "Not connected"}</strong>
-            </div>
-          </div>
-
-          <div className="workspace-meta__item">
-            <span className="workspace-meta__icon" aria-hidden="true">
-              <ShieldCheck size={16} />
-            </span>
-            <div>
-              <span>Status</span>
-              <strong>
-                {STATUS_LABELS[String(profile?.status || "").toLowerCase()] ||
-                  profile?.status ||
-                  "—"}
-              </strong>
-            </div>
-          </div>
-
-          <div className="workspace-meta__item">
-            <span className="workspace-meta__icon" aria-hidden="true">
-              <CreditCard size={16} />
-            </span>
-            <div>
-              <span>Plan</span>
-              <strong>{profile?.plan || "—"}</strong>
-            </div>
-          </div>
-
-          <div className="workspace-meta__item">
-            <span className="workspace-meta__icon" aria-hidden="true">
-              <Users size={16} />
-            </span>
-            <div>
-              <span>Seat limit</span>
-              <strong>
-                {profile?.seatLimit === null || profile?.seatLimit === undefined
-                  ? "Unlimited"
-                  : profile.seatLimit}
-              </strong>
-            </div>
-          </div>
-
-          <div className="workspace-meta__item">
-            <span className="workspace-meta__icon" aria-hidden="true">
-              <CalendarDays size={16} />
-            </span>
-            <div>
-              <span>Workspace created</span>
-              <strong>{formatDate(profile?.createdAt)}</strong>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="workspace-footer">
-        <p>
-          Invitations from the Agents screen stay active for 48 hours and can be
-          used once. Timezone changes apply to new activity only.
-        </p>
-      </footer>
+        </section>
+      </details>
     </div>
   );
 }
-

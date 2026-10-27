@@ -15,23 +15,44 @@ function preferIpv4Loopback(url) {
   );
 }
 
+function isLoopbackApi(url) {
+  return /^(https?:\/\/)?(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(
+    String(url || "").replace(/\/$/, "")
+  );
+}
+
 function resolveApiUrl() {
   const fromEnv = preferIpv4Loopback(trimSlash(import.meta.env.VITE_API_URL));
-  if (fromEnv) return fromEnv;
 
   if (typeof window !== "undefined") {
     const host = window.location.hostname || "";
-    if (host.endsWith(".onrender.com")) {
-      return "https://helpcentre-pro-api.onrender.com";
+
+    // Hosted frontends must never call a machine-local API URL baked into .env.
+    if (
+      host.endsWith(".onrender.com") ||
+      host.endsWith(".vercel.app")
+    ) {
+      if (!fromEnv || isLoopbackApi(fromEnv)) {
+        return "https://helpcentre-pro-admin.onrender.com";
+      }
+      return fromEnv;
     }
   }
 
+  // Local Vite: always use the same-origin `/api` proxy. Calling
+  // http://127.0.0.1:4008 from http://localhost:5173 (or a LAN IP) drops
+  // httpOnly cookies (cross-site) and surfaces "Authorization token is required".
+  if (import.meta.env.DEV) {
+    if (!fromEnv || isLoopbackApi(fromEnv)) return "";
+  }
+
+  if (fromEnv) return fromEnv;
   return "http://127.0.0.1:4008";
 }
 
 export const API_URL = resolveApiUrl();
 export const APP_NAME = import.meta.env.VITE_APP_NAME || "HelpCentre Pro";
-export const API_BASE = `${API_URL}/api/v1`;
+export const API_BASE = API_URL ? `${API_URL}/api/v1` : "/api/v1";
 
 /** `combined` (local), `admin` (platform host), or `tenant` (workspace host). */
 export const PORTAL_MODE = (

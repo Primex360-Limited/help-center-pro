@@ -16,7 +16,7 @@ export const MODULE_ACCESS = Object.freeze({
   reports: ["report:read"],
   templates: ["template:read"],
   automations: ["ticket:transfer", "ticket:assign", "ticket:supervise"],
-  billing: [], // not shipped — never shown
+  billing: ["settings:read", "settings:write"],
   userManagement: [
     "role:read",
     "role:manage",
@@ -28,4 +28,4 @@ export const MODULE_ACCESS = Object.freeze({
 });
 
 /** Nav items that are product features but not yet available. */
-export const COMING_SOON_MODULES = Object.freeze(new Set(["analytics", "reports", "billing"]));
+export const COMING_SOON_MODULES = Object.freeze(new Set(["analytics", "reports"]));

@@ -60,3 +60,37 @@ export const updateWorkspaceProfileSchema = z
     .refine((data) => Object.keys(data).length > 0, {
         message: "Provide at least one field to update"
     });
+
+export const apiKeyModeParamSchema = z.object({
+    mode: z.enum(["test", "live"])
+});
+
+export const saveWebhooksSchema = z.object({
+    endpointUrl: z
+        .union([
+            z.literal(""),
+            z.string().trim().url("endpointUrl must be a valid URL")
+        ])
+        .optional(),
+    signingSecret: z
+        .union([z.literal(""), z.string().trim().min(8).max(128)])
+        .optional(),
+    generateSecret: z.boolean().optional(),
+    events: z
+        .object({
+            "ticket.created": z.boolean().optional(),
+            "ticket.updated": z.boolean().optional(),
+            "ticket.resolved": z.boolean().optional(),
+            "customer.created": z.boolean().optional(),
+            "ticket.status_updated": z.boolean().optional()
+        })
+        .optional()
+});
+
+export const paystackInitializeSchema = z.object({
+    email: z.string().trim().email("A valid email is required")
+});
+
+export const paystackVerifySchema = z.object({
+    reference: z.string().trim().min(1, "reference is required")
+});

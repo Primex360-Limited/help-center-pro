@@ -5,7 +5,7 @@ import BrandLogo from "../../components/auth/BrandLogo.jsx";
 import PasswordField from "../../components/auth/PasswordField.jsx";
 import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
 import { acceptInvitation, previewInvitation } from "../../api/invitations.api.js";
-import { setStoredToken } from "../../api/client.js";
+import { setStoredRefreshToken, setStoredToken } from "../../api/client.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { isPasswordValid } from "../../utils/password.js";
 import "../../styles/auth.css";
@@ -71,6 +71,9 @@ export default function AcceptInvitation() {
       }
 
       setStoredToken(accessToken);
+      if (result?.data?.refreshToken) {
+        setStoredRefreshToken(result.data.refreshToken);
+      }
       await refreshUser();
       navigate("/dashboard", { replace: true });
     } catch (err) {

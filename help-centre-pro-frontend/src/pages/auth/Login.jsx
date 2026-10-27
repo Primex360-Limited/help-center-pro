@@ -20,6 +20,8 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const [clearingProvider, setClearingProvider] = useState(false);
   const [redirecting, setRedirecting] = useState("");
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedTenantId, setSelectedTenantId] = useState("");
   const redirectTimer = useRef(null);
 
   useEffect(
@@ -138,6 +140,14 @@ export default function Login() {
     return <SignInTransition message={redirecting} />;
   }
 
+  function extractWorkspaces(err) {
+    const errors = err?.payload?.errors || err?.errors || [];
+    const match = errors.find(
+      (item) => item?.code === "WORKSPACE_AMBIGUOUS" && Array.isArray(item.workspaces)
+    );
+    return match?.workspaces || [];
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -146,14 +156,23 @@ export default function Login() {
     try {
       const nextUser = await login(email.trim(), password, {
         portal: "tenant",
+        ...(selectedTenantId ? { tenantId: selectedTenantId } : {}),
       });
+      setWorkspaces([]);
       const destination = await routeSignedInUser(nextUser);
       if (destination !== "provider-blocked") {
         setSubmitting(false);
       }
     } catch (err) {
-      const message = err.message || "Unable to sign in";
-      setError(message);
+      const choices = extractWorkspaces(err);
+      if (choices.length) {
+        setWorkspaces(choices);
+        setSelectedTenantId((prev) => prev || choices[0].tenantId);
+        setError("This email is in more than one workspace. Select one to continue.");
+      } else {
+        setWorkspaces([]);
+        setError(err.message || "Unable to sign in");
+      }
       setSubmitting(false);
     }
   }
@@ -195,6 +214,28 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
+
+          {workspaces.length ? (
+            <div>
+              <label className="auth-label" htmlFor="login-workspace">
+                Workspace
+              </label>
+              <select
+                id="login-workspace"
+                className="auth-input"
+                value={selectedTenantId}
+                onChange={(e) => setSelectedTenantId(e.target.value)}
+                required
+              >
+                {workspaces.map((ws) => (
+                  <option key={ws.tenantId} value={ws.tenantId}>
+                    {ws.name || ws.slug}
+                    {ws.slug ? ` (${ws.slug})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="auth-forgot">
             <Link className="auth-link" to="/forgot-password">

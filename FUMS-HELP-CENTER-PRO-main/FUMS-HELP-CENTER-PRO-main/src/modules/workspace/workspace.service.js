@@ -77,10 +77,31 @@ function buildWorkspaceProfile(tenant) {
             ownNumber: settings.calling?.ownNumber || null
         },
         /** Widget / chat integration — customers appear when the app uses this key. */
-        widgetApiKeyPrefix: settings.widgetApiKeyPrefix || null,
+        widgetApiKeyPrefix:
+            settings.apiKeys?.live?.secretKeyPrefix ||
+            settings.widgetApiKeyPrefix ||
+            null,
         widgetApiKeyHint:
             settings.widgetApiKeyHint ||
-            "Generate an API key and embed it in your app chat (same pattern as a live-agent widget).",
+            "Generate test/live API keys and embed the public key in your app chat (LiveAgent-style).",
+        apiKeys: {
+            test: {
+                publicKeyPrefix: settings.apiKeys?.test?.publicKeyPrefix || null,
+                secretKeyPrefix: settings.apiKeys?.test?.secretKeyPrefix || null,
+                updatedAt: settings.apiKeys?.test?.updatedAt || null
+            },
+            live: {
+                publicKeyPrefix: settings.apiKeys?.live?.publicKeyPrefix || null,
+                secretKeyPrefix:
+                    settings.apiKeys?.live?.secretKeyPrefix ||
+                    settings.widgetApiKeyPrefix ||
+                    null,
+                updatedAt:
+                    settings.apiKeys?.live?.updatedAt ||
+                    settings.widgetApiKeyCreatedAt ||
+                    null
+            }
+        },
         createdAt: tenant.createdAt,
         updatedAt: tenant.updatedAt
     };
@@ -158,44 +179,24 @@ export async function updateWorkspaceProfile({
 }
 
 /**
- * Generate a widget API key for the tenant's in-app live chat.
- * Customers created via the widget appear on tickets with customer snapshots.
- * The raw key is returned once; only a prefix is stored for display.
+ * Legacy live secret rotation — prefer POST /workspace/api-keys/:mode/regenerate.
+ * Still returns a single secret for older clients; dual keys live under settings.apiKeys.
  */
 export async function generateWidgetApiKey({ tenantId, actorId = null }) {
+    const { regenerateApiKeys } = await import("./api-keys.service.js");
+    const result = await regenerateApiKeys({
+        tenantId,
+        mode: "live",
+        actorId
+    });
     const tenant = await findWorkspaceOrFail(tenantId);
-    const rawKey = `hcp_live_${crypto.randomBytes(24).toString("hex")}`;
-    const prefix = `${rawKey.slice(0, 16)}…`;
-    const hash = crypto.createHash("sha256").update(rawKey).digest("hex");
-
-    const updatedSettings = {
-        ...asSettings(tenant.settings),
-        widgetApiKeyPrefix: prefix,
-        widgetApiKeyHash: hash,
-        widgetApiKeyCreatedAt: new Date().toISOString(),
-        widgetApiKeyHint:
-            "Embed this key in your app chat widget. Customer identity flows into Help Centre Pro like a live-agent integration."
-    };
-
-    const updatedTenant = await prisma.tenant.update({
-        where: { id: tenant.id },
-        data: { settings: updatedSettings }
-    });
-
-    await recordAuditLog({
-        tenantId: tenant.id,
-        userId: actorId,
-        action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
-        entity: "Tenant",
-        entityId: tenant.id,
-        metadata: { changes: { widgetApiKeyRotated: true } }
-    });
 
     return {
-        workspace: buildWorkspaceProfile(updatedTenant),
-        apiKey: rawKey,
-        message:
-            "Store this API key now — it will not be shown again. Use it in your app chat widget so customer details sync into Help Centre Pro."
+        workspace: buildWorkspaceProfile(tenant),
+        apiKey: result.secretKey,
+        publicKey: result.publicKey,
+        secretKey: result.secretKey,
+        message: result.message
     };
 }
 

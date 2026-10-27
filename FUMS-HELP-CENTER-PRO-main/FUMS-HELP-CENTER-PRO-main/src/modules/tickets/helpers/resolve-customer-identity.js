@@ -37,7 +37,8 @@ export async function resolveCustomerIdentity({
             customerEmail: normalizedEmail || existingCustomer.customerEmail || undefined,
             customerPhone: normalizedPhone || existingCustomer.customerPhone || undefined,
             customerName: normalizedName || existingCustomer.customerName || undefined,
-            customerIp: normalizedIp || existingCustomer.customerIp || undefined
+            customerIp: normalizedIp || existingCustomer.customerIp || undefined,
+            isNew: false
         };
     }
 
@@ -48,7 +49,8 @@ export async function resolveCustomerIdentity({
         ...(normalizedEmail ? { customerEmail: normalizedEmail } : {}),
         ...(normalizedPhone ? { customerPhone: normalizedPhone } : {}),
         ...(normalizedName ? { customerName: normalizedName } : {}),
-        ...(normalizedIp ? { customerIp: normalizedIp } : {})
+        ...(normalizedIp ? { customerIp: normalizedIp } : {}),
+        isNew: Boolean(customerId)
     };
 }
 

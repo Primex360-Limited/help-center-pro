@@ -18,6 +18,7 @@ import { buildUserSnapshot } from "../ticket.utils.js";
 import { TICKET_STATUS } from "../ticket.constants.js";
 import { buildTicketLogEvent } from "../timeline/timeline.service.js";
 import { requireTenantId } from "../helpers/tenant-scope.js";
+import { dispatchTicketStatusUpdatedWebhook } from "../../webhooks/webhook.dispatcher.js";
 
 function buildAssignmentHistory(ticket, assignmentSnapshot, actor, transferReason) {
     return {
@@ -117,6 +118,11 @@ export async function transferTicket(ticketId, assignedToUserId, transferReason,
 
 /**
  * All assignable agents with live presence + open-ticket load — powers the
+    dispatchTicketStatusUpdatedWebhook(
+        { ...updatedTicket, tenantId },
+        updatedTicket.status
+    );
+
  * premium Transfer dialog (Available / Busy / Offline, open ticket counts).
  * Strictly scoped to the caller's workspace.
  */

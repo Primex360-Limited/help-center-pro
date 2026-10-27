@@ -22,6 +22,10 @@ import { buildTicketEventPayload } from "./timeline/timeline.service.js";
 import { toCreateTicketDto } from "./dto/create-ticket.dto.js";
 import { toListTicketsDto } from "./dto/list-ticket.dto.js";
 import { toTicketDetailDto } from "./dto/ticket-detail.dto.js";
+import {
+    dispatchCustomerCreatedWebhook,
+    dispatchTicketCreatedWebhook
+} from "../webhooks/webhook.dispatcher.js";
 
 function addHours(date, hours) {
     return new Date(date.getTime() + hours * 60 * 60 * 1000);
@@ -149,7 +153,19 @@ export async function createTicket(data, actor) {
                 initialEvent
             });
 
-            return toCreateTicketDto(ticket);
+            const dto = toCreateTicketDto(ticket);
+            if (customer.isNew && customer.customerId) {
+                dispatchCustomerCreatedWebhook({
+                    tenantId,
+                    customer
+                });
+            }
+            dispatchTicketCreatedWebhook({
+                ...ticket,
+                ...dto,
+                tenantId
+            });
+            return dto;
         } catch (error) {
             lastError = error;
             if (isTicketIdUniqueConflict(error) && attempt < maxAttempts - 1) {
@@ -175,9 +191,11 @@ export async function getTickets(query = {}) {
             where,
             skip: pagination.skip,
             take: pagination.limit,
-            orderBy: {
-                createdAt: "desc"
-            }
+            // Newest activity first — agents always see the latest conversation on top.
+            orderBy: [
+                { updatedAt: "desc" },
+                { createdAt: "desc" }
+            ]
         }),
         countTickets(where)
     ]);

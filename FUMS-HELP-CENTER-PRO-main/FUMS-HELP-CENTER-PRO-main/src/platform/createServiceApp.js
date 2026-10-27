@@ -7,7 +7,7 @@ import swaggerUi from "swagger-ui-express";
 
 import errorHandler from "../middleware/error.middleware.js";
 import rateLimiter from "../middleware/rateLimiter.middleware.js";
-import allowedCors from "../config/corsConfig.js";
+import { isAllowedCorsOrigin } from "../config/corsConfig.js";
 import swaggerSpec from "../config/swagger.js";
 import { attachTenantContext } from "../modules/tenants/tenant.middleware.js";
 import asyncHandler from "../middleware/async.middleware.js";
@@ -44,13 +44,14 @@ export function createServiceApp({
 
     const corsOrigin = {
         origin(origin, callback) {
-            if (!origin) return callback(null, true);
-            if (allowedCors.includes(origin)) {
+            if (isAllowedCorsOrigin(origin)) {
                 return callback(null, true);
             }
 
             console.warn(`🚫 Cors blocked (${serviceName}): ${origin}`);
-            return callback(new Error("Not allowed by CORS"));
+            // Reflect denial without throwing — a thrown Error becomes HTTP 500
+            // and the browser surfaces a generic "Unable to reach the API".
+            return callback(null, false);
         },
         credentials: true,
         optionsSuccessStatus: 200

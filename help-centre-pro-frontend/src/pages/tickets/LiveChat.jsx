@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRightLeft,
+  Check,
+  Copy,
+  Mail,
   Paperclip,
+  Phone,
   Search,
   Send,
   Smile,
   Ticket,
+  UserRound,
   X,
 } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   getMessages,
   listTickets,
@@ -18,6 +23,13 @@ import {
 import TransferTicketModal from "../../components/tickets/TransferTicketModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { formatTicketId } from "../../utils/format.js";
+import {
+  customerEmail,
+  customerPhone,
+  isFreshTicket,
+  sortTicketsNewestFirst,
+  ticketActivityAt,
+} from "./channelUtils.js";
 import "../../styles/tickets.css";
 
 const AVATAR_TONES = ["blue", "violet", "orange", "green", "rose", "teal"];
@@ -125,37 +137,45 @@ export default function LiveChat() {
   const [sending, setSending] = useState(false);
   const [ending, setEnding] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [copiedField, setCopiedField] = useState("");
 
   const messagesEndRef = useRef(null);
   const pollRef = useRef(null);
+  const copyTimerRef = useRef(null);
 
-  const loadChats = useCallback(async () => {
-    setLoadingList(true);
-    setListError("");
+  const loadChats = useCallback(async ({ silent } = {}) => {
+    if (!silent) {
+      setLoadingList(true);
+      setListError("");
+    }
     try {
       const result = await listTickets({
         channel: "CHAT",
         page: 1,
         limit: 100,
       });
-      const chats = (result?.data?.tickets || [])
-        .filter((ticket) => ticketChannel(ticket) === "CHAT")
-        .sort(
-          (a, b) =>
-            new Date(b.updatedAt || b.createdAt) -
-            new Date(a.updatedAt || a.createdAt)
-        );
+      const chats = sortTicketsNewestFirst(
+        (result?.data?.tickets || []).filter(
+          (ticket) => ticketChannel(ticket) === "CHAT"
+        )
+      );
       setTickets(chats);
     } catch (err) {
-      setListError(err.message || "Unable to load live chats");
-      setTickets([]);
+      if (!silent) {
+        setListError(err.message || "Unable to load live chats");
+        setTickets([]);
+      }
     } finally {
-      setLoadingList(false);
+      if (!silent) setLoadingList(false);
     }
   }, []);
 
   useEffect(() => {
     loadChats();
+    const listPoll = setInterval(() => {
+      loadChats({ silent: true });
+    }, 8000);
+    return () => clearInterval(listPoll);
   }, [loadChats]);
 
   useEffect(() => {
@@ -181,21 +201,48 @@ export default function LiveChat() {
 
   const filteredThreads = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return tickets;
-    return tickets.filter((ticket) => {
-      const haystack = [
-        ticket.ticketId,
-        ticket.title,
-        ticket.description,
-        ticket.customer?.name,
-        ticket.customer?.email,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
+    const list = !q
+      ? tickets
+      : tickets.filter((ticket) => {
+          const haystack = [
+            ticket.ticketId,
+            ticket.title,
+            ticket.description,
+            ticket.customer?.name,
+            ticket.customer?.email,
+            ticket.customer?.phone,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(q);
+        });
+    return sortTicketsNewestFirst(list);
   }, [tickets, searchQuery]);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
+  async function copyContact(value, field) {
+    const text = String(value || "").trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setBanner(
+        field === "email"
+          ? `Copied ${text} — ready to email.`
+          : `Copied ${text} — ready to call.`
+      );
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopiedField(""), 1800);
+    } catch {
+      setMessagesError("Could not copy to clipboard");
+    }
+  }
 
   const loadThreadMessages = useCallback(async (ticketId, { silent } = {}) => {
     if (!ticketId) return;
@@ -230,7 +277,7 @@ export default function LiveChat() {
 
     pollRef.current = setInterval(() => {
       loadThreadMessages(id, { silent: true });
-    }, 6000);
+    }, 2000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -271,24 +318,54 @@ export default function LiveChat() {
       return;
     }
     const id = selectedTicket.ticketId || selectedTicket.id;
+    const optimisticId = `local-${Date.now()}`;
+    const optimistic = {
+      id: optimisticId,
+      content,
+      createdAt: new Date().toISOString(),
+      sender: {
+        userId: user?.id || user?.userId,
+        name: user?.name || user?.email || "You",
+        email: user?.email,
+      },
+    };
+    setDraft("");
     setSending(true);
     setMessagesError("");
+    setMessages((prev) => [...prev, optimistic]);
+    setTickets((prev) =>
+      sortTicketsNewestFirst(
+        prev.map((ticket) =>
+          ticket.ticketId === id || ticket.id === id
+            ? {
+                ...ticket,
+                description: content,
+                updatedAt: new Date().toISOString(),
+                lastAgentResponseAt: new Date().toISOString(),
+              }
+            : ticket
+        )
+      )
+    );
     try {
       const result = await sendMessage(id, content);
       const message = result?.data?.message;
       if (message) {
         setMessages((prev) => {
-          if (prev.some((row) => row.id === message.id)) return prev;
-          return [...prev, message];
+          const withoutOptimistic = prev.filter((row) => row.id !== optimisticId);
+          if (withoutOptimistic.some((row) => row.id === message.id)) {
+            return withoutOptimistic;
+          }
+          return [...withoutOptimistic, message];
         });
       } else {
         loadThreadMessages(id, { silent: true }).catch(() => {});
       }
-      setDraft("");
-      setSending(false);
-      loadChats().catch(() => {});
     } catch (err) {
+      setMessages((prev) => prev.filter((row) => row.id !== optimisticId));
+      setDraft(content);
       setMessagesError(err.message || "Unable to send message");
+    } finally {
       setSending(false);
     }
   }
@@ -331,9 +408,11 @@ export default function LiveChat() {
 
   const ended = selectedTicket ? isEndedStatus(selectedTicket.status) : false;
   const name = selectedTicket ? customerName(selectedTicket) : "";
+  const email = selectedTicket ? customerEmail(selectedTicket) : "";
+  const phone = selectedTicket ? customerPhone(selectedTicket) : "";
 
   return (
-    <div className="live-chat">
+    <div className={`live-chat${selectedTicket ? " has-visitor" : ""}`}>
       <aside className="live-chat__list">
         <div className="live-chat__list-head">
           <h1>Live Chat</h1>
@@ -358,6 +437,8 @@ export default function LiveChat() {
             {filteredThreads.map((ticket) => {
               const id = ticket.ticketId || ticket.id;
               const threadName = customerName(ticket);
+              const threadEmail = customerEmail(ticket);
+              const threadPhone = customerPhone(ticket);
               const active = id === selectedId;
               const unread =
                 !isEndedStatus(ticket.status) &&
@@ -380,14 +461,26 @@ export default function LiveChat() {
                     </span>
                     <span>
                       <p className="live-chat__thread-name">{threadName}</p>
+                      {(threadEmail || threadPhone) ? (
+                        <p className="live-chat__thread-contact">
+                          {threadEmail || threadPhone}
+                        </p>
+                      ) : null}
                       <p className="live-chat__thread-preview">
                         {previewText(ticket)}
                       </p>
                     </span>
                     <span className="live-chat__thread-meta">
                       <span className="live-chat__thread-time">
-                        {formatRelative(ticket.updatedAt || ticket.createdAt)}
+                        {formatRelative(
+                          ticketActivityAt(ticket) ||
+                            ticket.updatedAt ||
+                            ticket.createdAt
+                        )}
                       </span>
+                      {isFreshTicket(ticket) ? (
+                        <span className="ch-fresh-pill">New</span>
+                      ) : null}
                       {unread ? (
                         <span className="live-chat__unread">{unread}</span>
                       ) : null}
@@ -399,9 +492,15 @@ export default function LiveChat() {
           </ul>
         ) : (
           <p className="live-chat__empty-list">
-            {tickets.length
-              ? "No chats match your search."
-              : "No live chat conversations yet."}
+            {tickets.length ? (
+              "No chats match your search."
+            ) : (
+              <>
+                No live chat conversations yet. Visitors open chats via your
+                widget API keys —{" "}
+                <Link to="/docs/integration">view integration docs</Link>.
+              </>
+            )}
           </p>
         )}
       </aside>
@@ -432,6 +531,30 @@ export default function LiveChat() {
                     />
                     {ended ? "Ended" : "Active"}
                   </p>
+                  {(email || phone) ? (
+                    <div className="live-chat__contact-inline">
+                      {email ? (
+                        <a
+                          className="live-chat__contact-chip"
+                          href={`mailto:${email}`}
+                          title={`Email ${email}`}
+                        >
+                          <Mail size={12} aria-hidden="true" />
+                          <span>{email}</span>
+                        </a>
+                      ) : null}
+                      {phone ? (
+                        <a
+                          className="live-chat__contact-chip"
+                          href={`tel:${phone.replace(/\s+/g, "")}`}
+                          title={`Call ${phone}`}
+                        >
+                          <Phone size={12} aria-hidden="true" />
+                          <span>{phone}</span>
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -555,6 +678,124 @@ export default function LiveChat() {
           </>
         )}
       </section>
+
+      {selectedTicket ? (
+        <aside className="live-chat__visitor" aria-label="Visitor details">
+          <div className="live-chat__visitor-head">
+            <UserRound size={16} aria-hidden="true" />
+            <h3>Visitor</h3>
+          </div>
+
+          <div className="live-chat__visitor-card">
+            <span
+              className={`tk-avatar tk-avatar--lg tone-${avatarTone(name)}`}
+              aria-hidden="true"
+            >
+              {initialsFromName(name)}
+            </span>
+            <div>
+              <strong>{name}</strong>
+              <span className="live-chat__visitor-status">
+                {ended ? "Chat ended" : "In conversation"}
+              </span>
+            </div>
+          </div>
+
+          <div className="live-chat__visitor-section">
+            <p className="live-chat__visitor-label">Contact</p>
+
+            <div className="live-chat__visitor-row">
+              <div className="live-chat__visitor-icon" aria-hidden="true">
+                <Mail size={15} />
+              </div>
+              <div className="live-chat__visitor-meta">
+                <span>Email</span>
+                {email ? (
+                  <a href={`mailto:${email}`}>{email}</a>
+                ) : (
+                  <em>Not provided</em>
+                )}
+              </div>
+              {email ? (
+                <button
+                  type="button"
+                  className="live-chat__visitor-copy"
+                  onClick={() => copyContact(email, "email")}
+                  aria-label="Copy email"
+                  title="Copy email"
+                >
+                  {copiedField === "email" ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="live-chat__visitor-row">
+              <div className="live-chat__visitor-icon" aria-hidden="true">
+                <Phone size={15} />
+              </div>
+              <div className="live-chat__visitor-meta">
+                <span>Phone</span>
+                {phone ? (
+                  <a href={`tel:${phone.replace(/\s+/g, "")}`}>{phone}</a>
+                ) : (
+                  <em>Not provided</em>
+                )}
+              </div>
+              {phone ? (
+                <button
+                  type="button"
+                  className="live-chat__visitor-copy"
+                  onClick={() => copyContact(phone, "phone")}
+                  aria-label="Copy phone"
+                  title="Copy phone"
+                >
+                  {copiedField === "phone" ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="live-chat__visitor-actions">
+            <button
+              type="button"
+              className="live-chat__btn live-chat__btn--primary"
+              disabled={!email}
+              title={email ? `Compose email to ${email}` : "No email on file"}
+              onClick={() => {
+                if (!email) return;
+                navigate(
+                  `/tickets/new/email?to=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`
+                );
+              }}
+            >
+              <Mail size={14} aria-hidden="true" />
+              Email visitor
+            </button>
+            <button
+              type="button"
+              className="live-chat__btn live-chat__btn--ghost"
+              disabled={!phone}
+              title={phone ? `Open Calls with ${phone}` : "No phone on file"}
+              onClick={() => {
+                if (!phone) return;
+                navigate(
+                  `/tickets/calls?dial=${encodeURIComponent(phone)}&ticket=${encodeURIComponent(
+                    selectedTicket.ticketId || selectedTicket.id
+                  )}`
+                );
+              }}
+            >
+              <Phone size={14} aria-hidden="true" />
+              Call visitor
+            </button>
+          </div>
+
+          <p className="live-chat__visitor-hint">
+            Captured when the visitor starts chat via your widget. Use these to
+            follow up by email or phone without leaving the conversation.
+          </p>
+        </aside>
+      ) : null}
 
       {transferOpen && selectedTicket ? (
         <TransferTicketModal

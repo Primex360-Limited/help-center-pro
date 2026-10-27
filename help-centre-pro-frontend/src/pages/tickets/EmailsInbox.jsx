@@ -8,6 +8,7 @@ import {
   Send,
 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { emailAccountsApi } from "../../api/email-accounts.api.js";
 import {
   addInternalNote,
   assignTicket,
@@ -34,11 +35,14 @@ import {
   formatDateTime,
   formatRelative,
   initialsFromName,
+  isFreshTicket,
   previewText,
   PRIORITY_OPTIONS,
   priorityTone,
+  sortTicketsNewestFirst,
   statusOptionsFor,
   statusTone,
+  ticketActivityAt,
   unwrapThread,
 } from "./channelUtils.js";
 import "../../styles/channels.css";
@@ -136,7 +140,31 @@ export default function EmailsInbox() {
   const [sending, setSending] = useState(false);
   const [banner, setBanner] = useState(location.state?.notice || "");
   const [transferOpen, setTransferOpen] = useState(false);
+  const [mailboxes, setMailboxes] = useState([]);
+  const [fromAccountId, setFromAccountId] = useState("");
   const composerRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await emailAccountsApi.list();
+        if (cancelled) return;
+        const list = (result?.data || []).filter(
+          (a) => a?.email && a.isActive !== false
+        );
+        setMailboxes(list);
+        const preferred =
+          list.find((a) => a.isDefault)?.id || list[0]?.id || "";
+        setFromAccountId(preferred);
+      } catch {
+        if (!cancelled) setMailboxes([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadEmails = useCallback(async ({ silent = false } = {}) => {
     if (!silent) {
@@ -149,11 +177,7 @@ export default function EmailsInbox() {
         page: 1,
         limit: 100,
       });
-      const rows = (result?.data?.tickets || []).sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt) -
-          new Date(a.updatedAt || a.createdAt)
-      );
+      const rows = sortTicketsNewestFirst(result?.data?.tickets || []);
       setTickets(rows);
     } catch (err) {
       if (!silent) {
@@ -222,20 +246,22 @@ export default function EmailsInbox() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return tickets;
-    return tickets.filter((ticket) => {
-      const hay = [
-        ticket.ticketId,
-        ticket.title,
-        ticket.description,
-        ticket.customer?.name,
-        ticket.customer?.email,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
+    const list = !q
+      ? tickets
+      : tickets.filter((ticket) => {
+          const hay = [
+            ticket.ticketId,
+            ticket.title,
+            ticket.description,
+            ticket.customer?.name,
+            ticket.customer?.email,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return hay.includes(q);
+        });
+    return sortTicketsNewestFirst(list);
   }, [tickets, searchQuery]);
 
   const loadDetail = useCallback(async (ticketId, { silent = false } = {}) => {
@@ -361,6 +387,7 @@ export default function EmailsInbox() {
           body,
           toEmail: customerEmail(selectedTicket) || undefined,
           subject: selectedTicket?.title || undefined,
+          ...(fromAccountId ? { emailAccountId: fromAccountId } : {}),
         });
         if (sendResult?.data?.usedMailbox) {
           setBanner(
@@ -544,6 +571,9 @@ export default function EmailsInbox() {
             textareaRef={composerRef}
             templateValues={templateValues}
             onInsertTemplate={handleInsertTemplate}
+            mailboxes={mailboxes}
+            fromAccountId={fromAccountId}
+            onFromChange={setFromAccountId}
           />
         </section>
 
@@ -622,14 +652,15 @@ export default function EmailsInbox() {
                       <div className="ch-thread-row__top">
                         <p className="ch-thread-row__name">{name}</p>
                         <span className="ch-thread-row__time">
-                          {formatRelative(
-                            ticket.updatedAt || ticket.createdAt
-                          )}
+                          {formatRelative(ticketActivityAt(ticket) || ticket.createdAt)}
                         </span>
                       </div>
                       <p className="ch-thread-row__preview">
                         <Mail size={12} aria-hidden="true" color="#1570ef" />
                         <span>{previewText(ticket)}</span>
+                        {isFreshTicket(ticket) ? (
+                          <span className="ch-fresh-pill">New</span>
+                        ) : null}
                       </p>
                     </div>
                     {unread ? (
@@ -790,6 +821,9 @@ function Composer({
   textareaRef,
   templateValues,
   onInsertTemplate,
+  mailboxes = [],
+  fromAccountId = "",
+  onFromChange,
 }) {
   return (
     <div className="ch-composer">
@@ -813,6 +847,26 @@ function Composer({
         </div>
         <TemplatePicker values={templateValues} onInsert={onInsertTemplate} />
       </div>
+      {tab === "reply" && mailboxes.length ? (
+        <label className="ch-composer__from">
+          <span>From</span>
+          <select
+            className="ch-select ch-select--premium"
+            value={fromAccountId}
+            onChange={(e) => onFromChange?.(e.target.value)}
+            aria-label="Send from mailbox"
+          >
+            {mailboxes.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.displayName
+                  ? `${account.displayName} <${account.email}>`
+                  : account.email}
+                {account.isDefault ? " · Default" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <textarea
         ref={textareaRef}
         value={draft}

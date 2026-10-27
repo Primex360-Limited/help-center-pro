@@ -41,17 +41,17 @@ const CARDS = [
   },
   {
     key: "agent",
-    title: "Call an agent",
+    title: "Live chat",
     description:
-      "Start a real-time chat conversation. Best for quick questions and immediate support.",
+      "Open the live chat inbox for real-time visitor conversations from your widget.",
     features: [
-      "Real time calling",
-      "Reach out an agent",
+      "Real-time messaging",
+      "Transfer between agents",
       "Quick replies",
-      "File sharing",
+      "End or resolve chats",
     ],
     hint: "Urgent issues, quick questions",
-    cta: "Call an agent",
+    cta: "Open live chat",
     to: "/tickets/live-chat",
     tone: "agent",
     Icon: Phone,

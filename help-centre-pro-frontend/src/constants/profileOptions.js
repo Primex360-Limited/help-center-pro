@@ -14,7 +14,7 @@ export const LANGUAGES = [
 ];
 
 export const TIMEZONES = [
-  { value: "Africa/Lagos", label: "Africa/Lagos (WAT)" },
+  { value: "Africa/Lagos", label: "Africa/Lagos (GMT+1)" },
   { value: "Africa/Cairo", label: "Africa/Cairo (EET)" },
   { value: "Africa/Johannesburg", label: "Africa/Johannesburg (SAST)" },
   { value: "UTC", label: "UTC" },

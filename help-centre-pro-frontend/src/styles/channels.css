@@ -616,6 +616,48 @@
   white-space: pre-wrap;
 }
 
+.ch-signature-block {
+  margin: 0 12px 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #eaecf0;
+  background: linear-gradient(180deg, #fafbfc 0%, #f4f6f8 100%);
+}
+
+.ch-signature-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #667085;
+}
+
+.ch-signature-editor {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #344054;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ch-signature-editor:focus {
+  border-color: #84caff;
+  box-shadow: 0 0 0 3px rgba(46, 144, 250, 0.15);
+}
+
 .ch-footer-bar {
   position: sticky;
   bottom: 0;
@@ -782,8 +824,29 @@
 
 /* ── Inbox split views ───────────────────────────────────────────────────── */
 
+.ch-fresh-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: #eff8ff;
+  color: #175cd3;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.ch-thread-row__preview .ch-fresh-pill {
+  margin-left: 8px;
+}
+
 .ch-inbox {
-  display: grid;
+   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   margin: -28px;
   height: calc(100vh - 72px);
@@ -1299,6 +1362,23 @@
   flex-shrink: 0;
 }
 
+.ch-composer__from {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.ch-composer__from > span {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ch-muted);
+}
+
+.ch-composer__from .ch-select {
+  width: 100%;
+}
+
 .ch-composer__tabs {
   display: flex;
   align-items: center;
@@ -1700,6 +1780,10 @@
   font-size: 13px;
   line-height: 1.45;
   color: var(--ch-muted);
+}
+
+.ch-from-empty .ch-input {
+  margin-bottom: 0;
 }
 
 .ch-field-hint {
