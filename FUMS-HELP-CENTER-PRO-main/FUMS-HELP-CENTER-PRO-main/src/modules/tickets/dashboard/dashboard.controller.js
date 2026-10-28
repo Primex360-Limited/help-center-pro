@@ -1,5 +1,5 @@
 import successResponse from "../../../shared/utils/apiResponse.js";
-import AppError from "../../../shared/errors/AppError.js";
+import { AppError } from "../../../shared/errors/AppError.js";
 import { getDashboardOverview } from "./dashboard.service.js";
 import { requireTenantId } from "../helpers/tenant-scope.js";
 
