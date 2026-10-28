@@ -1024,6 +1024,10 @@
   line-height: 1.3;
 }
 
+.signup-form-field .password-reqs {
+  margin-top: 8px;
+}
+
 .signup-form-submit {
   height: 46px;
   margin-top: 4px;

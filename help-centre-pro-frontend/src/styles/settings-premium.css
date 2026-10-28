@@ -956,6 +956,17 @@
   margin-top: 8px;
 }
 
+.settings-call-config {
+  max-width: 1100px;
+}
+
+.settings-call-config .admin-card,
+.settings-call-config .workspace-card {
+  border: 1px solid var(--settings-border, #eaecf0);
+  border-radius: 12px;
+  background: #fff;
+}
+
 .settings-account-row__actions {
   display: flex;
   align-items: center;

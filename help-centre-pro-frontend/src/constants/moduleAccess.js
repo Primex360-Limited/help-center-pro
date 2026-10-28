@@ -28,4 +28,4 @@ export const MODULE_ACCESS = Object.freeze({
 });
 
 /** Nav items that are product features but not yet available. */
-export const COMING_SOON_MODULES = Object.freeze(new Set(["analytics", "reports"]));
+export const COMING_SOON_MODULES = Object.freeze(new Set(["reports"]));

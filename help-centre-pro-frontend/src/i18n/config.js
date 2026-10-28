@@ -11,7 +11,7 @@ const en = {
   "auth.signup.password": "Password",
   "auth.signup.passwordPlaceholder": "Password",
   "auth.signup.confirmPassword": "Confirm Password",
-  "auth.signup.passwordHint": "At least 8 characters",
+  "auth.signup.passwordHint": "At least 8 characters with uppercase, lowercase, number, and special character",
   "auth.signup.or": "Or",
   "auth.signup.continueGoogle": "Continue with Google",
   "auth.signup.googleSoon": "Google sign-in will be available soon.",

@@ -25,6 +25,7 @@ import Tenants from "./pages/admin/Tenants.jsx";
 import IntegrationDocs from "./pages/docs/IntegrationDocs.jsx";
 import PrivacyPolicy from "./pages/docs/PrivacyPolicy.jsx";
 import TermsOfService from "./pages/docs/TermsOfService.jsx";
+import Analytics from "./pages/analytics/Analytics.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import CallsInbox from "./pages/tickets/CallsInbox.jsx";
 import CreateEmailTicket from "./pages/tickets/CreateEmailTicket.jsx";
@@ -269,6 +270,14 @@ export default function App() {
             }
           />
           <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute permission="report:read" tenantOnly>
+                <Analytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/workspace/user-management"
             element={
               <ProtectedRoute
@@ -354,6 +363,7 @@ export default function App() {
         />
         <Route path="/tickets/*" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="/agents" element={<PortalAccessDenied title="Workspace portal only" />} />
+        <Route path="/analytics" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="/automations/*" element={<PortalAccessDenied title="Workspace portal only" />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
@@ -552,6 +562,14 @@ export default function App() {
               tenantOnly
             >
               <Agents />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute permission="report:read" tenantOnly>
+              <Analytics />
             </ProtectedRoute>
           }
         />

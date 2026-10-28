@@ -67,7 +67,15 @@ export default function ResetPassword() {
         },
       });
     } catch (err) {
-      setError(err.message || "Unable to reset password. Request a fresh link and try again.");
+      const message =
+        err.message || "Unable to reset password. Request a fresh link and try again.";
+      setError(
+        /different from your previous|same as.*(current|previous)|must be different/i.test(
+          message
+        )
+          ? "Choose a new password that is different from your previous one."
+          : message
+      );
     } finally {
       setSubmitting(false);
     }

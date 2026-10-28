@@ -133,6 +133,76 @@ function wssFor(host, port = 8089) {
   return `wss://${host}:${port}/ws`;
 }
 
+const REGION_LABELS = {
+  NG: "Nigeria",
+  GH: "Ghana",
+  KE: "Kenya",
+  ZA: "South Africa",
+  TZ: "Tanzania",
+  UG: "Uganda",
+  CI: "Côte d’Ivoire",
+  SN: "Senegal",
+  MA: "Morocco",
+  EG: "Egypt",
+  SL: "Sierra Leone",
+  US: "United States",
+  CA: "Canada",
+  GB: "United Kingdom",
+  DE: "Germany",
+  FR: "France",
+  NL: "Netherlands",
+  BE: "Belgium",
+  CH: "Switzerland",
+  NO: "Norway",
+  SE: "Sweden",
+  FI: "Finland",
+  IT: "Italy",
+  ES: "Spain",
+  UA: "Ukraine",
+  EU: "Europe",
+  IN: "India",
+  SG: "Singapore",
+  MY: "Malaysia",
+  JP: "Japan",
+  CN: "China",
+  HK: "Hong Kong",
+  AU: "Australia",
+  NZ: "New Zealand",
+  AE: "United Arab Emirates",
+  SA: "Saudi Arabia",
+  QA: "Qatar",
+  KW: "Kuwait",
+  BR: "Brazil",
+  MX: "Mexico",
+  AR: "Argentina",
+  CL: "Chile",
+  CO: "Colombia",
+  TH: "Thailand",
+  GLOBAL: "Global",
+};
+
+export function regionLabel(code = "") {
+  const key = String(code || "").toUpperCase();
+  return REGION_LABELS[key] || key || "Global";
+}
+
+export function primaryRegionLabel(regions = []) {
+  const list = Array.isArray(regions) ? regions : [];
+  const first = list.find((r) => String(r).toUpperCase() !== "GLOBAL") || list[0] || "GLOBAL";
+  return regionLabel(first);
+}
+
+function logoDomainFromWebsite(website = "") {
+  try {
+    const url = new URL(
+      /^https?:\/\//i.test(website) ? website : `https://${website}`
+    );
+    return url.hostname.replace(/^www\./i, "");
+  } catch {
+    return "";
+  }
+}
+
 function brandedProvider({
   id,
   name,
@@ -147,10 +217,18 @@ function brandedProvider({
   sipPort = "",
 }) {
   const host = sipServer;
+  const websiteDomain = logoDomainFromWebsite(website);
+  const sipBrandDomain = String(host || "")
+    .replace(/^sip\./i, "")
+    .replace(/^[\w-]+\./, (m) => (m.toLowerCase() === "sip." ? "" : m));
   return {
     id,
     name,
     logo: null,
+    logoDomain:
+      websiteDomain ||
+      logoDomainFromWebsite(host ? `https://${String(host).replace(/^sip\./i, "")}` : "") ||
+      sipBrandDomain,
     category,
     website,
     description:
@@ -351,8 +429,9 @@ export const VOIP_PROVIDERS = [
     id: "custom_sip",
     name: "Custom SIP / Free PBX",
     logo: null,
+    logoDomain: "",
     category: "custom",
-    website: "",
+    website: "https://www.asterisk.org",
     description:
       "Any self-hosted or unknown SIP PBX (Asterisk, FreeSWITCH, 3CX, Issabel…). Enter host + WSS from your admin.",
     features: ["Any SIP provider", "Full control", "Browser softphone"],

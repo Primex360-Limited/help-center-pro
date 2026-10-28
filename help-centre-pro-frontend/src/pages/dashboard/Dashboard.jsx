@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Briefcase,
   Clock3,
@@ -6,6 +6,7 @@ import {
   Users,
   UserRound,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -24,11 +25,65 @@ const AGENT_TONES = ["tone-blue", "tone-green", "tone-orange", "tone-violet"];
 
 const EMPTY_OVERVIEW = {
   summary: {
-    openTickets: { value: 0, label: "Open Tickets", periodLabel: "Live" },
-    pending: { value: 0, label: "Pending", periodLabel: "Live" },
-    resolvedToday: { value: 0, label: "Resolved Today", periodLabel: "Today" },
-    totalCustomers: { value: 0, label: "Total Customers", periodLabel: "All time" },
-    activeAgents: { value: 0, label: "Active agents", periodLabel: "Live" },
+    openTickets: {
+      value: 0,
+      label: "Open Tickets",
+      periodKey: "live",
+      periodLabel: "Live",
+      periods: [
+        { key: "live", label: "Live", value: 0 },
+        { key: "today", label: "Today", value: 0 },
+        { key: "7d", label: "Last 7 days", value: 0 },
+        { key: "30d", label: "Last 30 days", value: 0 },
+      ],
+    },
+    pending: {
+      value: 0,
+      label: "Pending",
+      periodKey: "live",
+      periodLabel: "Live",
+      periods: [
+        { key: "live", label: "Live", value: 0 },
+        { key: "today", label: "Today", value: 0 },
+        { key: "7d", label: "Last 7 days", value: 0 },
+        { key: "30d", label: "Last 30 days", value: 0 },
+      ],
+    },
+    resolvedToday: {
+      value: 0,
+      label: "Resolved",
+      periodKey: "today",
+      periodLabel: "Today",
+      periods: [
+        { key: "today", label: "Today", value: 0 },
+        { key: "7d", label: "Last 7 days", value: 0 },
+        { key: "30d", label: "Last 30 days", value: 0 },
+        { key: "all", label: "All time", value: 0 },
+      ],
+    },
+    totalCustomers: {
+      value: 0,
+      label: "Total Customers",
+      periodKey: "all",
+      periodLabel: "All time",
+      periods: [
+        { key: "all", label: "All time", value: 0 },
+        { key: "30d", label: "Last 30 days", value: 0 },
+        { key: "7d", label: "Last 7 days", value: 0 },
+        { key: "today", label: "Today", value: 0 },
+      ],
+    },
+    activeAgents: {
+      value: 0,
+      label: "Active agents",
+      periodKey: "live",
+      periodLabel: "Live",
+      periods: [
+        { key: "live", label: "Live", value: 0 },
+        { key: "today", label: "Today", value: 0 },
+        { key: "7d", label: "Last 7 days", value: 0 },
+      ],
+    },
   },
   ticketsByChannel: {
     title: "Tickets by Channel",
@@ -47,20 +102,106 @@ const EMPTY_OVERVIEW = {
   recentTickets: [],
 };
 
-function MetricCard({ title, value, periodLabel, icon: Icon, tone }) {
+function resolveMetric(metric = {}) {
+  const periods = Array.isArray(metric.periods) && metric.periods.length
+    ? metric.periods
+    : [{ key: "default", label: metric.periodLabel || "Today", value: metric.value ?? 0 }];
+  const periodKey = metric.periodKey || periods[0].key;
+  const selected = periods.find((p) => p.key === periodKey) || periods[0];
+  return {
+    label: metric.label || "",
+    periods,
+    periodKey: selected.key,
+    periodLabel: selected.label,
+    value: selected.value ?? 0,
+  };
+}
+
+function MetricCard({ title, value, periods, periodKey, periodLabel, onPeriodChange, icon: Icon, tone }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const listId = useId();
+  const options = periods?.length
+    ? periods
+    : [{ key: "default", label: periodLabel || "Today", value }];
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointer(event) {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleKey(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  function selectPeriod(option) {
+    onPeriodChange?.(option.key);
+    setOpen(false);
+  }
+
   return (
-    <article className={`metric-card metric-card--${tone}`}>
+    <article className={`metric-card metric-card--${tone} ${open ? "is-menu-open" : ""}`}>
       <div className="metric-card__top">
         <p className="metric-card__label">{title}</p>
         <div className={`metric-card__icon metric-card__icon--${tone}`}>
           <Icon size={18} strokeWidth={2.2} />
         </div>
       </div>
-      <div className="metric-card__value">{formatNumber(value)}</div>
-      <button type="button" className="metric-card__period" disabled>
-        {periodLabel || "Today"}
-        <ChevronDown size={14} />
-      </button>
+      <div className="metric-card__value" key={`${periodKey}-${value}`}>
+        {formatNumber(value)}
+      </div>
+      <div className="metric-card__period-wrap" ref={rootRef}>
+        <button
+          type="button"
+          className={`metric-card__period ${open ? "is-open" : ""}`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setOpen((prev) => !prev)}
+        >
+          <span>{periodLabel || "Today"}</span>
+          <ChevronDown size={14} className="metric-card__chevron" />
+        </button>
+        {open ? (
+          <ul
+            id={listId}
+            className="metric-card__menu"
+            role="listbox"
+            aria-label={`${title} period`}
+          >
+            {options.map((option) => {
+              const selected = option.key === periodKey;
+              return (
+                <li key={option.key} role="option" aria-selected={selected}>
+                  <button
+                    type="button"
+                    className={`metric-card__menu-item ${selected ? "is-selected" : ""}`}
+                    onClick={() => selectPeriod(option)}
+                  >
+                    <span className="metric-card__menu-label">{option.label}</span>
+                    <span className="metric-card__menu-value">
+                      {formatNumber(option.value ?? 0)}
+                    </span>
+                    {selected ? <Check size={14} strokeWidth={2.6} /> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -88,6 +229,7 @@ function priorityTone(priority) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [overview, setOverview] = useState(EMPTY_OVERVIEW);
+  const [periodKeys, setPeriodKeys] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -118,9 +260,32 @@ export default function Dashboard() {
   }, []);
 
   const firstName = user?.firstName || "there";
-  const summary = { ...EMPTY_OVERVIEW.summary, ...(overview.summary || {}) };
+  const summarySource = { ...EMPTY_OVERVIEW.summary, ...(overview.summary || {}) };
+
+  const summary = Object.fromEntries(
+    Object.entries(summarySource).map(([key, metric]) => {
+      const base = resolveMetric(metric);
+      const selectedKey = periodKeys[key] || base.periodKey;
+      const selected =
+        base.periods.find((p) => p.key === selectedKey) || base.periods[0];
+      return [
+        key,
+        {
+          ...base,
+          periodKey: selected.key,
+          periodLabel: selected.label,
+          value: selected.value ?? 0,
+        },
+      ];
+    })
+  );
+
   const agents = overview.topAgentsToday?.agents || [];
   const recent = overview.recentTickets || [];
+
+  function setMetricPeriod(metricKey, periodKey) {
+    setPeriodKeys((prev) => ({ ...prev, [metricKey]: periodKey }));
+  }
 
   return (
     <div className="dashboard">
@@ -139,35 +304,50 @@ export default function Dashboard() {
         <MetricCard
           title={summary.openTickets.label}
           value={summary.openTickets.value}
+          periods={summary.openTickets.periods}
+          periodKey={summary.openTickets.periodKey}
           periodLabel={summary.openTickets.periodLabel}
+          onPeriodChange={(key) => setMetricPeriod("openTickets", key)}
           icon={Briefcase}
           tone="orange"
         />
         <MetricCard
           title={summary.pending.label}
           value={summary.pending.value}
+          periods={summary.pending.periods}
+          periodKey={summary.pending.periodKey}
           periodLabel={summary.pending.periodLabel}
+          onPeriodChange={(key) => setMetricPeriod("pending", key)}
           icon={Clock3}
           tone="amber"
         />
         <MetricCard
           title={summary.resolvedToday.label}
           value={summary.resolvedToday.value}
+          periods={summary.resolvedToday.periods}
+          periodKey={summary.resolvedToday.periodKey}
           periodLabel={summary.resolvedToday.periodLabel}
+          onPeriodChange={(key) => setMetricPeriod("resolvedToday", key)}
           icon={CheckCircle2}
           tone="green"
         />
         <MetricCard
           title={summary.totalCustomers.label}
           value={summary.totalCustomers.value}
+          periods={summary.totalCustomers.periods}
+          periodKey={summary.totalCustomers.periodKey}
           periodLabel={summary.totalCustomers.periodLabel}
+          onPeriodChange={(key) => setMetricPeriod("totalCustomers", key)}
           icon={Users}
           tone="violet"
         />
         <MetricCard
           title={summary.activeAgents.label}
           value={summary.activeAgents.value}
+          periods={summary.activeAgents.periods}
+          periodKey={summary.activeAgents.periodKey}
           periodLabel={summary.activeAgents.periodLabel}
+          onPeriodChange={(key) => setMetricPeriod("activeAgents", key)}
           icon={UserRound}
           tone="blue"
         />

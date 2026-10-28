@@ -9,6 +9,15 @@ const CHANNEL_LABELS = Object.freeze({
     MANUAL: "Manual"
 });
 
+const OPEN_STATUSES = [TICKET_STATUS.OPEN, TICKET_STATUS.QUEUED];
+const PENDING_STATUSES = [TICKET_STATUS.PENDING, TICKET_STATUS.WAITING_FOR_REPLY];
+const ACTIVE_STATUSES = [
+    TICKET_STATUS.OPEN,
+    TICKET_STATUS.QUEUED,
+    TICKET_STATUS.PENDING,
+    TICKET_STATUS.WAITING_FOR_REPLY
+];
+
 function startOfUtcDay(date = new Date()) {
     return new Date(Date.UTC(
         date.getUTCFullYear(),
@@ -19,6 +28,12 @@ function startOfUtcDay(date = new Date()) {
         0,
         0
     ));
+}
+
+function daysAgoStart(days) {
+    const start = startOfUtcDay();
+    start.setUTCDate(start.getUTCDate() - (days - 1));
+    return start;
 }
 
 function formatRelativeTime(dateValue) {
@@ -55,6 +70,10 @@ function emptyChannelBucket() {
     };
 }
 
+function metricOption(key, label, value) {
+    return { key, label, value };
+}
+
 async function getPrimaryChannelsByTicketIds(ticketIds) {
     if (!ticketIds.length) return new Map();
 
@@ -79,61 +98,166 @@ async function getPrimaryChannelsByTicketIds(ticketIds) {
     return map;
 }
 
-export async function getDashboardOverview(tenantId) {
-    const scopedTenantId = requireTenantId({ tenantId });
-    const todayStart = startOfUtcDay();
-    const tenantWhere = { tenantId: scopedTenantId };
+async function countDistinctCustomers(tenantWhere, createdAtGte = null) {
+    const where = {
+        ...tenantWhere,
+        ...(createdAtGte ? { createdAt: { gte: createdAtGte } } : {})
+    };
 
-    const [
-        openCount,
-        pendingCount,
-        resolvedTodayRows,
-        emailCustomerGroups,
-        idOnlyCustomerGroups,
-        ticketsCreatedToday,
-        recentTickets,
-        activeAgentGroups
-    ] = await Promise.all([
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: [TICKET_STATUS.OPEN, TICKET_STATUS.QUEUED] }
-            }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: {
-                    in: [TICKET_STATUS.PENDING, TICKET_STATUS.WAITING_FOR_REPLY]
-                }
-            }
-        }),
-        prisma.ticketStatusHistory.findMany({
-            where: {
-                newStatus: TICKET_STATUS.RESOLVED,
-                createdAt: { gte: todayStart },
-                ticket: tenantWhere
-            },
-            select: {
-                ticketRefId: true,
-                changedByUserId: true,
-                changedByName: true
-            }
-        }),
+    const [emailGroups, idGroups] = await Promise.all([
         prisma.ticket.groupBy({
             by: ["customerEmail"],
-            where: { ...tenantWhere, customerEmail: { not: null } },
+            where: { ...where, customerEmail: { not: null } },
             _count: { _all: true }
         }),
         prisma.ticket.groupBy({
             by: ["customerId"],
             where: {
-                ...tenantWhere,
+                ...where,
                 customerId: { not: null },
                 customerEmail: null
             },
             _count: { _all: true }
+        })
+    ]);
+
+    const unique = new Set();
+    for (const group of emailGroups) {
+        if (group.customerEmail) unique.add(group.customerEmail.toLowerCase());
+    }
+    for (const group of idGroups) {
+        if (group.customerId) unique.add(`id:${group.customerId}`);
+    }
+    return unique.size;
+}
+
+async function countResolvedSince(tenantWhere, since = null) {
+    return prisma.ticketStatusHistory.count({
+        where: {
+            newStatus: TICKET_STATUS.RESOLVED,
+            ...(since ? { createdAt: { gte: since } } : {}),
+            ticket: tenantWhere
+        }
+    });
+}
+
+async function countActiveAgents(tenantWhere, createdAtGte = null) {
+    if (!createdAtGte) {
+        const groups = await prisma.ticket.groupBy({
+            by: ["assignedToUserId"],
+            where: {
+                ...tenantWhere,
+                assignedToUserId: { not: null },
+                status: { in: ACTIVE_STATUSES }
+            },
+            _count: { _all: true }
+        });
+        return groups.length;
+    }
+
+    const rows = await prisma.ticketStatusHistory.findMany({
+        where: {
+            newStatus: TICKET_STATUS.RESOLVED,
+            createdAt: { gte: createdAtGte },
+            ticket: tenantWhere,
+            changedByUserId: { not: null }
+        },
+        select: { changedByUserId: true },
+        distinct: ["changedByUserId"]
+    });
+    return rows.length;
+}
+
+export async function getDashboardOverview(tenantId) {
+    const scopedTenantId = requireTenantId({ tenantId });
+    const todayStart = startOfUtcDay();
+    const weekStart = daysAgoStart(7);
+    const monthStart = daysAgoStart(30);
+    const tenantWhere = { tenantId: scopedTenantId };
+
+    const [
+        openLive,
+        openToday,
+        open7d,
+        open30d,
+        pendingLive,
+        pendingToday,
+        pending7d,
+        pending30d,
+        resolvedToday,
+        resolved7d,
+        resolved30d,
+        resolvedAll,
+        customersAll,
+        customers30d,
+        customers7d,
+        customersToday,
+        agentsLive,
+        agentsToday,
+        agents7d,
+        ticketsCreatedToday,
+        recentTickets,
+        resolvedTodayRows
+    ] = await Promise.all([
+        prisma.ticket.count({
+            where: { ...tenantWhere, status: { in: OPEN_STATUSES } }
         }),
+        prisma.ticket.count({
+            where: {
+                ...tenantWhere,
+                status: { in: OPEN_STATUSES },
+                createdAt: { gte: todayStart }
+            }
+        }),
+        prisma.ticket.count({
+            where: {
+                ...tenantWhere,
+                status: { in: OPEN_STATUSES },
+                createdAt: { gte: weekStart }
+            }
+        }),
+        prisma.ticket.count({
+            where: {
+                ...tenantWhere,
+                status: { in: OPEN_STATUSES },
+                createdAt: { gte: monthStart }
+            }
+        }),
+        prisma.ticket.count({
+            where: { ...tenantWhere, status: { in: PENDING_STATUSES } }
+        }),
+        prisma.ticket.count({
+            where: {
+                ...tenantWhere,
+                status: { in: PENDING_STATUSES },
+                createdAt: { gte: todayStart }
+            }
+        }),
+        prisma.ticket.count({
+            where: {
+                ...tenantWhere,
+                status: { in: PENDING_STATUSES },
+                createdAt: { gte: weekStart }
+            }
+        }),
+        prisma.ticket.count({
+            where: {
+                ...tenantWhere,
+                status: { in: PENDING_STATUSES },
+                createdAt: { gte: monthStart }
+            }
+        }),
+        countResolvedSince(tenantWhere, todayStart),
+        countResolvedSince(tenantWhere, weekStart),
+        countResolvedSince(tenantWhere, monthStart),
+        countResolvedSince(tenantWhere, null),
+        countDistinctCustomers(tenantWhere),
+        countDistinctCustomers(tenantWhere, monthStart),
+        countDistinctCustomers(tenantWhere, weekStart),
+        countDistinctCustomers(tenantWhere, todayStart),
+        countActiveAgents(tenantWhere),
+        countActiveAgents(tenantWhere, todayStart),
+        countActiveAgents(tenantWhere, weekStart),
         prisma.ticket.findMany({
             where: { ...tenantWhere, createdAt: { gte: todayStart } },
             select: { id: true }
@@ -154,21 +278,17 @@ export async function getDashboardOverview(tenantId) {
                 createdByName: true
             }
         }),
-        prisma.ticket.groupBy({
-            by: ["assignedToUserId"],
+        prisma.ticketStatusHistory.findMany({
             where: {
-                ...tenantWhere,
-                assignedToUserId: { not: null },
-                status: {
-                    in: [
-                        TICKET_STATUS.OPEN,
-                        TICKET_STATUS.QUEUED,
-                        TICKET_STATUS.PENDING,
-                        TICKET_STATUS.WAITING_FOR_REPLY
-                    ]
-                }
+                newStatus: TICKET_STATUS.RESOLVED,
+                createdAt: { gte: todayStart },
+                ticket: tenantWhere
             },
-            _count: { _all: true }
+            select: {
+                ticketRefId: true,
+                changedByUserId: true,
+                changedByName: true
+            }
         })
     ]);
 
@@ -236,24 +356,42 @@ export async function getDashboardOverview(tenantId) {
 
     const maxAgentScore = topAgents[0]?.score || 0;
 
-    const uniqueCustomers = new Set();
-    for (const group of emailCustomerGroups) {
-        if (group.customerEmail) {
-            uniqueCustomers.add(group.customerEmail.toLowerCase());
-        }
-    }
-    for (const group of idOnlyCustomerGroups) {
-        if (group.customerId) {
-            uniqueCustomers.add(`id:${group.customerId}`);
-        }
-    }
-
     const byChannel = ["EMAIL", "CHAT", "PHONE", "MANUAL"].map((channel) => ({
         channel,
         label: channelLabel(channel),
         created: createdByChannel[channel] || 0,
         resolved: resolvedByChannel[channel] || 0
     }));
+
+    const openPeriods = [
+        metricOption("live", "Live", openLive),
+        metricOption("today", "Today", openToday),
+        metricOption("7d", "Last 7 days", open7d),
+        metricOption("30d", "Last 30 days", open30d)
+    ];
+    const pendingPeriods = [
+        metricOption("live", "Live", pendingLive),
+        metricOption("today", "Today", pendingToday),
+        metricOption("7d", "Last 7 days", pending7d),
+        metricOption("30d", "Last 30 days", pending30d)
+    ];
+    const resolvedPeriods = [
+        metricOption("today", "Today", resolvedToday),
+        metricOption("7d", "Last 7 days", resolved7d),
+        metricOption("30d", "Last 30 days", resolved30d),
+        metricOption("all", "All time", resolvedAll)
+    ];
+    const customerPeriods = [
+        metricOption("all", "All time", customersAll),
+        metricOption("30d", "Last 30 days", customers30d),
+        metricOption("7d", "Last 7 days", customers7d),
+        metricOption("today", "Today", customersToday)
+    ];
+    const agentPeriods = [
+        metricOption("live", "Live", agentsLive),
+        metricOption("today", "Today", agentsToday),
+        metricOption("7d", "Last 7 days", agents7d)
+    ];
 
     return {
         generatedAt: new Date().toISOString(),
@@ -264,29 +402,39 @@ export async function getDashboardOverview(tenantId) {
         },
         summary: {
             openTickets: {
-                value: openCount,
+                value: openLive,
                 label: "Open Tickets",
-                periodLabel: "Live"
+                periodKey: "live",
+                periodLabel: "Live",
+                periods: openPeriods
             },
             pending: {
-                value: pendingCount,
+                value: pendingLive,
                 label: "Pending",
-                periodLabel: "Live"
+                periodKey: "live",
+                periodLabel: "Live",
+                periods: pendingPeriods
             },
             resolvedToday: {
-                value: resolvedTodayRows.length,
-                label: "Resolved Today",
-                periodLabel: "Today"
+                value: resolvedToday,
+                label: "Resolved",
+                periodKey: "today",
+                periodLabel: "Today",
+                periods: resolvedPeriods
             },
             totalCustomers: {
-                value: uniqueCustomers.size,
+                value: customersAll,
                 label: "Total Customers",
-                periodLabel: "All time"
+                periodKey: "all",
+                periodLabel: "All time",
+                periods: customerPeriods
             },
             activeAgents: {
-                value: activeAgentGroups.length,
+                value: agentsLive,
                 label: "Active agents",
-                periodLabel: "Live"
+                periodKey: "live",
+                periodLabel: "Live",
+                periods: agentPeriods
             }
         },
         ticketsByChannel: {

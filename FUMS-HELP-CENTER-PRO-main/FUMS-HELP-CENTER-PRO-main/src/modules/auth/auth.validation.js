@@ -16,12 +16,12 @@ export const registerSchema = z.object({
     lastName: z.string().min(2, "Name must be at least 2 characters")
 });
 
-/** Public workspace signup (matches Create account UI: full name + email + password). */
+/** Public workspace signup — same strong password policy as reset / change. */
 export const workspaceSignupSchema = z
     .object({
         fullName: z.string().min(2, "Name must be at least 2 characters").max(120),
         email: z.string().email("Invalid email"),
-        password: z.string().min(8, "Password must be at least 8 characters").max(128),
+        password: strongPassword,
         confirmPassword: z.string().min(8, "Password must be at least 8 characters")
     })
     .refine((data) => data.password === data.confirmPassword, {

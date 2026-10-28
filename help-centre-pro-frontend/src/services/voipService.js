@@ -83,6 +83,7 @@ class VoipService {
     this.listeners = new Map();
     this.initialized = false;
     this.registered = false;
+    this.acceptInbound = true;
     this.remoteAudioEl = null;
     this.pcConfig = null;
     this.held = false;
@@ -116,6 +117,10 @@ class VoipService {
       }
 
       this.activeConfig = activeConfig;
+      this.acceptInbound =
+        settings.acceptInbound === undefined
+          ? true
+          : Boolean(settings.acceptInbound);
       const provider =
         getProviderById(activeConfig.providerId) || {
           id: activeConfig.providerId,
@@ -144,21 +149,22 @@ class VoipService {
     } catch {
       /* ignore */
     }
-    this.activeConfig = null;
-    this.provider = null;
-    this.device = null;
-    this.call = null;
-    this.initialized = false;
-    this.registered = false;
-    this.pcConfig = null;
-    this.held = false;
-    this.mediaRecorder = null;
-    this.recordedChunks = [];
-    this.mixContext = null;
-    this.remoteStream = null;
-    this.pendingRecordingDataUrl = null;
-    this.pendingQuality = null;
-  }
+      this.activeConfig = null;
+      this.provider = null;
+      this.device = null;
+      this.call = null;
+      this.initialized = false;
+      this.registered = false;
+      this.acceptInbound = true;
+      this.pcConfig = null;
+      this.held = false;
+      this.mediaRecorder = null;
+      this.recordedChunks = [];
+      this.mixContext = null;
+      this.remoteStream = null;
+      this.pendingRecordingDataUrl = null;
+      this.pendingQuality = null;
+    }
 
   buildUaConfiguration(credentials, JsSIP) {
     const host = pickSipHost(credentials);
@@ -321,9 +327,16 @@ class VoipService {
       this.emit("error", new Error(error?.cause || "SIP registration failed"));
     });
     this.device.on("newRTCSession", (data) => {
-      if (data.originator === "remote") {
-        this.emit("incoming", data.session);
+      if (data.originator !== "remote") return;
+      if (!this.acceptInbound) {
+        try {
+          data.session?.terminate?.({ status_code: 486, reason_phrase: "Busy Here" });
+        } catch {
+          /* ignore */
+        }
+        return;
       }
+      this.emit("incoming", data.session);
     });
   }
 

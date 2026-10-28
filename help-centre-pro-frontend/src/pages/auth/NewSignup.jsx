@@ -3,6 +3,8 @@ import { Eye, EyeOff, ChevronRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { registerWorkspace } from "../../api/auth.api.js";
+import PasswordRequirements from "../../components/auth/PasswordRequirements.jsx";
+import { isPasswordValid } from "../../utils/password.js";
 import heroArt from "../../assets/signup-hero-exact.png";
 import logoMark from "../../assets/helpcentre-pro-mark-blue.png";
 import "../../styles/auth.css";
@@ -31,8 +33,10 @@ export default function NewSignup() {
       setError(t("auth.signup.errors.email"));
       return;
     }
-    if (password.length < 8) {
-      setError(t("auth.signup.errors.passwordLength"));
+    if (!isPasswordValid(password)) {
+      setError(
+        "Password must be at least 8 characters and include uppercase, lowercase, number, and special character."
+      );
       return;
     }
     if (password !== confirmPassword) {
@@ -148,7 +152,7 @@ export default function NewSignup() {
                   {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
                 </button>
               </div>
-              <p className="signup-form-hint">At least 8 characters</p>
+              <PasswordRequirements password={password} />
             </div>
 
             <div className="signup-form-field">

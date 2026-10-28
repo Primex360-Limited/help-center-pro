@@ -363,7 +363,11 @@ export async function getVoipSettings({ tenantId }) {
 
     return {
         configurations: Array.isArray(settings.voipConfigurations) ? settings.voipConfigurations : [],
-        activeConfigId: settings.voipActiveConfigId || ""
+        activeConfigId: settings.voipActiveConfigId || "",
+        acceptInbound:
+            settings.voipAcceptInbound === undefined
+                ? true
+                : Boolean(settings.voipAcceptInbound)
     };
 }
 
@@ -373,7 +377,11 @@ export async function getVoipSettings({ tenantId }) {
 export async function saveVoipSettings({ tenantId, payload = {}, actorId = null }) {
     const tenant = await findWorkspaceOrFail(tenantId);
     const settings = asSettings(tenant.settings);
-    const { configurations = [], activeConfigId = "" } = payload;
+    const {
+        configurations = [],
+        activeConfigId = "",
+        acceptInbound
+    } = payload;
 
     // Validate that activeConfigId exists in configurations
     if (activeConfigId && configurations.length > 0) {
@@ -386,7 +394,10 @@ export async function saveVoipSettings({ tenantId, payload = {}, actorId = null 
     const updatedSettings = {
         ...settings,
         voipConfigurations: configurations,
-        voipActiveConfigId: activeConfigId
+        voipActiveConfigId: activeConfigId,
+        ...(acceptInbound === undefined
+            ? {}
+            : { voipAcceptInbound: Boolean(acceptInbound) })
     };
 
     const updatedTenant = await prisma.tenant.update({

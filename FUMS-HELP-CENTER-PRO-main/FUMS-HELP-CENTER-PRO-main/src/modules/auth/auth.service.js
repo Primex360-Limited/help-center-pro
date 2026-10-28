@@ -1758,6 +1758,18 @@ export async function resetPassword({ token, password, confirmPassword }) {
         throw new AppError("User not found", 404);
     }
 
+    // Never allow recycling the current password on reset — same rule as
+    // authenticated change-password.
+    if (user.passwordHash) {
+        const isSamePassword = await comparePassword(password, user.passwordHash);
+        if (isSamePassword) {
+            throw new AppError(
+                "Choose a new password that is different from your previous one",
+                400
+            );
+        }
+    }
+
     const passwordHash = await hashPassword(password);
     const now = new Date();
 

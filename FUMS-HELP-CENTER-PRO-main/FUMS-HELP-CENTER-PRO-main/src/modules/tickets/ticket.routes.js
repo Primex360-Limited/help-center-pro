@@ -49,6 +49,7 @@ import {
 import { addTicketEventHandler } from "./timeline/timeline.controller.js";
 import { createTicketEventSchema } from "./timeline/timeline.validation.js";
 import { getDashboardOverviewHandler } from "./dashboard/dashboard.controller.js";
+import { getTicketAnalyticsHandler } from "./analytics/analytics.controller.js";
 
 const ticketRoutes = express.Router();
 
@@ -72,6 +73,31 @@ ticketRoutes.use(requireWorkspaceTenant);
 ticketRoutes.get(
     "/tickets/dashboard",
     asyncHandler(getDashboardOverviewHandler)
+);
+
+/**
+ * @openapi
+ * /tickets/analytics:
+ *   get:
+ *     tags: [Tickets]
+ *     summary: Tenant analytics overview for tickets and agents
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: period
+ *         schema:
+ *           type: string
+ *           enum: [7d, 30d, 90d]
+ *     responses:
+ *       200:
+ *         description: Analytics fetched successfully
+ */
+ticketRoutes.get(
+    "/tickets/analytics",
+    requirePermission("report:read"),
+    asyncHandler(getTicketAnalyticsHandler)
 );
 
 /**

@@ -18,6 +18,14 @@ export async function getDashboardOverview() {
   });
 }
 
+/** GET /tickets/analytics?period=7d|30d|90d */
+export async function getTicketAnalytics(period = "7d") {
+  return apiRequest(`/tickets/analytics${toQuery({ period })}`, {
+    method: "GET",
+    auth: true,
+  });
+}
+
 /**
  * GET /tickets — supports status, priority, assignedToUserId, channel, page, limit.
  * Response: { data: { tickets }, meta }

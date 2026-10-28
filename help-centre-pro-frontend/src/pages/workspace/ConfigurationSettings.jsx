@@ -12,10 +12,12 @@ import { Link } from "react-router-dom";
 import { emailAccountsApi } from "../../api/email-accounts.api.js";
 import ConfirmActionModal from "../../components/agents/ConfirmActionModal.jsx";
 import AddEmailAccountModal from "../../components/workspace/AddEmailAccountModal.jsx";
+import VoipSettings from "./VoipSettings.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import "../../styles/settings-premium.css";
 import "../../styles/email-settings.css";
 import "../../styles/admin.css";
+import "../../styles/voip-settings.css";
 
 const CHANNELS = [
   {
