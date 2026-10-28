@@ -1,7 +1,7 @@
 import { AppError } from "../../../shared/errors/AppError.js";
-import { createTicketMessageWithEvent, findTicketByPublicId, listTicketMessages } from "../ticket.repository.js";
+import { createTicketMessageWithEvent, findTicketByPublicId, listTicketEvents, listTicketMessages } from "../ticket.repository.js";
 import { buildPaginationMeta, getPagination } from "../ticket.utils.js";
-import { MESSAGE_TYPE } from "../ticket.constants.js";
+import { MESSAGE_TYPE, SENDER_TYPE } from "../ticket.constants.js";
 import { mapTicketMessageResponse } from "../helpers/map-ticket-response.js";
 import { buildAgentChatEvent } from "../timeline/timeline.service.js";
 import { requireTenantId } from "../helpers/tenant-scope.js";
@@ -39,22 +39,125 @@ export async function sendTicketMessage(ticketId, content, actor, messageType = 
     });
 }
 
+function chatEventAsMessage(event, ticket) {
+    // Prisma relation shape: event.chat.message — also accept nested payloads.
+    const rawContent =
+        (typeof event?.chat?.message === "string" && event.chat.message) ||
+        (typeof event?.chat?.content === "string" && event.chat.content) ||
+        (typeof event?.metadata?.message === "string" && event.metadata.message) ||
+        "";
+    const content = String(rawContent).trim();
+    if (!content) return null;
+    if (event?.metadata?.messageType === MESSAGE_TYPE.INTERNAL_NOTE) return null;
+    // Only chat (and legacy rows without type) belong in the live-chat pane.
+    if (event?.type && event.type !== "CHAT") return null;
+
+    const actor = event?.metadata?.actor && typeof event.metadata.actor === "object"
+        ? event.metadata.actor
+        : {};
+    const senderType = event?.chat?.senderType || event?.createdBy;
+    const isCustomer =
+        senderType === SENDER_TYPE.CUSTOMER ||
+        String(senderType).toUpperCase() === "CUSTOMER" ||
+        actor.type === SENDER_TYPE.CUSTOMER;
+
+    return {
+        id: event.id,
+        ticketId: ticket.ticketId,
+        sender: isCustomer
+            ? {
+                userId: null,
+                name: actor.name || ticket.customerName || "Customer",
+                email: actor.email || ticket.customerEmail || ""
+            }
+            : {
+                userId: actor.userId || "agent",
+                name: actor.name || "Agent",
+                email: actor.email || ""
+            },
+        type: MESSAGE_TYPE.MESSAGE,
+        content,
+        createdAt: event.createdAt
+    };
+}
+
+function descriptionAsMessage(ticket) {
+    const content = String(ticket?.description || "").trim();
+    if (!content) return null;
+    return {
+        id: `desc:${ticket.ticketId}`,
+        ticketId: ticket.ticketId,
+        sender: {
+            userId: null,
+            name: ticket.customerName || "Customer",
+            email: ticket.customerEmail || ""
+        },
+        type: MESSAGE_TYPE.MESSAGE,
+        content,
+        createdAt: ticket.createdAt || ticket.updatedAt || new Date().toISOString()
+    };
+}
+
 export async function getTicketMessages(ticketId, query = {}, messageType = MESSAGE_TYPE.MESSAGE, tenantId = null) {
     const ticket = await getTicketOrThrow(ticketId, tenantId ?? query.tenantId);
     const pagination = getPagination(query);
-    const { messages, total } = await listTicketMessages({
-        ticketRefId: ticket.id,
-        messageType,
-        skip: pagination.skip,
-        take: pagination.limit
-    });
+    const [{ messages }, events] = await Promise.all([
+        listTicketMessages({
+            ticketRefId: ticket.id,
+            messageType
+        }),
+        // Always load timeline events — widget visitor messages live here,
+        // not in TicketMessage (which requires an agent senderUserId).
+        messageType === MESSAGE_TYPE.MESSAGE
+            ? listTicketEvents(ticket.id)
+            : Promise.resolve([])
+    ]);
+
+    const stored = messages.map(mapTicketMessageResponse);
+    const storedIds = new Set(stored.map((message) => message.id));
+    const fromWidget = events
+        .filter((event) => {
+            const legacyId = event?.metadata?.legacyMessageId;
+            return !legacyId || !storedIds.has(legacyId);
+        })
+        .map((event) => chatEventAsMessage(event, ticket))
+        .filter((message) => message && !storedIds.has(message.id));
+
+    let combined = [...stored, ...fromWidget].sort(
+        (first, second) => new Date(first.createdAt) - new Date(second.createdAt)
+    );
+
+    // Last resort: ticket.description is set from the first visitor message.
+    if (!combined.length && messageType === MESSAGE_TYPE.MESSAGE) {
+        const seed = descriptionAsMessage(ticket);
+        if (seed) combined = [seed];
+    }
+
+    // `latest=true` returns the newest window (WhatsApp / live-chat style).
+    // Default pagination remains oldest-first for classic ticket history.
+    const wantLatest =
+        query.latest === true ||
+        query.latest === "true" ||
+        query.latest === 1 ||
+        query.latest === "1";
+    let pageItems;
+    if (wantLatest) {
+        const end = combined.length;
+        const start = Math.max(0, end - pagination.limit);
+        pageItems = combined.slice(start, end);
+    } else {
+        pageItems = combined.slice(
+            pagination.skip,
+            pagination.skip + pagination.limit
+        );
+    }
 
     return {
-        messages: messages.map(mapTicketMessageResponse),
+        messages: pageItems,
         meta: buildPaginationMeta({
             page: pagination.page,
             limit: pagination.limit,
-            total
+            total: combined.length
         })
     };
 }

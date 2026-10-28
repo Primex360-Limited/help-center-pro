@@ -11,5 +11,10 @@ export const createMessageSchema = z.object({
 
 export const listMessagesQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(DEFAULT_TICKET_PAGE),
-    limit: z.coerce.number().int().min(1).max(MAX_TICKET_LIMIT).default(DEFAULT_TICKET_LIMIT)
+    limit: z.coerce.number().int().min(1).max(MAX_TICKET_LIMIT).default(DEFAULT_TICKET_LIMIT),
+    /** When true, return the newest `limit` messages (live chat / WhatsApp). */
+    latest: z
+        .union([z.boolean(), z.enum(["true", "false", "1", "0"])])
+        .optional()
+        .transform((value) => value === true || value === "true" || value === "1")
 });

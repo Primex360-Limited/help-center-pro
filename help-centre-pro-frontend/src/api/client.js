@@ -163,6 +163,15 @@ export async function apiRequest(path, options = {}) {
       payload?.error ||
       `Request failed (${response.status})`;
 
+    // Vite proxy returns bare 500/text when the local API (:4008) is down.
+    if (
+      response.status >= 500 &&
+      (!text || !String(text).trim() || String(text).trim() === "Internal Server Error")
+    ) {
+      message =
+        "Cannot reach the API. Start the backend on port 4008 (or check VITE_API_URL), then try again.";
+    }
+
     if (typeof message === "string") {
       message = sanitizeApiErrorMessage(message, response.status);
     }
@@ -203,6 +212,12 @@ function sanitizeApiErrorMessage(raw, status) {
 
   if (status === 502 || status === 503 || status === 504 || /Bad Gateway/i.test(text)) {
     return "The API is waking up or temporarily unavailable. Wait about a minute and try again.";
+  }
+
+  // Static SPA hosts (admin/web) rewrite unknown paths to index.html — usually
+  // means VITE_API_URL pointed at the wrong Render service.
+  if (/Help Center Pro|Admin Sign In|id="root"/i.test(text)) {
+    return "Cannot reach the API. Confirm VITE_API_URL is https://helpcentre-pro-api.onrender.com and redeploy the frontend.";
   }
 
   const plain = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();

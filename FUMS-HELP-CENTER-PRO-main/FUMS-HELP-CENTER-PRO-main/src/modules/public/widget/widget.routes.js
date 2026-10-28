@@ -4,9 +4,12 @@ import { validate } from "../../../middleware/validate.middleware.js";
 import { requireWidgetApiKey } from "./widget.middleware.js";
 import {
     createVisitorHandler,
-    sendMessageHandler
+    listMessagesHandler,
+    sendMessageHandler,
+    sessionHandler
 } from "./widget.controller.js";
 import {
+    widgetListMessagesQuerySchema,
     widgetMessageSchema,
     widgetVisitorSchema
 } from "./widget.validation.js";
@@ -24,7 +27,7 @@ const widgetPublicRoutes = express.Router();
  *     description: |
  *       Authenticate with `X-HCP-API-Key: pk_test_…` / `pk_live_…` or
  *       `Authorization: Bearer sk_test_…` / `sk_live_…`.
- *       Production base: https://helpcentre-pro-admin.onrender.com/api/v1
+ *       Production base: https://helpcentre-pro-api.onrender.com/api/v1
  *     security:
  *       - hcpApiKey: []
  *       - bearerAuth: []
@@ -86,6 +89,63 @@ widgetPublicRoutes.post(
     requireWidgetApiKey,
     validate(widgetMessageSchema),
     asyncHandler(sendMessageHandler)
+);
+
+/**
+ * @openapi
+ * /public/widget/messages:
+ *   get:
+ *     tags: [Public Widget]
+ *     summary: Poll chat messages (customer + agent replies)
+ *     description: |
+ *       External chatbots must poll this endpoint so agent replies appear
+ *       in the visitor UI. Pass `after` (ISO timestamp) to fetch only new rows.
+ *     security:
+ *       - hcpApiKey: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: ticketId
+ *         required: true
+ *         schema: { type: string, example: TK-00019 }
+ *       - in: query
+ *         name: after
+ *         required: false
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+ *     responses:
+ *       200:
+ *         description: Message list for the ticket
+ *       404:
+ *         description: Ticket not found
+ */
+widgetPublicRoutes.get(
+    "/public/widget/messages",
+    requireWidgetApiKey,
+    validate(widgetListMessagesQuerySchema, "query"),
+    asyncHandler(listMessagesHandler)
+);
+
+/**
+ * @openapi
+ * /public/widget/session:
+ *   get:
+ *     tags: [Public Widget]
+ *     summary: Resolve workspace for the API key
+ *     security:
+ *       - hcpApiKey: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Workspace + key mode
+ */
+widgetPublicRoutes.get(
+    "/public/widget/session",
+    requireWidgetApiKey,
+    asyncHandler(sessionHandler)
 );
 
 export default widgetPublicRoutes;

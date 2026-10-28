@@ -446,11 +446,22 @@ export async function seedDemoTickets() {
 
     await ensureTenantChannels(tenant);
 
+    // Detect seed data by demo emails only — never by TK-##### (real tickets
+    // share that public id format).
     const already = await prisma.ticket.findFirst({
         where: {
             OR: [
-                { ticketId: { startsWith: "TK-000" } },
-                { ticketId: { startsWith: "TCKT-20260512-" } }
+                { ticketId: { startsWith: "TCKT-20260512-" } },
+                {
+                    customerEmail: {
+                        in: [
+                            "sarah.chen@example.com",
+                            "david.okafor@example.com",
+                            "james.wilson@example.com",
+                            "ayepeace@gmail.com"
+                        ]
+                    }
+                }
             ]
         }
     });

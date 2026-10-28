@@ -1,23 +1,27 @@
 import prisma from "../../database/prisma/client.js";
 
+/** Known seed/demo customer emails from `seedDemoTickets` — never real traffic. */
+const DEMO_CUSTOMER_EMAILS = Object.freeze([
+    "sarah.chen@example.com",
+    "david.okafor@example.com",
+    "james.wilson@example.com",
+    "ayepeace@gmail.com"
+]);
+
 /**
- * Permanently remove known seed / demo tickets so workspaces only show
- * real customer data. Safe to run on every boot (idempotent).
+ * Remove only known seed / demo tickets.
+ *
+ * IMPORTANT: Real public IDs are `TK-00001`, `TK-00019`, … — never match on
+ * `TK-000*` or every boot wipes live chat and support history.
  */
 export async function purgeDemoTickets() {
     const result = await prisma.ticket.deleteMany({
         where: {
             OR: [
-                { ticketId: { startsWith: "TK-000" } },
                 { ticketId: { startsWith: "TCKT-20260512-" } },
                 {
                     customerEmail: {
-                        in: [
-                            "sarah.chen@example.com",
-                            "david.okafor@example.com",
-                            "james.wilson@example.com",
-                            "ayepeace@gmail.com"
-                        ]
+                        in: [...DEMO_CUSTOMER_EMAILS]
                     }
                 }
             ]

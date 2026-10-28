@@ -130,6 +130,8 @@ export default function LiveChat() {
 
   const [selectedId, setSelectedId] = useState(selectedParam);
   const [messages, setMessages] = useState([]);
+  /** Ticket id the `messages` array belongs to — avoids flashing the wrong thread. */
+  const [messagesForId, setMessagesForId] = useState("");
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messagesError, setMessagesError] = useState("");
   const [banner, setBanner] = useState("");
@@ -140,6 +142,10 @@ export default function LiveChat() {
   const [copiedField, setCopiedField] = useState("");
 
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const stickToBottomRef = useRef(true);
+  const pendingJumpRef = useRef(false);
+  const scrollSignatureRef = useRef("");
   const pollRef = useRef(null);
   const copyTimerRef = useRef(null);
 
@@ -154,16 +160,24 @@ export default function LiveChat() {
         page: 1,
         limit: 100,
       });
-      const chats = sortTicketsNewestFirst(
-        (result?.data?.tickets || []).filter(
+      let rows = result?.data?.tickets || [];
+      // Fallback: if channel filter returns empty (legacy rows), scan recent inbox.
+      if (!rows.length) {
+        const broad = await listTickets({ page: 1, limit: 100 });
+        rows = (broad?.data?.tickets || []).filter(
           (ticket) => ticketChannel(ticket) === "CHAT"
-        )
-      );
-      setTickets(chats);
+        );
+      } else {
+        rows = rows.filter((ticket) => ticketChannel(ticket) === "CHAT");
+      }
+      // Live inbox = active threads only. Ended chats live under All Tickets.
+      const active = rows.filter((ticket) => !isEndedStatus(ticket.status));
+      setTickets(sortTicketsNewestFirst(active.length ? active : rows));
     } catch (err) {
       if (!silent) {
         setListError(err.message || "Unable to load live chats");
-        setTickets([]);
+        // Keep existing threads on a failed refresh so reload flicker never
+        // looks like "chats were deleted".
       }
     } finally {
       if (!silent) setLoadingList(false);
@@ -244,40 +258,116 @@ export default function LiveChat() {
     }
   }
 
-  const loadThreadMessages = useCallback(async (ticketId, { silent } = {}) => {
-    if (!ticketId) return;
-    if (!silent) {
-      setLoadingMessages(true);
-      setMessagesError("");
+  const scrollThreadToLatest = useCallback((behavior = "auto") => {
+    const pane = messagesContainerRef.current;
+    if (pane) {
+      pane.scrollTo({ top: pane.scrollHeight, behavior });
+      return;
     }
-    try {
-      const result = await getMessages(ticketId, { page: 1, limit: 100 });
-      const rows = result?.data?.messages || [];
-      // Newest first so agents see the latest message immediately.
-      const sorted = [...rows].sort(
-        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-      );
-      setMessages(sorted);
-    } catch (err) {
-      if (!silent) {
-        setMessagesError(err.message || "Unable to load messages");
-        setMessages([]);
-      }
-    } finally {
-      if (!silent) setLoadingMessages(false);
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
   }, []);
+
+  const loadThreadMessages = useCallback(
+    async (ticket, { silent } = {}) => {
+      const ticketId = ticket?.ticketId || ticket?.id || ticket;
+      if (!ticketId || typeof ticketId !== "string") return;
+      if (!silent) {
+        setLoadingMessages(true);
+        setMessagesError("");
+      }
+      try {
+        // latest=true → newest window; we still render oldest → newest.
+        const result = await getMessages(ticketId, {
+          page: 1,
+          limit: 100,
+          latest: true,
+        });
+        let rows = result?.data?.messages || result?.messages || [];
+        // If the API has not yet hydrated timeline events, seed from ticket
+        // description so the pane never looks empty while the list has a preview.
+        if (!rows.length) {
+          const seed =
+            (typeof ticket === "object" && ticket?.description) ||
+            selectedTicket?.description ||
+            "";
+          if (String(seed).trim()) {
+            rows = [
+              {
+                id: `desc:${ticketId}`,
+                content: String(seed).trim(),
+                createdAt:
+                  (typeof ticket === "object" && ticket?.createdAt) ||
+                  selectedTicket?.createdAt ||
+                  new Date().toISOString(),
+                sender: {
+                  userId: null,
+                  name:
+                    (typeof ticket === "object" &&
+                      (ticket?.customer?.name || ticket?.customerName)) ||
+                    selectedTicket?.customer?.name ||
+                    "Customer",
+                  email:
+                    (typeof ticket === "object" &&
+                      (ticket?.customer?.email || ticket?.customerEmail)) ||
+                    selectedTicket?.customer?.email ||
+                    "",
+                },
+              },
+            ];
+          }
+        }
+        const sorted = [...rows].sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        );
+        setMessages(sorted);
+        setMessagesForId(ticketId);
+      } catch (err) {
+        if (!silent) {
+          setMessagesError(err.message || "Unable to load messages");
+        }
+      } finally {
+        if (!silent) setLoadingMessages(false);
+      }
+    },
+    [selectedTicket]
+  );
 
   useEffect(() => {
     if (!selectedTicket) {
       setMessages([]);
+      setMessagesForId("");
       return undefined;
     }
     const id = selectedTicket.ticketId || selectedTicket.id;
-    loadThreadMessages(id);
+    stickToBottomRef.current = true;
+    pendingJumpRef.current = true;
+    // Seed from description immediately so the pane never looks empty while
+    // the list already shows a preview — then hydrate from the API.
+    const seed = String(selectedTicket.description || "").trim();
+    setMessagesForId((prev) => {
+      if (prev === id) return prev;
+      if (seed) {
+        setMessages([
+          {
+            id: `desc:${id}`,
+            content: seed,
+            createdAt: selectedTicket.createdAt || new Date().toISOString(),
+            sender: {
+              userId: null,
+              name: selectedTicket.customer?.name || "Customer",
+              email: selectedTicket.customer?.email || "",
+            },
+          },
+        ]);
+        return id;
+      }
+      setMessages([]);
+      return "";
+    });
+    loadThreadMessages(selectedTicket);
 
     pollRef.current = setInterval(() => {
-      loadThreadMessages(id, { silent: true });
+      loadThreadMessages(selectedTicket, { silent: true });
     }, 2000);
 
     return () => {
@@ -286,12 +376,32 @@ export default function LiveChat() {
   }, [selectedTicket?.ticketId, selectedTicket?.id, loadThreadMessages]);
 
   useEffect(() => {
-    // Keep the latest (top) message in view when the thread updates.
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [messages]);
+    if (loadingMessages) return undefined;
+    if (!stickToBottomRef.current && !pendingJumpRef.current) return undefined;
+
+    const signature = messages.map((row) => row.id).join("|");
+    const jump = pendingJumpRef.current;
+    if (!jump && signature === scrollSignatureRef.current) return undefined;
+    scrollSignatureRef.current = signature;
+    pendingJumpRef.current = false;
+
+    const frame = requestAnimationFrame(() => {
+      scrollThreadToLatest(jump ? "auto" : "smooth");
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages, loadingMessages, scrollThreadToLatest]);
+
+  function handleMessagesScroll() {
+    const pane = messagesContainerRef.current;
+    if (!pane) return;
+    const distance = pane.scrollHeight - pane.scrollTop - pane.clientHeight;
+    stickToBottomRef.current = distance < 96;
+  }
 
   function selectThread(ticket) {
     const id = ticket.ticketId || ticket.id;
+    stickToBottomRef.current = true;
+    pendingJumpRef.current = true;
     setSelectedId(id);
     setDraft("");
     setMessagesError("");
@@ -334,7 +444,10 @@ export default function LiveChat() {
     setDraft("");
     setSending(true);
     setMessagesError("");
-    setMessages((prev) => [optimistic, ...prev]);
+    stickToBottomRef.current = true;
+    pendingJumpRef.current = true;
+    setMessagesForId(id);
+    setMessages((prev) => [...prev, optimistic]);
     setTickets((prev) =>
       sortTicketsNewestFirst(
         prev.map((ticket) =>
@@ -361,7 +474,7 @@ export default function LiveChat() {
           return [...withoutOptimistic, message];
         });
       } else {
-        loadThreadMessages(id, { silent: true }).catch(() => {});
+        loadThreadMessages(selectedTicket, { silent: true }).catch(() => {});
       }
     } catch (err) {
       setMessages((prev) => prev.filter((row) => row.id !== optimisticId));
@@ -442,9 +555,15 @@ export default function LiveChat() {
               const threadEmail = customerEmail(ticket);
               const threadPhone = customerPhone(ticket);
               const active = id === selectedId;
-              const unread =
+              const waitingOnAgent =
                 !isEndedStatus(ticket.status) &&
-                (ticket.status === "QUEUED" || ticket.status === "OPEN")
+                Boolean(ticket.lastCustomerResponseAt) &&
+                (!ticket.lastAgentResponseAt ||
+                  new Date(ticket.lastCustomerResponseAt) >
+                    new Date(ticket.lastAgentResponseAt));
+              const unread =
+                !active &&
+                (ticket.status === "QUEUED" || waitingOnAgent)
                   ? 1
                   : 0;
 
@@ -463,11 +582,12 @@ export default function LiveChat() {
                     </span>
                     <span>
                       <p className="live-chat__thread-name">{threadName}</p>
-                      {(threadEmail || threadPhone) ? (
-                        <p className="live-chat__thread-contact">
-                          {threadEmail || threadPhone}
-                        </p>
-                      ) : null}
+                      <p className="live-chat__thread-contact">
+                        {formatTicketId(id)}
+                        {threadEmail || threadPhone
+                          ? ` · ${threadEmail || threadPhone}`
+                          : ""}
+                      </p>
                       <p className="live-chat__thread-preview">
                         {previewText(ticket)}
                       </p>
@@ -480,7 +600,7 @@ export default function LiveChat() {
                             ticket.createdAt
                         )}
                       </span>
-                      {isFreshTicket(ticket) ? (
+                      {isFreshTicket(ticket) && !active ? (
                         <span className="ch-fresh-pill">New</span>
                       ) : null}
                       {unread ? (
@@ -498,9 +618,9 @@ export default function LiveChat() {
               "No chats match your search."
             ) : (
               <>
-                No live chat conversations yet. Visitors open chats via your
-                widget API keys —{" "}
-                <Link to="/docs/integration">view integration docs</Link>.
+                No live chat conversations yet. New visitor chats stay here
+                after reload — open one from your widget or{" "}
+                <Link to="/docs/integration">integration docs</Link>.
               </>
             )}
           </p>
@@ -602,11 +722,15 @@ export default function LiveChat() {
               <p className="live-chat__error">{messagesError}</p>
             ) : null}
 
-            <div className="live-chat__messages">
-              <div ref={messagesEndRef} />
-              {loadingMessages ? (
-                <p className="live-chat__empty-list">Loading messages…</p>
-              ) : messages.length ? (
+            <div
+              className="live-chat__messages"
+              ref={messagesContainerRef}
+              onScroll={handleMessagesScroll}
+            >
+              <div className="live-chat__messages-spacer" aria-hidden="true" />
+              {messagesForId ===
+                (selectedTicket.ticketId || selectedTicket.id) &&
+              messages.length ? (
                 messages.map((message) => {
                   const agent = isAgentMessage(
                     message,
@@ -627,6 +751,8 @@ export default function LiveChat() {
                     </div>
                   );
                 })
+              ) : loadingMessages ? (
+                <p className="live-chat__empty-list">Loading messages…</p>
               ) : (
                 <p className="live-chat__empty-list">
                   No messages yet. Say hello to start the conversation.
@@ -637,6 +763,7 @@ export default function LiveChat() {
                   This conversation has ended.
                 </div>
               ) : null}
+              <div ref={messagesEndRef} />
             </div>
 
             <form className="live-chat__composer" onSubmit={handleSend}>

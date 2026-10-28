@@ -133,7 +133,11 @@ export async function regenerateApiKeysHandler(req, res) {
     return successResponse(res, result.message, {
         mode: result.mode,
         publicKey: result.publicKey,
-        secretKey: result.secretKey
+        secretKey: result.secretKey,
+        publicKeyPrefix: result.publicKeyPrefix,
+        secretKeyPrefix: result.secretKeyPrefix,
+        updatedAt: result.updatedAt,
+        previousKeysRevoked: result.previousKeysRevoked === true
     });
 }
 

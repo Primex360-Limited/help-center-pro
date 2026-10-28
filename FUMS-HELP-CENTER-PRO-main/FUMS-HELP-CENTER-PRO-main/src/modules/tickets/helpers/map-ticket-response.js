@@ -24,12 +24,22 @@ function mapCustomerReference(ticket) {
     };
 }
 
+function resolveTicketChannel(ticket) {
+    if (ticket.channel) return ticket.channel;
+    if (ticket.sourceChannel) return ticket.sourceChannel;
+
+    const events = Array.isArray(ticket.events) ? ticket.events : [];
+    const ranked = ["CHAT", "EMAIL", "PHONE"];
+    for (const preferred of ranked) {
+        if (events.some((event) => event?.channel === preferred)) {
+            return preferred;
+        }
+    }
+    return events[0]?.channel || null;
+}
+
 export function mapTicketResponse(ticket) {
-    const channel =
-        ticket.channel ||
-        ticket.sourceChannel ||
-        ticket.events?.[0]?.channel ||
-        null;
+    const channel = resolveTicketChannel(ticket);
 
     return {
         id: ticket.id,

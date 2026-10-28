@@ -69,7 +69,8 @@ export const env = {
     SEED_TEST_USER: bool(process.env.SEED_TEST_USER, false),
     SEED_DEMO_TICKETS: bool(process.env.SEED_DEMO_TICKETS, false),
     // Purge known demo ticket ids on boot (safe / idempotent).
-    PURGE_DEMO_DATA: bool(process.env.PURGE_DEMO_DATA, true),
+    // Default off — a bad demo purge previously wiped real TK-##### tickets on boot.
+    PURGE_DEMO_DATA: bool(process.env.PURGE_DEMO_DATA, false),
     // Seeds the default platform super admin (ebube.okechukwu@primex360.com).
     SEED_PROVIDER_SUPER_ADMIN: bool(process.env.SEED_PROVIDER_SUPER_ADMIN, true),
 

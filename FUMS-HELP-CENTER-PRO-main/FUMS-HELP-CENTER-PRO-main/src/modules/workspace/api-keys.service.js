@@ -223,6 +223,7 @@ export async function resolveTenantByApiKey(rawKey) {
     const apiKeys = settings.apiKeys || {};
 
     let mode = "live";
+    let keyKind = "public";
     if (
         apiKeys.test?.publicKeyHash === digest ||
         apiKeys.test?.secretKeyHash === digest
@@ -236,7 +237,22 @@ export async function resolveTenantByApiKey(rawKey) {
         mode = "live";
     }
 
-    return { tenant, mode, settings };
+    if (
+        apiKeys.test?.secretKeyHash === digest ||
+        apiKeys.live?.secretKeyHash === digest
+    ) {
+        keyKind = "secret";
+    } else if (
+        apiKeys.test?.publicKeyHash === digest ||
+        apiKeys.live?.publicKeyHash === digest ||
+        settings.widgetApiKeyHash === digest
+    ) {
+        keyKind = "public";
+    } else if (key.startsWith("sk_")) {
+        keyKind = "secret";
+    }
+
+    return { tenant, mode, settings, keyKind };
 }
 
 export function hashApiKey(raw) {

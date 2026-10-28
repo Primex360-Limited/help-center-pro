@@ -23,3 +23,10 @@ export const widgetMessageSchema = z.object({
     name: z.string().trim().min(1).max(120).optional(),
     phone: z.string().trim().min(5).max(32).optional()
 });
+
+/** GET /public/widget/messages?ticketId=TK-…&after=ISO&limit=100 */
+export const widgetListMessagesQuerySchema = z.object({
+    ticketId: z.string().trim().min(1, "ticketId is required"),
+    after: z.string().trim().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional()
+});

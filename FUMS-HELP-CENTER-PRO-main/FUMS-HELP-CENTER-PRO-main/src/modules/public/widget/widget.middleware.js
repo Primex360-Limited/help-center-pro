@@ -26,7 +26,7 @@ export async function requireWidgetApiKey(req, _res, next) {
             );
         }
 
-        const { tenant, mode, settings } = await resolveTenantByApiKey(rawKey);
+        const { tenant, mode, settings, keyKind } = await resolveTenantByApiKey(rawKey);
         if (tenant.status === "suspended") {
             throw new AppError("This workspace has been suspended", 403);
         }
@@ -34,6 +34,7 @@ export async function requireWidgetApiKey(req, _res, next) {
         req.widgetTenant = tenant;
         req.widgetMode = mode;
         req.widgetSettings = settings;
+        req.widgetKeyKind = keyKind || "public";
         req.tenantId = tenant.id;
         next();
     } catch (error) {

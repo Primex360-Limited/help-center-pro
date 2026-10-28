@@ -32,8 +32,16 @@ function resolveApiUrl() {
       host.endsWith(".onrender.com") ||
       host.endsWith(".vercel.app")
     ) {
+      // API lives on helpcentre-pro-api — never the static admin/web hosts.
       if (!fromEnv || isLoopbackApi(fromEnv)) {
-        return "https://helpcentre-pro-admin.onrender.com";
+        return "https://helpcentre-pro-api.onrender.com";
+      }
+      // Guard against a mis-baked VITE_API_URL pointing at a static SPA host.
+      if (
+        /helpcentre-pro-(admin|web)\.onrender\.com/i.test(fromEnv) &&
+        !/helpcentre-pro-api\.onrender\.com/i.test(fromEnv)
+      ) {
+        return "https://helpcentre-pro-api.onrender.com";
       }
       return fromEnv;
     }

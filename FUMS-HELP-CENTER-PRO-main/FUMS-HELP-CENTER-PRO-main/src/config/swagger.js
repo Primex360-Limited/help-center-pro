@@ -7,7 +7,7 @@ const options = {
             title: "Help Centre Pro API",
             version: "1.2.0",
             description:
-                "Help Centre Pro multi-tenant customer support platform API — authentication, RBAC, invitations, tickets, workspace settings (API keys, webhooks, billing), email accounts, public widget integration, and service health.\n\n**Production app:** https://helpcentre-pro-web.onrender.com\n\n**Production API:** https://helpcentre-pro-admin.onrender.com\n\n**Integrator guide:** https://helpcentre-pro-web.onrender.com/docs/integration",
+                "Help Centre Pro multi-tenant customer support platform API — authentication, RBAC, invitations, tickets, workspace settings (API keys, webhooks, billing), email accounts, public widget integration, and service health.\n\n**Production app:** https://helpcentre-pro-web.onrender.com\n\n**Production API:** https://helpcentre-pro-api.onrender.com\n\n**Integrator guide:** https://helpcentre-pro-web.onrender.com/docs/integration",
             contact: {
                 name: "Help Centre Pro",
                 url: "https://helpcentre-pro-web.onrender.com",
@@ -40,7 +40,7 @@ const options = {
         ],
         servers: [
             {
-                url: "https://helpcentre-pro-admin.onrender.com/api/v1",
+                url: "https://helpcentre-pro-api.onrender.com/api/v1",
                 description: "Production (Render)",
             },
             {
@@ -1794,7 +1794,13 @@ const options = {
             },
         },
     },
-    apis: ["src/modules/**/*.js"],
+    // Prefer route files only — scanning every module JS (services, etc.)
+    // made local boot hang for tens of seconds on Windows.
+    apis: [
+        "src/modules/**/*.routes.js",
+        "src/modules/**/*Routes.js",
+        "src/modules/health/**/*.js"
+    ],
 };
 
 const swaggerSpec = swaggerJSDoc(options);

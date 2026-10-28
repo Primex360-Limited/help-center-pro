@@ -455,6 +455,118 @@
   text-decoration: underline;
 }
 
+.settings-widget-ref__lead {
+  margin: 0 0 14px;
+  color: #475467;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.settings-widget-ref__lead code {
+  font-size: 12.5px;
+  background: #f2f4f7;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.settings-widget-ref__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.settings-widget-ref__list li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 12px 12px 10px;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.settings-widget-ref__list li.is-highlight {
+  border-color: #b2ddff;
+  background: #f5faff;
+}
+
+.settings-widget-ref__method {
+  display: inline-grid;
+  place-items: center;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  background: #f2f4f7;
+  color: #344054;
+}
+
+.settings-widget-ref__method[data-method="GET"] {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.settings-widget-ref__method[data-method="POST"] {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.settings-widget-ref__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: #101828;
+  font-size: 14px;
+}
+
+.settings-widget-ref__path {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  color: #344054;
+  word-break: break-all;
+}
+
+.settings-widget-ref__body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #667085;
+}
+
+.settings-widget-ref__req,
+.settings-widget-ref__opt {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.settings-widget-ref__req {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.settings-widget-ref__opt {
+  background: #f2f4f7;
+  color: #475467;
+}
+
+.settings-widget-ref__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
 /* —— Badges —— */
 .settings-plan-badge,
 .settings-badge {
@@ -495,6 +607,21 @@
   .settings-api-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.settings-key-reveal-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fecdca;
+  background: #fef3f2;
+  color: #912018;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 550;
 }
 
 .settings-key-block {

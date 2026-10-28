@@ -1,18 +1,33 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Copy, KeyRound, Shield, Webhook } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Copy,
+  KeyRound,
+  MessageSquare,
+  Radio,
+  Shield,
+  Sparkles,
+  Webhook,
+} from "lucide-react";
 import "../../styles/integration-docs.css";
 
-const API_HOST = "https://helpcentre-pro-admin.onrender.com";
+const API_HOST = "https://helpcentre-pro-api.onrender.com";
 const WEB_HOST = "https://helpcentre-pro-web.onrender.com";
 const BASE = `${API_HOST}/api/v1`;
 
 const SECTIONS = [
+  { id: "quickstart", label: "Quickstart" },
   { id: "keys", label: "API keys" },
-  { id: "visitors", label: "Visitor identity" },
-  { id: "messages", label: "Messages" },
+  { id: "endpoints", label: "API reference" },
+  { id: "visitors", label: "Start a chat" },
+  { id: "messages", label: "Send messages" },
+  { id: "poll-messages", label: "Receive replies" },
+  { id: "session", label: "Validate key" },
+  { id: "errors", label: "Errors & tips" },
   { id: "webhooks", label: "Webhooks" },
-  { id: "test", label: "Test script" },
+  { id: "test", label: "Test scripts" },
 ];
 
 const LANGUAGES = [
@@ -124,34 +139,50 @@ export default function IntegrationDocs() {
 
         <div className="idocs-content">
           <section className="idocs-hero">
-            <p className="idocs-eyebrow">Integration guide</p>
-            <h1>Build on Help Centre Pro</h1>
-            <p>
-              Connect your product with test and live API keys — collect visitor
-              email and phone, open chat tickets, send messages, and receive
-              signed webhooks.
+            <p className="idocs-eyebrow">
+              <Sparkles size={14} aria-hidden="true" /> Developer platform
             </p>
-            <div className="idocs-pills" role="navigation" aria-label="On this page">
-              {SECTIONS.map((s) => (
-                <a
-                  key={s.id}
-                  href={`#${s.id}`}
-                  className={active === s.id ? "is-active" : undefined}
-                  onClick={() => setActive(s.id)}
-                >
-                  {s.label}
-                </a>
-              ))}
+            <h1>HelpCentre Pro</h1>
+            <p className="idocs-hero__lead">
+              Embed premium live support in your product. Open a chat, sync
+              messages both ways, and let your agents reply from Live Chat.
+            </p>
+            <div className="idocs-hero__cta">
+              <a href="#quickstart" className="idocs-btn idocs-btn--primary">
+                Start in 4 steps
+                <ArrowRight size={16} aria-hidden="true" />
+              </a>
+              <a href="#test" className="idocs-btn idocs-btn--ghost">
+                Run a test script
+              </a>
             </div>
+            <ol className="idocs-flow" aria-label="Integration flow">
+              <li>
+                <span>1</span>
+                Collect visitor
+              </li>
+              <li>
+                <span>2</span>
+                Send messages
+              </li>
+              <li>
+                <span>3</span>
+                Poll agent replies
+              </li>
+              <li>
+                <span>4</span>
+                Go live
+              </li>
+            </ol>
             <dl className="idocs-meta">
               <div>
-                <dt>Base URL</dt>
+                <dt>API base</dt>
                 <dd>
                   <code>{BASE}</code>
                 </dd>
               </div>
               <div>
-                <dt>App</dt>
+                <dt>Workspace</dt>
                 <dd>
                   <a href={WEB_HOST} target="_blank" rel="noreferrer">
                     {WEB_HOST.replace("https://", "")}
@@ -161,16 +192,104 @@ export default function IntegrationDocs() {
             </dl>
           </section>
 
+          <section className="idocs-section" id="quickstart">
+            <div className="idocs-section__head">
+              <span className="idocs-icon" aria-hidden="true">
+                <Radio size={18} />
+              </span>
+              <div>
+                <h2>Quickstart</h2>
+                <p>
+                  Your chatbot talks to Help Centre Pro over three endpoints.
+                  Agent replies only appear if you poll — posting alone is
+                  one-way.
+                </p>
+              </div>
+            </div>
+
+            <div className="idocs-steps">
+              <article className="idocs-step">
+                <span className="idocs-step__n">01</span>
+                <h3>Create a visitor session</h3>
+                <p>
+                  <code>POST /public/widget/visitor</code> stores email / phone
+                  and opens a Live Chat ticket. Save <code>ticketId</code>.
+                </p>
+              </article>
+              <article className="idocs-step">
+                <span className="idocs-step__n">02</span>
+                <h3>Send customer messages</h3>
+                <p>
+                  <code>POST /public/widget/messages</code> appends each visitor
+                  message to that ticket for your agents.
+                </p>
+              </article>
+              <article className="idocs-step">
+                <span className="idocs-step__n">03</span>
+                <h3>Poll for agent replies</h3>
+                <p>
+                  <code>GET /public/widget/messages?ticketId=…</code> every 1–3s
+                  while the chat is open. Render rows with{" "}
+                  <code>role: "agent"</code>.
+                </p>
+              </article>
+              <article className="idocs-step">
+                <span className="idocs-step__n">04</span>
+                <h3>Switch to live keys</h3>
+                <p>
+                  Develop with <code>pk_test_</code> / <code>sk_test_</code>, then
+                  ship <code>pk_live_</code> / <code>sk_live_</code> from
+                  Settings → API Token.
+                </p>
+              </article>
+            </div>
+
+            <CodeBlock label="Minimal chatbot loop (JavaScript)">{`const BASE = "${BASE}";
+const KEY = "sk_test_YOUR_SECRET_KEY"; // server-side only
+
+async function startChat(visitor) {
+  const created = await fetch(\`\${BASE}/public/widget/visitor\`, {
+    method: "POST",
+    headers: {
+      "X-HCP-API-Key": KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(visitor),
+  }).then((r) => r.json());
+
+  const ticketId = created.data.ticketId;
+  let after = null;
+
+  // Keep polling while the widget is open — this is how agent replies arrive.
+  const timer = setInterval(async () => {
+    const url = new URL(\`\${BASE}/public/widget/messages\`);
+    url.searchParams.set("ticketId", ticketId);
+    if (after) url.searchParams.set("after", after);
+
+    const thread = await fetch(url, {
+      headers: { Authorization: \`Bearer \${KEY}\` },
+    }).then((r) => r.json());
+
+    for (const msg of thread.data.messages || []) {
+      if (msg.role === "agent") renderAgentBubble(msg);
+    }
+    if (thread.data.latestAt) after = thread.data.latestAt;
+  }, 2000);
+
+  return { ticketId, stop: () => clearInterval(timer) };
+}`}</CodeBlock>
+          </section>
+
           <section className="idocs-section" id="keys">
             <div className="idocs-section__head">
               <span className="idocs-icon" aria-hidden="true">
                 <Shield size={18} />
               </span>
               <div>
-                <h2>Test vs live API keys</h2>
+                <h2>API keys</h2>
                 <p>
-                  Each workspace has a <strong>test</strong> and{" "}
-                  <strong>live</strong> key pair from Settings → API Token.
+                  Every workspace has a test and live key pair under Settings →
+                  API Token.
                 </p>
               </div>
             </div>
@@ -180,7 +299,7 @@ export default function IntegrationDocs() {
                 <h3>Public keys</h3>
                 <p>
                   <code>pk_test_</code> / <code>pk_live_</code> — safe for
-                  client apps and widgets.
+                  client apps and embedded widgets.
                 </p>
               </article>
               <article className="idocs-callout idocs-callout--warn">
@@ -198,8 +317,99 @@ export default function IntegrationDocs() {
                 <code>Authorization: Bearer sk_live_…</code>
               </li>
               <li>
-                Use this guide for widget visitors, messages, and webhooks only —
-                everything you need to connect Help Centre Pro to your app.
+                Test mode data stays isolated from live customers — switch keys
+                when you are ready for production traffic.
+              </li>
+              <li>
+                Regenerating keys permanently revokes the previous pair for that
+                mode. Update your chat widget immediately.
+              </li>
+            </ul>
+          </section>
+
+          <section className="idocs-section" id="endpoints">
+            <div className="idocs-section__head">
+              <span className="idocs-icon" aria-hidden="true">
+                <MessageSquare size={18} />
+              </span>
+              <div>
+                <h2>API reference</h2>
+                <p>
+                  Everything your external chat widget needs. Base path{" "}
+                  <code>{BASE}</code>.
+                </p>
+              </div>
+            </div>
+
+            <div className="idocs-table-wrap">
+              <table className="idocs-table">
+                <thead>
+                  <tr>
+                    <th>Method</th>
+                    <th>Endpoint</th>
+                    <th>Purpose</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>POST</code>
+                    </td>
+                    <td>
+                      <code>/public/widget/visitor</code>
+                    </td>
+                    <td>Start chat — create visitor + Live Chat ticket</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>POST</code>
+                    </td>
+                    <td>
+                      <code>/public/widget/messages</code>
+                    </td>
+                    <td>Send a visitor message on an open ticket</td>
+                  </tr>
+                  <tr className="is-emphasis">
+                    <td>
+                      <code>GET</code>
+                    </td>
+                    <td>
+                      <code>/public/widget/messages</code>
+                    </td>
+                    <td>
+                      <strong>Get agent chat</strong> — poll customer + agent
+                      messages (required)
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>GET</code>
+                    </td>
+                    <td>
+                      <code>/public/widget/session</code>
+                    </td>
+                    <td>Validate API key and resolve workspace</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="idocs-list">
+              <li>
+                Headers: <code>Content-Type: application/json</code> on POST
+                bodies.
+              </li>
+              <li>
+                Auth (either): <code>X-HCP-API-Key: pk_…</code> or{" "}
+                <code>Authorization: Bearer sk_…</code>.
+              </li>
+              <li>
+                Keep <code>ticketId</code> from the visitor response for every
+                later call.
+              </li>
+              <li>
+                Message <code>role</code> is <code>customer</code> or{" "}
+                <code>agent</code> — render agent bubbles from GET polls.
               </li>
             </ul>
           </section>
@@ -210,10 +420,11 @@ export default function IntegrationDocs() {
                 <KeyRound size={18} />
               </span>
               <div>
-                <h2>Collect visitor email and phone</h2>
+                <h2>Start a chat</h2>
                 <p>
-                  Ask for identity before chat starts. Help Centre Pro stores the
-                  visitor as a customer and opens a live-chat ticket for agents.
+                  Collect email (required) and phone before chat. We create the
+                  customer profile and open a Live Chat ticket your agents see
+                  instantly.
                 </p>
               </div>
             </div>
@@ -242,13 +453,13 @@ Content-Type: application/json
           <section className="idocs-section" id="messages">
             <div className="idocs-section__head">
               <span className="idocs-icon" aria-hidden="true">
-                <Copy size={18} />
+                <MessageSquare size={18} />
               </span>
               <div>
-                <h2>Send follow-up messages</h2>
+                <h2>Send messages</h2>
                 <p>
-                  Append customer messages to an existing ticket. Agents reply from
-                  Live Chat in the workspace.
+                  Append each visitor message to the open ticket. Agents reply
+                  from Live Chat in the workspace.
                 </p>
               </div>
             </div>
@@ -261,14 +472,186 @@ Content-Type: application/json
   "message": "Still seeing the same error after clearing cache."
 }
 
+// 201
+{
+  "success": true,
+  "data": {
+    "ticketId": "TK-00042",
+    "eventId": "…"
+  }
+}`}</CodeBlock>
+          </section>
+
+          <section className="idocs-section" id="poll-messages">
+            <div className="idocs-section__head">
+              <span className="idocs-icon" aria-hidden="true">
+                <Radio size={18} />
+              </span>
+              <div>
+                <h2>Receive agent replies</h2>
+                <p>
+                  Required for every external chatbot. Poll while the chat is
+                  open (1–3s). Pass <code>after</code> with the last{" "}
+                  <code>latestAt</code> so you only fetch new rows.
+                </p>
+              </div>
+            </div>
+            <div className="idocs-banner" role="note">
+              Without this poll, agents can see the visitor — but the visitor
+              never sees the agent. This is the most common integration miss.
+            </div>
+            <CodeBlock label="GET /public/widget/messages">{`GET ${BASE}/public/widget/messages?ticketId=TK-00042
+Authorization: Bearer sk_test_…
+
+# Incremental poll (only messages newer than latestAt):
+GET ${BASE}/public/widget/messages?ticketId=TK-00042&after=2026-10-28T15:36:00.000Z
+
 // 200
 {
   "success": true,
   "data": {
     "ticketId": "TK-00042",
-    "messageId": "…"
+    "status": "OPEN",
+    "latestAt": "2026-10-28T15:36:12.000Z",
+    "messages": [
+      {
+        "id": "…",
+        "role": "customer",
+        "senderType": "CUSTOMER",
+        "name": "Ada Okafor",
+        "content": "Hello, I need help…",
+        "createdAt": "…"
+      },
+      {
+        "id": "…",
+        "role": "agent",
+        "senderType": "AGENT",
+        "name": "Support agent",
+        "content": "hi",
+        "createdAt": "…"
+      }
+    ]
   }
 }`}</CodeBlock>
+          </section>
+
+          <section className="idocs-section" id="session">
+            <div className="idocs-section__head">
+              <span className="idocs-icon" aria-hidden="true">
+                <KeyRound size={18} />
+              </span>
+              <div>
+                <h2>Validate API key</h2>
+                <p>
+                  Call this on widget boot to confirm the key works and to show
+                  the correct workspace name.
+                </p>
+              </div>
+            </div>
+            <CodeBlock label="GET /public/widget/session">{`GET ${BASE}/public/widget/session
+Authorization: Bearer sk_test_…
+
+// 200
+{
+  "success": true,
+  "data": {
+    "mode": "test",
+    "keyKind": "secret",
+    "workspace": {
+      "id": "…",
+      "name": "Acme Support",
+      "slug": "acme"
+    }
+  }
+}`}</CodeBlock>
+          </section>
+
+          <section className="idocs-section" id="errors">
+            <div className="idocs-section__head">
+              <span className="idocs-icon" aria-hidden="true">
+                <Shield size={18} />
+              </span>
+              <div>
+                <h2>Errors & integration tips</h2>
+                <p>
+                  Standard JSON errors. Build your chat widget around these
+                  statuses.
+                </p>
+              </div>
+            </div>
+
+            <div className="idocs-table-wrap">
+              <table className="idocs-table">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Meaning</th>
+                    <th>What to do</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <code>400</code>
+                    </td>
+                    <td>Validation failed</td>
+                    <td>Check email, ticketId, message body</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>401</code>
+                    </td>
+                    <td>Missing / invalid API key</td>
+                    <td>Regenerate keys in Settings → API Token</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>403</code>
+                    </td>
+                    <td>Workspace suspended</td>
+                    <td>Contact the workspace owner</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>404</code>
+                    </td>
+                    <td>Ticket not found</td>
+                    <td>Use the ticketId from visitor create</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>429</code>
+                    </td>
+                    <td>Rate limited</td>
+                    <td>Back off and retry with jitter</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <ul className="idocs-list">
+              <li>
+                Always poll <code>GET /public/widget/messages</code> while the
+                chat UI is open — that is how agent replies arrive.
+              </li>
+              <li>
+                Store <code>latestAt</code> and pass it as <code>after</code> on
+                the next poll to stay efficient.
+              </li>
+              <li>
+                Use secret keys only on your backend. Public keys may be embedded
+                in client widgets.
+              </li>
+              <li>
+                After regenerating keys, redeploy your widget config — old keys
+                stop working immediately.
+              </li>
+              <li>
+                Ticket <code>status</code> from the poll response may be{" "}
+                <code>OPEN</code>, <code>PENDING</code>, <code>RESOLVED</code>,
+                or <code>CLOSED</code> — disable sending when ended.
+              </li>
+            </ul>
           </section>
 
           <section className="idocs-section" id="webhooks">
@@ -365,7 +748,7 @@ if (expected !== req.get("X-HCP-Signature")) {
               <CodeBlock label="JavaScript/Node.js">{`// test-integration.js
 // Run with: node test-integration.js
 
-const API_HOST = "https://helpcentre-pro-admin.onrender.com";
+const API_HOST = "https://helpcentre-pro-api.onrender.com";
 const BASE = \`\${API_HOST}/api/v1\`;
 
 // Replace with your actual test keys from Settings → API Token
@@ -437,7 +820,7 @@ async function testMessagesEndpoint(ticketId) {
     if (response.ok) {
       console.log("✅ Messages endpoint SUCCESS");
       console.log("   Ticket ID:", data.data.ticketId);
-      console.log("   Message ID:", data.data.messageId);
+      console.log("   Event ID:", data.data.eventId);
     } else {
       console.log("❌ Messages endpoint FAILED");
       console.log("   Status:", response.status);
@@ -445,6 +828,38 @@ async function testMessagesEndpoint(ticketId) {
     }
   } catch (error) {
     console.log("❌ Messages endpoint ERROR");
+    console.log("   Error:", error.message);
+  }
+}
+
+async function testPollMessagesEndpoint(ticketId) {
+  console.log("\\n🧪 Testing GET /public/widget/messages (agent reply poll)...");
+
+  if (!ticketId) {
+    console.log("⚠️  Skipping poll test (no ticket ID from previous test)");
+    return;
+  }
+
+  try {
+    const url = new URL(\`\${BASE}/public/widget/messages\`);
+    url.searchParams.set("ticketId", ticketId);
+    const response = await fetch(url, {
+      headers: { Authorization: \`Bearer \${SECRET_KEY}\` },
+    });
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log("✅ Poll messages SUCCESS");
+      console.log("   Messages:", data.data.messages?.length || 0);
+      console.log("   latestAt:", data.data.latestAt);
+      console.log("   Tip: poll every 1–3s while chat is open; pass after=latestAt");
+    } else {
+      console.log("❌ Poll messages FAILED");
+      console.log("   Status:", response.status);
+      console.log("   Error:", data);
+    }
+  } catch (error) {
+    console.log("❌ Poll messages ERROR");
     console.log("   Error:", error.message);
   }
 }
@@ -464,12 +879,14 @@ async function runTests() {
 
   const ticketId = await testVisitorEndpoint();
   await testMessagesEndpoint(ticketId);
+  await testPollMessagesEndpoint(ticketId);
 
   console.log("\\n✨ Test complete!");
   console.log("\\n💡 Tips:");
   console.log("   - Get your keys from Settings → API Token in your workspace");
   console.log("   - Use test keys (pk_test_*/sk_test_*) for development");
   console.log("   - Switch to live keys (pk_live_*/sk_live_*) for production");
+  console.log("   - Poll GET /public/widget/messages so agent replies appear in your chatbot");
   console.log("   - Check your workspace to see the created ticket");
 }
 
@@ -483,7 +900,7 @@ runTests();`}</CodeBlock>
 import requests
 import json
 
-API_HOST = "https://helpcentre-pro-admin.onrender.com"
+API_HOST = "https://helpcentre-pro-api.onrender.com"
 BASE = f"{API_HOST}/api/v1"
 
 # Replace with your actual test keys from Settings → API Token
@@ -595,7 +1012,7 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 
 public class TestIntegration {
-    private static final String API_HOST = "https://helpcentre-pro-admin.onrender.com";
+    private static final String API_HOST = "https://helpcentre-pro-api.onrender.com";
     private static final String BASE = API_HOST + "/api/v1";
     
     // Replace with your actual test keys from Settings → API Token
@@ -728,7 +1145,7 @@ public class TestIntegration {
               <CodeBlock label="cURL">{`# Test with cURL (Quick one-liners)
 
 # Test Visitor Endpoint
-curl -X POST https://helpcentre-pro-admin.onrender.com/api/v1/public/widget/visitor \\
+curl -X POST https://helpcentre-pro-api.onrender.com/api/v1/public/widget/visitor \\
   -H "X-HCP-API-Key: pk_test_YOUR_PUBLIC_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -739,7 +1156,7 @@ curl -X POST https://helpcentre-pro-admin.onrender.com/api/v1/public/widget/visi
   }'
 
 # Test Messages Endpoint (replace TICKET_ID with actual ticket ID from above)
-curl -X POST https://helpcentre-pro-admin.onrender.com/api/v1/public/widget/messages \\
+curl -X POST https://helpcentre-pro-api.onrender.com/api/v1/public/widget/messages \\
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY_HERE" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -747,10 +1164,14 @@ curl -X POST https://helpcentre-pro-admin.onrender.com/api/v1/public/widget/mess
     "message": "Follow-up test message from cURL."
   }'
 
+# Poll agent replies (required for external chatbots)
+curl "https://helpcentre-pro-api.onrender.com/api/v1/public/widget/messages?ticketId=TK-00042" \\
+  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY_HERE"
+
 # Windows PowerShell version
 # Test Visitor Endpoint
 Invoke-RestMethod -Method POST \\
-  -Uri "https://helpcentre-pro-admin.onrender.com/api/v1/public/widget/visitor" \\
+  -Uri "https://helpcentre-pro-api.onrender.com/api/v1/public/widget/visitor" \\
   -Headers @{
     "X-HCP-API-Key" = "pk_test_YOUR_PUBLIC_KEY_HERE"
     "Content-Type" = "application/json"
@@ -768,7 +1189,7 @@ Invoke-RestMethod -Method POST \\
 // test_integration.php
 // Run with: php test_integration.php
 
-$API_HOST = "https://helpcentre-pro-admin.onrender.com";
+$API_HOST = "https://helpcentre-pro-api.onrender.com";
 $BASE = $API_HOST . "/api/v1";
 
 // Replace with your actual test keys from Settings → API Token
@@ -890,7 +1311,7 @@ import (
 )
 
 const (
-	APIHost  = "https://helpcentre-pro-admin.onrender.com"
+	APIHost  = "https://helpcentre-pro-api.onrender.com"
 	Base     = APIHost + "/api/v1"
 	
 	// Replace with your actual test keys from Settings → API Token
@@ -1094,14 +1515,19 @@ func main() {
             <div>
               <h2>Ready to integrate?</h2>
               <p>
-                Sign in, open Settings → API Token, rotate test or live keys, and
-                copy the secret once — it is shown only after regeneration.
+                Sign in → Settings → API Token for your keys and the chat widget
+                endpoint list (including get agent chat). Copy the secret once
+                after regeneration, then poll{" "}
+                <code>GET /public/widget/messages</code> in your app.
               </p>
             </div>
             <div className="idocs-cta__actions">
               <Link to="/login" className="idocs-btn idocs-btn--primary">
                 Go to workspace
               </Link>
+              <a href="#poll-messages" className="idocs-btn idocs-btn--ghost">
+                Poll agent replies
+              </a>
             </div>
           </section>
 

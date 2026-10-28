@@ -1129,10 +1129,19 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-anchor: none;
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overscroll-behavior: contain;
+}
+
+/* Push short threads to the bottom (WhatsApp-style). */
+.live-chat__messages-spacer {
+  flex: 1 1 auto;
+  min-height: 0;
+  pointer-events: none;
 }
 
 .live-chat__bubble-row {

@@ -303,10 +303,12 @@ export async function listTickets({ where, skip, take, orderBy }) {
         take,
         orderBy,
         include: {
+            // Prefer a recent event so channel stays accurate for live chat
+            // after mixed timeline activity (assign / status / notes).
             events: {
-                orderBy: { createdAt: "asc" },
-                take: 1,
-                select: { channel: true }
+                orderBy: { createdAt: "desc" },
+                take: 8,
+                select: { channel: true, createdAt: true }
             }
         }
     });

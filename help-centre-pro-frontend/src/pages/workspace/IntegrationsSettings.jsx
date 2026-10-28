@@ -18,8 +18,8 @@ export default function IntegrationsSettings() {
             className="settings-card__desc"
             style={{ textAlign: "center", maxWidth: 420, margin: "8px auto 0" }}
           >
-            Connect Help Centre Pro to your product with test and live API keys.
-            Collect visitor email and phone, open tickets, and sync messages.
+            Connect your chat widget with API keys: start a visitor chat, send
+            messages, and poll GET /public/widget/messages for agent replies.
           </p>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>

@@ -210,6 +210,11 @@ export async function addEventToTicket(ticketId, data, actor) {
         updatedByName: actor.name,
         updatedByEmail: actor.email,
         ...(isCustomerEvent ? { lastCustomerResponseAt: now } : {}),
+        ...(isCustomerEvent &&
+        data.eventMetadata?.source === "public_widget_api" &&
+        data.chat?.message
+            ? { description: String(data.chat.message).slice(0, 2000) }
+            : {}),
         ...(isAgentEvent ? { lastAgentResponseAt: now } : {}),
         ...(isCustomerEvent && ticket.status === TICKET_STATUS.WAITING_FOR_REPLY
             ? {

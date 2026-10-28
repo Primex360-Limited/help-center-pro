@@ -7,3 +7,6 @@ export class AppError extends Error {
         Error.captureStackTrace?.(this, this.constructor);
     }
 }
+
+/** Named + default so either import style cannot crash the process on boot. */
+export default AppError;

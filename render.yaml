@@ -26,6 +26,8 @@ services:
         value: "false"
       - key: SEED_TEST_USER
         value: "false"
+      - key: PURGE_DEMO_DATA
+        value: "false"
       - key: SEED_PROVIDER_SUPER_ADMIN
         value: "true"
       - key: EMAIL_ENABLED
