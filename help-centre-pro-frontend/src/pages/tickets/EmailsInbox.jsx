@@ -402,13 +402,12 @@ export default function EmailsInbox() {
         }
       }
       setDraft("");
-      // Clear Sending immediately — reload the thread in the background so
-      // a slow list refresh never traps the button in "Sending…".
-      setSending(false);
       loadDetail(selectedId).catch(() => {});
       loadEmails().catch(() => {});
     } catch (err) {
       setDetailError(err.message || "Unable to send");
+    } finally {
+      // Always clear Sending — never leave the button stuck on Render timeouts.
       setSending(false);
     }
   }

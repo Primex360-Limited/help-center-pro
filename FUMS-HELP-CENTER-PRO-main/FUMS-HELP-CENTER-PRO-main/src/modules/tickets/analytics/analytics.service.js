@@ -32,8 +32,7 @@ function addUtcDays(date, days) {
 }
 
 function dayKey(dateValue) {
-    const d = new Date(dateValue);
-    return d.toISOString().slice(0, 10);
+    return new Date(dateValue).toISOString().slice(0, 10);
 }
 
 function formatDayLabel(isoDay) {
@@ -46,10 +45,7 @@ function formatDayLabel(isoDay) {
 }
 
 function percentChange(current, previous) {
-    if (previous === 0) {
-        if (current === 0) return 0;
-        return 100;
-    }
+    if (previous === 0) return current === 0 ? 0 : 100;
     return Math.round(((current - previous) / previous) * 100);
 }
 
@@ -58,6 +54,22 @@ function initialsFromName(name = "") {
     if (!parts.length) return "AG";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function resolvePeriod(periodKey = "7d") {
+    const key = PERIODS[periodKey] ? periodKey : "7d";
+    const meta = PERIODS[key];
+    const endExclusive = addUtcDays(startOfUtcDay(), 1);
+    const start = addUtcDays(endExclusive, -meta.days);
+    const previousEnd = start;
+    const previousStart = addUtcDays(previousEnd, -meta.days);
+    return {
+        ...meta,
+        startsAt: start,
+        endsAt: endExclusive,
+        previousStartsAt: previousStart,
+        previousEndsAt: previousEnd
+    };
 }
 
 async function primaryChannelByTicketIds(ticketIds) {
@@ -79,39 +91,15 @@ async function primaryChannelByTicketIds(ticketIds) {
     return map;
 }
 
-function resolvePeriod(periodKey = "7d") {
-    const key = PERIODS[periodKey] ? periodKey : "7d";
-    const meta = PERIODS[key];
-    const endExclusive = addUtcDays(startOfUtcDay(), 1);
-    const start = addUtcDays(endExclusive, -meta.days);
-    const previousEnd = start;
-    const previousStart = addUtcDays(previousEnd, -meta.days);
-    return {
-        ...meta,
-        startsAt: start,
-        endsAt: endExclusive,
-        previousStartsAt: previousStart,
-        previousEndsAt: previousEnd
-    };
-}
-
 export async function getTicketAnalytics(tenantId, periodKey = "7d") {
     const scopedTenantId = requireTenantId({ tenantId });
     const period = resolvePeriod(periodKey);
     const tenantWhere = { tenantId: scopedTenantId };
 
-    const [
-        currentTickets,
-        previousTickets,
-        resolvedCurrent,
-        resolvedPrevious,
-        allTicketsSnapshot
-    ] = await Promise.all([
+    // Keep query count low for Render / shared Postgres pools.
+    const [allTickets, resolvedHistory] = await Promise.all([
         prisma.ticket.findMany({
-            where: {
-                ...tenantWhere,
-                createdAt: { gte: period.startsAt, lt: period.endsAt }
-            },
+            where: tenantWhere,
             select: {
                 id: true,
                 status: true,
@@ -121,24 +109,14 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
                 assignedToName: true
             }
         }),
-        prisma.ticket.findMany({
-            where: {
-                ...tenantWhere,
-                createdAt: {
-                    gte: period.previousStartsAt,
-                    lt: period.previousEndsAt
-                }
-            },
-            select: {
-                id: true,
-                status: true
-            }
-        }),
         prisma.ticketStatusHistory.findMany({
             where: {
                 newStatus: TICKET_STATUS.RESOLVED,
-                createdAt: { gte: period.startsAt, lt: period.endsAt },
-                ticket: tenantWhere
+                ticket: tenantWhere,
+                createdAt: {
+                    gte: period.previousStartsAt,
+                    lt: period.endsAt
+                }
             },
             select: {
                 ticketRefId: true,
@@ -146,29 +124,27 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
                 changedByUserId: true,
                 changedByName: true
             }
-        }),
-        prisma.ticketStatusHistory.count({
-            where: {
-                newStatus: TICKET_STATUS.RESOLVED,
-                createdAt: {
-                    gte: period.previousStartsAt,
-                    lt: period.previousEndsAt
-                },
-                ticket: tenantWhere
-            }
-        }),
-        prisma.ticket.findMany({
-            where: tenantWhere,
-            select: {
-                id: true,
-                status: true,
-                priority: true,
-                assignedToUserId: true,
-                assignedToName: true,
-                createdAt: true
-            }
         })
     ]);
+
+    const inRange = (date, start, end) => {
+        const t = new Date(date).getTime();
+        return t >= start.getTime() && t < end.getTime();
+    };
+
+    const currentTickets = allTickets.filter((t) =>
+        inRange(t.createdAt, period.startsAt, period.endsAt)
+    );
+    const previousTickets = allTickets.filter((t) =>
+        inRange(t.createdAt, period.previousStartsAt, period.previousEndsAt)
+    );
+
+    const resolvedCurrent = resolvedHistory.filter((r) =>
+        inRange(r.createdAt, period.startsAt, period.endsAt)
+    );
+    const resolvedPreviousCount = resolvedHistory.filter((r) =>
+        inRange(r.createdAt, period.previousStartsAt, period.previousEndsAt)
+    ).length;
 
     const totalCurrent = currentTickets.length;
     const totalPrevious = previousTickets.length;
@@ -185,10 +161,9 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
             : 0;
     const resolutionRatePrevious =
         totalPrevious > 0
-            ? Math.round((resolvedPrevious / totalPrevious) * 100)
+            ? Math.round((resolvedPreviousCount / totalPrevious) * 100)
             : 0;
 
-    // Volume series — one point per UTC day in the selected period
     const volumeMap = new Map();
     for (let i = 0; i < period.days; i += 1) {
         const day = addUtcDays(period.startsAt, i);
@@ -212,54 +187,28 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
         label: formatDayLabel(row.date)
     }));
 
-    // Status / priority from current snapshot for reliability of live desk state
-    const statusCounts = {
-        open: 0,
-        resolved: 0,
-        closed: 0,
-        pending: 0
-    };
+    const statusCounts = { open: 0, resolved: 0, closed: 0, pending: 0 };
     const priorityCounts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
-    for (const ticket of allTicketsSnapshot) {
+    for (const ticket of allTickets) {
         if (OPEN_STATUSES.includes(ticket.status)) statusCounts.open += 1;
         else if (RESOLVED_STATUSES.includes(ticket.status)) statusCounts.resolved += 1;
         else if (CLOSED_STATUSES.includes(ticket.status)) statusCounts.closed += 1;
         else if (PENDING_STATUSES.includes(ticket.status)) statusCounts.pending += 1;
-
         if (priorityCounts[ticket.priority] !== undefined) {
             priorityCounts[ticket.priority] += 1;
         }
     }
+
     const statusTotal =
         statusCounts.open +
         statusCounts.resolved +
         statusCounts.closed +
         statusCounts.pending;
     const statusBreakdown = [
-        {
-            key: "open",
-            label: "Open",
-            count: statusCounts.open,
-            color: "#2E90FA"
-        },
-        {
-            key: "resolved",
-            label: "Resolved",
-            count: statusCounts.resolved,
-            color: "#12B76A"
-        },
-        {
-            key: "closed",
-            label: "Closed",
-            count: statusCounts.closed,
-            color: "#98A2B3"
-        },
-        {
-            key: "pending",
-            label: "Pending",
-            count: statusCounts.pending,
-            color: "#FDB022"
-        }
+        { key: "open", label: "Open", count: statusCounts.open, color: "#2E90FA" },
+        { key: "resolved", label: "Resolved", count: statusCounts.resolved, color: "#12B76A" },
+        { key: "closed", label: "Closed", count: statusCounts.closed, color: "#98A2B3" },
+        { key: "pending", label: "Pending", count: statusCounts.pending, color: "#FDB022" }
     ].map((row) => ({
         ...row,
         percent: statusTotal > 0 ? Math.round((row.count / statusTotal) * 100) : 0
@@ -268,39 +217,18 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
     const priorityTotal =
         priorityCounts.HIGH + priorityCounts.MEDIUM + priorityCounts.LOW;
     const priorityBreakdown = [
-        {
-            key: "HIGH",
-            label: "High",
-            count: priorityCounts.HIGH,
-            color: "#F04438"
-        },
-        {
-            key: "MEDIUM",
-            label: "Medium",
-            count: priorityCounts.MEDIUM,
-            color: "#FDB022"
-        },
-        {
-            key: "LOW",
-            label: "Low",
-            count: priorityCounts.LOW,
-            color: "#12B76A"
-        }
+        { key: "HIGH", label: "High", count: priorityCounts.HIGH, color: "#F04438" },
+        { key: "MEDIUM", label: "Medium", count: priorityCounts.MEDIUM, color: "#FDB022" },
+        { key: "LOW", label: "Low", count: priorityCounts.LOW, color: "#12B76A" }
     ].map((row) => ({
         ...row,
-        percent:
-            priorityTotal > 0 ? Math.round((row.count / priorityTotal) * 100) : 0
+        percent: priorityTotal > 0 ? Math.round((row.count / priorityTotal) * 100) : 0
     }));
 
     const channelMap = await primaryChannelByTicketIds(
         currentTickets.map((t) => t.id)
     );
-    const channelCounts = {
-        PHONE: 0,
-        EMAIL: 0,
-        CHAT: 0,
-        MANUAL: 0
-    };
+    const channelCounts = { PHONE: 0, EMAIL: 0, CHAT: 0, MANUAL: 0 };
     for (const ticket of currentTickets) {
         const channel = channelMap.get(ticket.id) || "MANUAL";
         channelCounts[channel] = (channelCounts[channel] || 0) + 1;
@@ -319,7 +247,6 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
                 : 0
     }));
 
-    // Top agents — tickets assigned in the period (created in window)
     const agentMap = new Map();
     for (const ticket of currentTickets) {
         if (!ticket.assignedToUserId) continue;
@@ -333,7 +260,10 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
         };
         current.total += 1;
         if (ticket.assignedToName) current.name = ticket.assignedToName;
-        if (RESOLVED_STATUSES.includes(ticket.status) || CLOSED_STATUSES.includes(ticket.status)) {
+        if (
+            RESOLVED_STATUSES.includes(ticket.status) ||
+            CLOSED_STATUSES.includes(ticket.status)
+        ) {
             current.resolved += 1;
         } else if (OPEN_STATUSES.includes(ticket.status)) {
             current.open += 1;
@@ -377,7 +307,7 @@ export async function getTicketAnalytics(tenantId, periodKey = "7d") {
                 value: resolvedCurrentCount,
                 changePercent: percentChange(
                     resolvedCurrentCount,
-                    resolvedPrevious
+                    resolvedPreviousCount
                 )
             },
             resolutionRate: {

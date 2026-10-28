@@ -185,3 +185,149 @@ export function validateGmailConfig() {
   }
   return true;
 }
+
+function encodeRfc2047(value = "") {
+  const text = String(value);
+  if (/^[\x20-\x7E]*$/.test(text)) return text;
+  return `=?UTF-8?B?${Buffer.from(text, "utf8").toString("base64")}?=`;
+}
+
+function formatHeaderAddress(email, displayName) {
+  const addr = String(email || "").trim();
+  if (!addr) return "";
+  if (!displayName) return addr;
+  const safeName = encodeRfc2047(String(displayName).replace(/[\r\n"]/g, ""));
+  return `"${safeName}" <${addr}>`;
+}
+
+function toHeaderList(value) {
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean).join(", ");
+  }
+  return String(value).trim();
+}
+
+/**
+ * Send mail through the Gmail API over HTTPS (works on Render / hosts that
+ * block outbound SMTP to smtp.gmail.com). Uses the same OAuth token as IMAP.
+ */
+export async function sendViaGmailApi(account, emailData = {}) {
+  if (!account?.id) {
+    throw new AppError("Gmail account id is required for API send", 400);
+  }
+
+  const {
+    to,
+    cc,
+    bcc,
+    subject,
+    text,
+    html,
+    inReplyTo,
+    references
+  } = emailData;
+
+  const toHeader = toHeaderList(to);
+  if (!toHeader) {
+    throw new AppError("Recipient email is required", 400);
+  }
+
+  const fromHeader = formatHeaderAddress(
+    account.email,
+    account.displayName || ""
+  );
+  const messageId = `<${cryptoRandomId()}@mail.gmail.com>`;
+  const boundary = `hcp_${cryptoRandomId()}`;
+
+  const plain =
+    text ||
+    (html
+      ? String(html)
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "");
+  const htmlBody =
+    html ||
+    `<!DOCTYPE html><html><body style="font-family:sans-serif;line-height:1.5">${escapeHtml(
+      plain
+    ).replace(/\r\n|\r|\n/g, "<br>\n")}</body></html>`;
+
+  const headers = [
+    `From: ${fromHeader}`,
+    `To: ${toHeader}`,
+    toHeaderList(cc) ? `Cc: ${toHeaderList(cc)}` : null,
+    toHeaderList(bcc) ? `Bcc: ${toHeaderList(bcc)}` : null,
+    `Subject: ${encodeRfc2047(subject || "(no subject)")}`,
+    `Message-ID: ${messageId}`,
+    inReplyTo ? `In-Reply-To: ${inReplyTo}` : null,
+    references ? `References: ${references}` : null,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "X-Mailer: HelpCentre Pro"
+  ].filter(Boolean);
+
+  const mime = [
+    ...headers,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    plain || "",
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    htmlBody,
+    `--${boundary}--`,
+    ""
+  ].join("\r\n");
+
+  const raw = Buffer.from(mime, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+
+  try {
+    const gmail = await getGmailClient(account.id);
+    const response = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: { raw }
+    });
+
+    return {
+      success: true,
+      messageId,
+      gmailId: response?.data?.id || null,
+      response: "gmail-api",
+      sentFolder: {
+        appended: true,
+        deferred: false,
+        via: "gmail_api"
+      }
+    };
+  } catch (error) {
+    const detail =
+      error?.response?.data?.error?.message ||
+      error?.message ||
+      "Gmail API send failed";
+    console.error(`[Gmail API] send failed for ${account.email}:`, detail);
+    throw new AppError(`Failed to send via Gmail API: ${detail}`, 502);
+  }
+}
+
+function cryptoRandomId() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

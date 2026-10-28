@@ -83,6 +83,7 @@ export async function apiRequest(path, options = {}) {
     body,
     auth = false,
     headers = {},
+    timeoutMs = 0,
     _retried = false,
   } = options;
 
@@ -103,6 +104,12 @@ export async function apiRequest(path, options = {}) {
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer =
+    timeoutMs > 0 && controller
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
+
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
@@ -110,12 +117,20 @@ export async function apiRequest(path, options = {}) {
       headers: finalHeaders,
       credentials: "include",
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...(controller ? { signal: controller.signal } : {}),
     });
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error(
+        "The request timed out. Email sending may be blocked on this host — reconnect Gmail with Google sign-in, then try again."
+      );
+    }
     const target = API_URL || window.location.origin;
     throw new Error(
       `Unable to reach the API (${target}). Confirm the backend is live on port 4008 and CORS allows this site.`
     );
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 
   // Expired/missing access token — refresh once and retry.

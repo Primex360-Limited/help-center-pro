@@ -185,6 +185,8 @@ export async function replyTicketEmail(ticketId, payload) {
       method: "POST",
       auth: true,
       body: payload,
+      // Render SMTP hangs can exceed proxy limits — fail the UI cleanly.
+      timeoutMs: 55_000,
     }
   );
 }

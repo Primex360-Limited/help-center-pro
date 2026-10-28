@@ -71,7 +71,7 @@ function emptyChannelBucket() {
 }
 
 function metricOption(key, label, value) {
-    return { key, label, value };
+    return { key, label, value: Number(value) || 0 };
 }
 
 async function getPrimaryChannelsByTicketIds(ticketIds) {
@@ -98,76 +98,45 @@ async function getPrimaryChannelsByTicketIds(ticketIds) {
     return map;
 }
 
-async function countDistinctCustomers(tenantWhere, createdAtGte = null) {
-    const where = {
-        ...tenantWhere,
-        ...(createdAtGte ? { createdAt: { gte: createdAtGte } } : {})
-    };
+function countInWindow(tickets, statuses, since = null) {
+    return tickets.filter((ticket) => {
+        if (statuses && !statuses.includes(ticket.status)) return false;
+        if (since && new Date(ticket.createdAt) < since) return false;
+        return true;
+    }).length;
+}
 
-    const [emailGroups, idGroups] = await Promise.all([
-        prisma.ticket.groupBy({
-            by: ["customerEmail"],
-            where: { ...where, customerEmail: { not: null } },
-            _count: { _all: true }
-        }),
-        prisma.ticket.groupBy({
-            by: ["customerId"],
-            where: {
-                ...where,
-                customerId: { not: null },
-                customerEmail: null
-            },
-            _count: { _all: true }
-        })
-    ]);
-
+function uniqueCustomerCount(tickets, since = null) {
     const unique = new Set();
-    for (const group of emailGroups) {
-        if (group.customerEmail) unique.add(group.customerEmail.toLowerCase());
-    }
-    for (const group of idGroups) {
-        if (group.customerId) unique.add(`id:${group.customerId}`);
+    for (const ticket of tickets) {
+        if (since && new Date(ticket.createdAt) < since) continue;
+        if (ticket.customerEmail) {
+            unique.add(ticket.customerEmail.toLowerCase());
+        } else if (ticket.customerId) {
+            unique.add(`id:${ticket.customerId}`);
+        }
     }
     return unique.size;
 }
 
-async function countResolvedSince(tenantWhere, since = null) {
-    return prisma.ticketStatusHistory.count({
-        where: {
-            newStatus: TICKET_STATUS.RESOLVED,
-            ...(since ? { createdAt: { gte: since } } : {}),
-            ticket: tenantWhere
-        }
-    });
+function countResolvedInWindow(historyRows, since = null) {
+    if (!since) return historyRows.length;
+    return historyRows.filter((row) => new Date(row.createdAt) >= since).length;
 }
 
-async function countActiveAgents(tenantWhere, createdAtGte = null) {
-    if (!createdAtGte) {
-        const groups = await prisma.ticket.groupBy({
-            by: ["assignedToUserId"],
-            where: {
-                ...tenantWhere,
-                assignedToUserId: { not: null },
-                status: { in: ACTIVE_STATUSES }
-            },
-            _count: { _all: true }
-        });
-        return groups.length;
+function uniqueResolvers(historyRows, since = null) {
+    const ids = new Set();
+    for (const row of historyRows) {
+        if (since && new Date(row.createdAt) < since) continue;
+        if (row.changedByUserId) ids.add(row.changedByUserId);
     }
-
-    const rows = await prisma.ticketStatusHistory.findMany({
-        where: {
-            newStatus: TICKET_STATUS.RESOLVED,
-            createdAt: { gte: createdAtGte },
-            ticket: tenantWhere,
-            changedByUserId: { not: null }
-        },
-        select: { changedByUserId: true },
-        distinct: ["changedByUserId"]
-    });
-    return rows.length;
+    return ids.size;
 }
 
+/**
+ * Dashboard overview — resilient single-pass aggregates so the endpoint
+ * cannot 500 from Prisma null-filter quirks or connection-pool overload.
+ */
 export async function getDashboardOverview(tenantId) {
     const scopedTenantId = requireTenantId({ tenantId });
     const todayStart = startOfUtcDay();
@@ -175,92 +144,30 @@ export async function getDashboardOverview(tenantId) {
     const monthStart = daysAgoStart(30);
     const tenantWhere = { tenantId: scopedTenantId };
 
-    const [
-        openLive,
-        openToday,
-        open7d,
-        open30d,
-        pendingLive,
-        pendingToday,
-        pending7d,
-        pending30d,
-        resolvedToday,
-        resolved7d,
-        resolved30d,
-        resolvedAll,
-        customersAll,
-        customers30d,
-        customers7d,
-        customersToday,
-        agentsLive,
-        agentsToday,
-        agents7d,
-        ticketsCreatedToday,
-        recentTickets,
-        resolvedTodayRows
-    ] = await Promise.all([
-        prisma.ticket.count({
-            where: { ...tenantWhere, status: { in: OPEN_STATUSES } }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: OPEN_STATUSES },
-                createdAt: { gte: todayStart }
-            }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: OPEN_STATUSES },
-                createdAt: { gte: weekStart }
-            }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: OPEN_STATUSES },
-                createdAt: { gte: monthStart }
-            }
-        }),
-        prisma.ticket.count({
-            where: { ...tenantWhere, status: { in: PENDING_STATUSES } }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: PENDING_STATUSES },
-                createdAt: { gte: todayStart }
-            }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: PENDING_STATUSES },
-                createdAt: { gte: weekStart }
-            }
-        }),
-        prisma.ticket.count({
-            where: {
-                ...tenantWhere,
-                status: { in: PENDING_STATUSES },
-                createdAt: { gte: monthStart }
-            }
-        }),
-        countResolvedSince(tenantWhere, todayStart),
-        countResolvedSince(tenantWhere, weekStart),
-        countResolvedSince(tenantWhere, monthStart),
-        countResolvedSince(tenantWhere, null),
-        countDistinctCustomers(tenantWhere),
-        countDistinctCustomers(tenantWhere, monthStart),
-        countDistinctCustomers(tenantWhere, weekStart),
-        countDistinctCustomers(tenantWhere, todayStart),
-        countActiveAgents(tenantWhere),
-        countActiveAgents(tenantWhere, todayStart),
-        countActiveAgents(tenantWhere, weekStart),
+    const [tickets, resolvedHistory, recentTickets] = await Promise.all([
         prisma.ticket.findMany({
-            where: { ...tenantWhere, createdAt: { gte: todayStart } },
-            select: { id: true }
+            where: tenantWhere,
+            select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                customerEmail: true,
+                customerId: true,
+                assignedToUserId: true,
+                assignedToName: true
+            }
+        }),
+        prisma.ticketStatusHistory.findMany({
+            where: {
+                newStatus: TICKET_STATUS.RESOLVED,
+                ticket: tenantWhere
+            },
+            select: {
+                ticketRefId: true,
+                changedByUserId: true,
+                changedByName: true,
+                createdAt: true
+            }
         }),
         prisma.ticket.findMany({
             where: tenantWhere,
@@ -277,33 +184,52 @@ export async function getDashboardOverview(tenantId) {
                 assignedToName: true,
                 createdByName: true
             }
-        }),
-        prisma.ticketStatusHistory.findMany({
-            where: {
-                newStatus: TICKET_STATUS.RESOLVED,
-                createdAt: { gte: todayStart },
-                ticket: tenantWhere
-            },
-            select: {
-                ticketRefId: true,
-                changedByUserId: true,
-                changedByName: true
-            }
         })
     ]);
 
-    const resolvedTicketIds = [...new Set(resolvedTodayRows.map((row) => row.ticketRefId))];
-    const resolvedTodayDetails = resolvedTicketIds.length
-        ? await prisma.ticket.findMany({
-            where: { ...tenantWhere, id: { in: resolvedTicketIds } },
-            select: {
-                id: true,
-                assignedToUserId: true,
-                assignedToName: true
-            }
-        })
-        : [];
+    const openLive = countInWindow(tickets, OPEN_STATUSES);
+    const openToday = countInWindow(tickets, OPEN_STATUSES, todayStart);
+    const open7d = countInWindow(tickets, OPEN_STATUSES, weekStart);
+    const open30d = countInWindow(tickets, OPEN_STATUSES, monthStart);
 
+    const pendingLive = countInWindow(tickets, PENDING_STATUSES);
+    const pendingToday = countInWindow(tickets, PENDING_STATUSES, todayStart);
+    const pending7d = countInWindow(tickets, PENDING_STATUSES, weekStart);
+    const pending30d = countInWindow(tickets, PENDING_STATUSES, monthStart);
+
+    const resolvedToday = countResolvedInWindow(resolvedHistory, todayStart);
+    const resolved7d = countResolvedInWindow(resolvedHistory, weekStart);
+    const resolved30d = countResolvedInWindow(resolvedHistory, monthStart);
+    const resolvedAll = resolvedHistory.length;
+
+    const customersAll = uniqueCustomerCount(tickets);
+    const customers30d = uniqueCustomerCount(tickets, monthStart);
+    const customers7d = uniqueCustomerCount(tickets, weekStart);
+    const customersToday = uniqueCustomerCount(tickets, todayStart);
+
+    const agentsLive = new Set(
+        tickets
+            .filter(
+                (t) =>
+                    t.assignedToUserId &&
+                    ACTIVE_STATUSES.includes(t.status)
+            )
+            .map((t) => t.assignedToUserId)
+    ).size;
+    const agentsToday = uniqueResolvers(resolvedHistory, todayStart);
+    const agents7d = uniqueResolvers(resolvedHistory, weekStart);
+
+    const resolvedTodayRows = resolvedHistory.filter(
+        (row) => new Date(row.createdAt) >= todayStart
+    );
+    const resolvedTicketIds = [
+        ...new Set(resolvedTodayRows.map((row) => row.ticketRefId))
+    ];
+    const ticketById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
+
+    const ticketsCreatedToday = tickets.filter(
+        (ticket) => new Date(ticket.createdAt) >= todayStart
+    );
     const createdTodayIds = ticketsCreatedToday.map((ticket) => ticket.id);
     const recentIds = recentTickets.map((ticket) => ticket.id);
     const channelMap = await getPrimaryChannelsByTicketIds([
@@ -323,12 +249,8 @@ export async function getDashboardOverview(tenantId) {
     }
 
     const agentScoreMap = new Map();
-    const resolvedTicketById = new Map(
-        resolvedTodayDetails.map((ticket) => [ticket.id, ticket])
-    );
-
     for (const row of resolvedTodayRows) {
-        const ticket = resolvedTicketById.get(row.ticketRefId);
+        const ticket = ticketById.get(row.ticketRefId);
         const userId = ticket?.assignedToUserId || row.changedByUserId;
         const name = ticket?.assignedToName || row.changedByName || "Unassigned";
         if (!userId) continue;

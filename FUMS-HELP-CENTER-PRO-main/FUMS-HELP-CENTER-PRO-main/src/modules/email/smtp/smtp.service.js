@@ -133,9 +133,11 @@ function buildTransporterOptions(account, secret, secure) {
             rejectUnauthorized: false,
             minVersion: "TLSv1.2"
         },
-        connectionTimeout: 20_000,
-        greetingTimeout: 20_000,
-        socketTimeout: 45_000,
+        // Keep timeouts short — Render / cloud hosts often block SMTP and
+        // otherwise nodemailer can hang until the reverse proxy drops the request.
+        connectionTimeout: 12_000,
+        greetingTimeout: 12_000,
+        socketTimeout: 25_000,
         // One-shot send — avoid pooled sockets that die mid-flight.
         pool: false
     };
@@ -315,6 +317,9 @@ function buildTransactionalHeaders({
 
 function friendlySmtpError(error, account = {}) {
     const msg = String(error?.message || error || "");
+    if (/timeout|etimedout|timed out|hang up|econnrefused|network/i.test(msg)) {
+        return `${msg}. Outbound SMTP is often blocked on cloud hosts (e.g. Render). Connect Gmail with Google sign-in so replies send over HTTPS, or use an SMTP relay allowed from this server.`;
+    }
     if (isTlsMismatchError(error)) {
         return `${msg}. Check SMTP port and encryption: use 465 with SSL, or 587 with STARTTLS. For Zoho custom domains use smtppro.zoho.com.`;
     }
@@ -325,6 +330,20 @@ function friendlySmtpError(error, account = {}) {
         return `${msg}. Use an app password (not your normal login password) and the full email as username.`;
     }
     return msg;
+}
+
+function withHardTimeout(promise, ms, message) {
+    let timer = null;
+    return Promise.race([
+        Promise.resolve(promise).finally(() => {
+            if (timer) clearTimeout(timer);
+        }),
+        new Promise((_, reject) => {
+            timer = setTimeout(() => {
+                reject(new AppError(message, 504));
+            }, ms);
+        })
+    ]);
 }
 
 /**
@@ -348,8 +367,14 @@ export async function sendEmailViaSmtp(account, emailData) {
         autoSubmitted = false
     } = emailData;
 
+    const canUseGmailApi =
+        account?.provider === "gmail" &&
+        account?.id &&
+        (!attachments || attachments.length === 0);
+
     try {
-        return await withSmtpRetry(account, async (secure) => {
+        return await withHardTimeout(
+            withSmtpRetry(account, async (secure) => {
             let transporter = null;
             try {
                 ({ transporter } = await createSmtpTransporter(account, {
@@ -438,11 +463,51 @@ export async function sendEmailViaSmtp(account, emailData) {
                     }
                 }
             }
-        });
-    } catch (error) {
-        console.error("SMTP send error:", error);
+        }),
+            // Fail SMTP quickly so Gmail API fallback can run on blocked hosts.
+            canUseGmailApi ? 18_000 : 45_000,
+            "Mailbox SMTP timed out. On Render and similar hosts, connect Gmail with Google sign-in (HTTPS) or use an allowed SMTP relay."
+        );
+    } catch (smtpError) {
+        if (canUseGmailApi) {
+            console.warn(
+                `[SMTP] ${account.email} SMTP failed (${smtpError?.message || smtpError}); falling back to Gmail API`
+            );
+            try {
+                const { sendViaGmailApi } = await import(
+                    "../oauth/gmail.oauth.service.js"
+                );
+                return await withHardTimeout(
+                    sendViaGmailApi(account, {
+                        to,
+                        cc,
+                        bcc,
+                        subject,
+                        text,
+                        html,
+                        inReplyTo,
+                        references
+                    }),
+                    40_000,
+                    "Gmail send timed out. Please try again in a moment."
+                );
+            } catch (apiError) {
+                console.error(
+                    `[SMTP] Gmail API fallback also failed for ${account.email}:`,
+                    apiError?.message || apiError
+                );
+                if (apiError instanceof AppError) throw apiError;
+                throw new AppError(
+                    `Failed to send email via your mailbox: ${friendlySmtpError(apiError, account)}`,
+                    502
+                );
+            }
+        }
+
+        console.error("SMTP send error:", smtpError);
+        if (smtpError instanceof AppError) throw smtpError;
         throw new AppError(
-            `Failed to send email via your mailbox: ${friendlySmtpError(error)}`,
+            `Failed to send email via your mailbox: ${friendlySmtpError(smtpError, account)}`,
             502
         );
     }
