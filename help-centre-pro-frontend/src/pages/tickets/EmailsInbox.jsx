@@ -109,8 +109,9 @@ function normalizeThreadMessages(messages, thread, ticket, currentUserId) {
     merged.push(row);
   });
 
+  // Newest first — agents see the latest the moment they open the ticket.
   return merged.sort(
-    (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
   );
 }
 
@@ -459,7 +460,7 @@ export default function EmailsInbox() {
   const displayMessages =
     composerTab === "note"
       ? [...conversation, ...noteItems].sort(
-          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
         )
       : conversation;
 

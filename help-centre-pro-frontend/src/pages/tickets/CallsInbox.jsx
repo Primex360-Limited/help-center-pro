@@ -546,8 +546,9 @@ export default function CallsInbox() {
       isAgent: true,
       isNote: true,
     }));
+    // Newest first — latest call notes/messages appear at the top.
     return [...rows, ...noteRows].sort(
-      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
   }, [messages, notes, selectedTicket, user]);
 

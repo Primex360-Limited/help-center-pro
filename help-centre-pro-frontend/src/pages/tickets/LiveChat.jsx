@@ -253,8 +253,9 @@ export default function LiveChat() {
     try {
       const result = await getMessages(ticketId, { page: 1, limit: 100 });
       const rows = result?.data?.messages || [];
+      // Newest first so agents see the latest message immediately.
       const sorted = [...rows].sort(
-        (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
       setMessages(sorted);
     } catch (err) {
@@ -285,7 +286,8 @@ export default function LiveChat() {
   }, [selectedTicket?.ticketId, selectedTicket?.id, loadThreadMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Keep the latest (top) message in view when the thread updates.
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [messages]);
 
   function selectThread(ticket) {
@@ -332,7 +334,7 @@ export default function LiveChat() {
     setDraft("");
     setSending(true);
     setMessagesError("");
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev) => [optimistic, ...prev]);
     setTickets((prev) =>
       sortTicketsNewestFirst(
         prev.map((ticket) =>
@@ -601,6 +603,7 @@ export default function LiveChat() {
             ) : null}
 
             <div className="live-chat__messages">
+              <div ref={messagesEndRef} />
               {loadingMessages ? (
                 <p className="live-chat__empty-list">Loading messages…</p>
               ) : messages.length ? (
@@ -634,7 +637,6 @@ export default function LiveChat() {
                   This conversation has ended.
                 </div>
               ) : null}
-              <div ref={messagesEndRef} />
             </div>
 
             <form className="live-chat__composer" onSubmit={handleSend}>
