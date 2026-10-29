@@ -30,14 +30,15 @@ const WIDGET_ENDPOINTS = [
     method: "POST",
     path: "/public/widget/visitor",
     title: "Start chat",
-    detail: "Collect visitor email/phone and open a Live Chat ticket.",
+    detail:
+      "Start a chat. Name, email, and phone are optional — anonymous visitors work.",
     icon: UserPlus,
     required: true,
   },
   {
     method: "POST",
     path: "/public/widget/messages",
-    title: "Send visitor message",
+    title: "Send visitor message (left bubble)",
     detail: "Append a customer message to an open ticket.",
     icon: MessageSquare,
     required: true,

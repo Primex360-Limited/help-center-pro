@@ -78,12 +78,23 @@ export function mapTicketResponse(ticket) {
 }
 
 export function mapTicketMessageResponse(message) {
+    const senderId = String(message.senderUserId || "");
+    // Real workspace agents have UUID sender ids. Legacy widget posts that
+    // used the secret key landed as system:widget-secret-agent — those are
+    // visitor messages and must render on the customer (left) side.
+    const isSystemSender = senderId.startsWith("system:");
+    const isAgent = Boolean(senderId) && !isSystemSender;
     return {
         id: message.id,
         ticketId: message.ticket?.ticketId || message.ticketId,
+        senderType: isAgent ? "AGENT" : "CUSTOMER",
+        role: isAgent ? "agent" : "customer",
         sender: {
-            userId: message.senderUserId,
-            name: message.senderName,
+            userId: isAgent ? message.senderUserId : null,
+            type: isAgent ? "AGENT" : "CUSTOMER",
+            name: isAgent
+                ? message.senderName
+                : message.senderName || "Customer",
             email: message.senderEmail
         },
         type: message.messageType,

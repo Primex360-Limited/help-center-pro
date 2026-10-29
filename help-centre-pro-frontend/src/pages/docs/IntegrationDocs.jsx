@@ -212,8 +212,9 @@ export default function IntegrationDocs() {
                 <span className="idocs-step__n">01</span>
                 <h3>Create a visitor session</h3>
                 <p>
-                  <code>POST /public/widget/visitor</code> stores email / phone
-                  and opens a Live Chat ticket. Save <code>ticketId</code>.
+                  <code>POST /public/widget/visitor</code> opens a Live Chat
+                  ticket. Name, email, and phone are optional. Save{" "}
+                  <code>ticketId</code>.
                 </p>
               </article>
               <article className="idocs-step">
@@ -245,16 +246,21 @@ export default function IntegrationDocs() {
             </div>
 
             <CodeBlock label="Minimal chatbot loop (JavaScript)">{`const BASE = "${BASE}";
-const KEY = "sk_test_YOUR_SECRET_KEY"; // server-side only
+const PUBLIC_KEY = "pk_test_YOUR_PUBLIC_KEY"; // visitor traffic
+const SECRET_KEY = "sk_test_YOUR_SECRET_KEY"; // server-side poll / agent bots
 
-async function startChat(visitor) {
+async function startChat(visitor = {}) {
+  // name, email, phone are all optional
   const created = await fetch(\`\${BASE}/public/widget/visitor\`, {
     method: "POST",
     headers: {
-      "X-HCP-API-Key": KEY,
+      "X-HCP-API-Key": PUBLIC_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(visitor),
+    body: JSON.stringify({
+      message: "Hi — I need help.",
+      ...visitor,
+    }),
   }).then((r) => r.json());
 
   const ticketId = created.data.ticketId;
@@ -267,16 +273,29 @@ async function startChat(visitor) {
     if (after) url.searchParams.set("after", after);
 
     const thread = await fetch(url, {
-      headers: { Authorization: \`Bearer \${KEY}\` },
+      headers: { Authorization: \`Bearer \${SECRET_KEY}\` },
     }).then((r) => r.json());
 
     for (const msg of thread.data.messages || []) {
       if (msg.role === "agent") renderAgentBubble(msg);
+      if (msg.role === "customer") renderCustomerBubble(msg); // left side
     }
     if (thread.data.latestAt) after = thread.data.latestAt;
   }, 2000);
 
   return { ticketId, stop: () => clearInterval(timer) };
+}
+
+async function sendVisitorMessage(ticketId, message) {
+  // Always post visitor lines as the customer (left bubble in Live Chat).
+  return fetch(\`\${BASE}/public/widget/messages\`, {
+    method: "POST",
+    headers: {
+      "X-HCP-API-Key": PUBLIC_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ticketId, message }),
+  }).then((r) => r.json());
 }`}</CodeBlock>
           </section>
 
@@ -298,15 +317,16 @@ async function startChat(visitor) {
               <article className="idocs-callout">
                 <h3>Public keys</h3>
                 <p>
-                  <code>pk_test_</code> / <code>pk_live_</code> — safe for
-                  client apps and embedded widgets.
+                  <code>pk_test_</code> / <code>pk_live_</code> — preferred for
+                  visitor create + visitor messages (customer / left bubbles).
                 </p>
               </article>
               <article className="idocs-callout idocs-callout--warn">
                 <h3>Secret keys</h3>
                 <p>
                   <code>sk_test_</code> / <code>sk_live_</code> — server only.
-                  Never ship in browser or mobile bundles.
+                  Safe for polling. Pass <code>role: &quot;agent&quot;</code> only
+                  when posting automated agent replies.
                 </p>
               </article>
             </div>
@@ -315,6 +335,10 @@ async function startChat(visitor) {
               <li>
                 Authenticate with <code>X-HCP-API-Key: pk_test_…</code> or{" "}
                 <code>Authorization: Bearer sk_live_…</code>
+              </li>
+              <li>
+                Visitor messages default to <code>role: &quot;customer&quot;</code>{" "}
+                (left). Never send visitor lines as agent.
               </li>
               <li>
                 Test mode data stays isolated from live customers — switch keys
@@ -422,9 +446,9 @@ async function startChat(visitor) {
               <div>
                 <h2>Start a chat</h2>
                 <p>
-                  Collect email (required) and phone before chat. We create the
-                  customer profile and open a Live Chat ticket your agents see
-                  instantly.
+                  Open a Live Chat ticket your agents see instantly.{" "}
+                  <strong>Name, email, and phone are optional</strong> — pass
+                  whatever the visitor shared, or start fully anonymous.
                 </p>
               </div>
             </div>
@@ -432,6 +456,10 @@ async function startChat(visitor) {
 X-HCP-API-Key: pk_test_…
 Content-Type: application/json
 
+// Minimal — message only
+{ "message": "I need help resetting my password." }
+
+// Or with optional identity
 {
   "email": "ada@example.com",
   "phone": "+2348030000000",
@@ -445,7 +473,8 @@ Content-Type: application/json
   "data": {
     "ticketId": "TK-00042",
     "customerId": "…",
-    "mode": "test"
+    "mode": "test",
+    "anonymous": false
   }
 }`}</CodeBlock>
           </section>
@@ -458,13 +487,21 @@ Content-Type: application/json
               <div>
                 <h2>Send messages</h2>
                 <p>
-                  Append each visitor message to the open ticket. Agents reply
-                  from Live Chat in the workspace.
+                  Append each visitor message to the open ticket. Visitor lines
+                  always appear on the <strong>left</strong> in Live Chat
+                  (WhatsApp-style). Agents reply from the workspace on the
+                  right.
                 </p>
               </div>
             </div>
+            <div className="idocs-banner" role="note">
+              Use your <code>pk_</code> public key (or secret key without{" "}
+              <code>role</code>) for visitor messages. Only pass{" "}
+              <code>role: &quot;agent&quot;</code> with a secret key when your
+              server posts an automated agent reply.
+            </div>
             <CodeBlock label="POST /public/widget/messages">{`POST ${BASE}/public/widget/messages
-Authorization: Bearer sk_test_…
+X-HCP-API-Key: pk_test_…
 Content-Type: application/json
 
 {
@@ -472,14 +509,20 @@ Content-Type: application/json
   "message": "Still seeing the same error after clearing cache."
 }
 
-// 201
+// 201 — role is always "customer" unless you opted into agent
 {
   "success": true,
   "data": {
     "ticketId": "TK-00042",
-    "eventId": "…"
+    "eventId": "…",
+    "role": "customer"
   }
-}`}</CodeBlock>
+}
+
+// Optional: automated agent reply (secret key + role)
+POST ${BASE}/public/widget/messages
+Authorization: Bearer sk_test_…
+{ "ticketId": "TK-00042", "message": "Happy to help!", "role": "agent" }`}</CodeBlock>
           </section>
 
           <section className="idocs-section" id="poll-messages">
@@ -806,7 +849,7 @@ async function testMessagesEndpoint(ticketId) {
     const response = await fetch(\`\${BASE}/public/widget/messages\`, {
       method: "POST",
       headers: {
-        "Authorization": \`Bearer \${SECRET_KEY}\`,
+        "X-HCP-API-Key": PUBLIC_KEY,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

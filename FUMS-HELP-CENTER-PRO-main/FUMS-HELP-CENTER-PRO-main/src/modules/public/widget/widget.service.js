@@ -3,7 +3,7 @@ import prisma from "../../../database/prisma/client.js";
 import { createTicket } from "../../tickets/ticket.service.js";
 import { findTicketByPublicId } from "../../tickets/ticket.repository.js";
 import { addEventToTicket } from "../../tickets/timeline/timeline.service.js";
-import { getTicketMessages, sendTicketMessage } from "../../tickets/messages/message.service.js";
+import { getTicketMessages } from "../../tickets/messages/message.service.js";
 import {
     MESSAGE_TYPE,
     SENDER_TYPE,
@@ -67,6 +67,12 @@ async function collapseDuplicateOpenChats(tenantId, visitorEmail, keepTicketId) 
     });
 }
 
+function buildGuestVisitorEmail() {
+    return `guest.${Date.now().toString(36)}.${Math.random()
+        .toString(36)
+        .slice(2, 8)}@visitor.local`;
+}
+
 export async function createWidgetVisitor({
     tenantId,
     mode,
@@ -76,14 +82,23 @@ export async function createWidgetVisitor({
     message,
     customerIp = null
 }) {
-    const visitorEmail = String(email).trim().toLowerCase();
-    const visitorName = name?.trim() || visitorEmail.split("@")[0];
+    const hasEmail = Boolean(String(email || "").trim());
+    const visitorEmail = hasEmail
+        ? String(email).trim().toLowerCase()
+        : buildGuestVisitorEmail();
     const visitorPhone = phone?.trim() || undefined;
+    const visitorName =
+        name?.trim() ||
+        (hasEmail ? visitorEmail.split("@")[0] : visitorPhone || "Visitor");
     const initialMessage =
         message?.trim() ||
         `Chat started by ${visitorName} via widget (${mode})`;
 
-    const existing = await findReusableChatTicket(tenantId, visitorEmail);
+    // Only resume when we have a real identity (email) — anonymous guests
+    // always get a fresh thread.
+    const existing = hasEmail
+        ? await findReusableChatTicket(tenantId, visitorEmail)
+        : null;
     if (existing) {
         await collapseDuplicateOpenChats(tenantId, visitorEmail, existing.ticketId);
         await addEventToTicket(
@@ -111,7 +126,8 @@ export async function createWidgetVisitor({
             ticketId: existing.ticketId,
             customerId: existing.customerId || visitorEmail,
             mode,
-            resumed: true
+            resumed: true,
+            anonymous: !hasEmail
         };
     }
 
@@ -132,7 +148,8 @@ export async function createWidgetVisitor({
             },
             initialEventMetadata: {
                 widgetMode: mode,
-                source: "public_widget_api"
+                source: "public_widget_api",
+                anonymous: !hasEmail
             }
         },
         { ...WIDGET_ACTOR, tenantId }
@@ -142,7 +159,8 @@ export async function createWidgetVisitor({
         ticketId: ticket.ticketId,
         customerId: ticket.customer?.customerId || visitorEmail,
         mode,
-        resumed: false
+        resumed: false,
+        anonymous: !hasEmail
     };
 }
 
@@ -154,7 +172,8 @@ export async function sendWidgetMessage({
     message,
     email,
     name,
-    phone
+    phone,
+    role = "customer"
 }) {
     const ticket = await findTicketByPublicId(ticketId, { tenantId });
     if (!ticket) {
@@ -162,19 +181,33 @@ export async function sendWidgetMessage({
     }
 
     const content = String(message).trim();
+    const wantAgent =
+        keyKind === "secret" && String(role || "customer").toLowerCase() === "agent";
 
-    // Secret key posts as the agent so external integrations (and this test
-    // harness) can deliver replies into the same ticket the visitor opened.
-    if (keyKind === "secret") {
-        const agentMessage = await sendTicketMessage(
+    // Secret key + role:"agent" posts an agent bubble (automation / bot replies).
+    // Everything else — including secret-key visitor traffic — is the customer,
+    // so Live Chat keeps WhatsApp-style left bubbles for visitor messages.
+    if (wantAgent) {
+        const event = await addEventToTicket(
             ticket.ticketId,
-            content,
-            { ...WIDGET_SECRET_AGENT, tenantId },
-            MESSAGE_TYPE.MESSAGE
+            {
+                tenantId,
+                channel: TICKET_CHANNEL.CHAT,
+                chat: {
+                    message: content,
+                    senderType: SENDER_TYPE.AGENT
+                },
+                eventMetadata: {
+                    widgetMode: mode,
+                    source: "public_widget_api",
+                    role: "agent"
+                }
+            },
+            { ...WIDGET_SECRET_AGENT, tenantId }
         );
         return {
             ticketId: ticket.ticketId,
-            messageId: agentMessage.id,
+            eventId: event.id,
             mode,
             role: "agent"
         };
@@ -241,12 +274,15 @@ export async function listWidgetMessages({
             return new Date(message.createdAt).getTime() > afterMs;
         })
         .map((message) => {
+            const explicit = String(
+                message?.role || message?.senderType || message?.sender?.type || ""
+            ).toUpperCase();
             const senderId = String(message?.sender?.userId || "");
-            const isCustomerActor =
-                !senderId ||
-                senderId === "system:widget-api" ||
-                senderId === "system:chat-widget";
-            const isAgent = !isCustomerActor;
+            const isAgent =
+                explicit === "AGENT" ||
+                (Boolean(senderId) &&
+                    !senderId.startsWith("system:") &&
+                    explicit !== "CUSTOMER");
             return {
                 id: message.id,
                 ticketId: ticket.ticketId,

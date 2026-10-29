@@ -37,12 +37,11 @@ const widgetPublicRoutes = express.Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email]
  *             properties:
- *               email: { type: string, format: email }
- *               phone: { type: string }
- *               name: { type: string }
- *               message: { type: string }
+ *               email: { type: string, format: email, description: Optional }
+ *               phone: { type: string, description: Optional }
+ *               name: { type: string, description: Optional }
+ *               message: { type: string, description: Optional opening message }
  *     responses:
  *       201:
  *         description: Visitor stored and ticket created
@@ -75,9 +74,10 @@ widgetPublicRoutes.post(
  *             properties:
  *               ticketId: { type: string, example: TK-00042 }
  *               message: { type: string }
- *               email: { type: string, format: email }
- *               name: { type: string }
- *               phone: { type: string }
+ *               email: { type: string, format: email, description: Optional }
+ *               name: { type: string, description: Optional }
+ *               phone: { type: string, description: Optional }
+ *               role: { type: string, enum: [customer, agent], description: "Secret key only. Default customer. Pass agent for automated agent replies." }
  *     responses:
  *       200:
  *         description: Message appended

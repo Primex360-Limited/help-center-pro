@@ -44,7 +44,8 @@ export async function sendMessageHandler(req, res) {
         message: body.message,
         email: body.email,
         name: body.name,
-        phone: body.phone
+        phone: body.phone,
+        role: body.role
     });
 
     return successResponse(res, "Message sent", result, 201);

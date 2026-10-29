@@ -64,14 +64,18 @@ function chatEventAsMessage(event, ticket) {
     return {
         id: event.id,
         ticketId: ticket.ticketId,
+        senderType: isCustomer ? SENDER_TYPE.CUSTOMER : SENDER_TYPE.AGENT,
+        role: isCustomer ? "customer" : "agent",
         sender: isCustomer
             ? {
                 userId: null,
+                type: SENDER_TYPE.CUSTOMER,
                 name: actor.name || ticket.customerName || "Customer",
                 email: actor.email || ticket.customerEmail || ""
             }
             : {
-                userId: actor.userId || "agent",
+                userId: actor.userId || null,
+                type: SENDER_TYPE.AGENT,
                 name: actor.name || "Agent",
                 email: actor.email || ""
             },
@@ -87,8 +91,11 @@ function descriptionAsMessage(ticket) {
     return {
         id: `desc:${ticket.ticketId}`,
         ticketId: ticket.ticketId,
+        senderType: SENDER_TYPE.CUSTOMER,
+        role: "customer",
         sender: {
             userId: null,
+            type: SENDER_TYPE.CUSTOMER,
             name: ticket.customerName || "Customer",
             email: ticket.customerEmail || ""
         },

@@ -102,9 +102,22 @@ function endStatusFor(ticket) {
   return "RESOLVED";
 }
 
+/** WhatsApp-style: customer left, agent right. Prefer explicit role/senderType. */
 function isAgentMessage(message, currentUserId, ticket) {
-  const senderId = message?.sender?.userId;
-  if (!senderId) return false;
+  const explicit = String(
+    message?.role || message?.senderType || message?.sender?.type || ""
+  ).toUpperCase();
+  if (explicit === "CUSTOMER" || explicit === "VISITOR") return false;
+  if (explicit === "AGENT") return true;
+
+  const senderId = String(message?.sender?.userId || "");
+  // Legacy mis-posts used the secret key for visitor traffic and stored
+  // system:widget-secret-agent — still treat those as customer on the left.
+  // Intentional agent automation now sends role:"agent" with a real agent id.
+  if (!senderId || senderId.startsWith("system:")) {
+    return false;
+  }
+
   const customerEmail = String(ticket?.customer?.email || "").toLowerCase();
   const senderEmail = String(message?.sender?.email || "").toLowerCase();
   if (customerEmail && senderEmail && customerEmail === senderEmail) {
@@ -114,7 +127,8 @@ function isAgentMessage(message, currentUserId, ticket) {
   if (ticket?.assignedTo?.userId && senderId === ticket.assignedTo.userId) {
     return true;
   }
-  return true;
+  // Ambiguous rows stay on the left (visitor) — never flip customer traffic right.
+  return false;
 }
 
 export default function LiveChat() {
@@ -294,6 +308,8 @@ export default function LiveChat() {
             rows = [
               {
                 id: `desc:${ticketId}`,
+                role: "customer",
+                senderType: "CUSTOMER",
                 content: String(seed).trim(),
                 createdAt:
                   (typeof ticket === "object" && ticket?.createdAt) ||
@@ -301,6 +317,7 @@ export default function LiveChat() {
                   new Date().toISOString(),
                 sender: {
                   userId: null,
+                  type: "CUSTOMER",
                   name:
                     (typeof ticket === "object" &&
                       (ticket?.customer?.name || ticket?.customerName)) ||
@@ -350,10 +367,13 @@ export default function LiveChat() {
         setMessages([
           {
             id: `desc:${id}`,
+            role: "customer",
+            senderType: "CUSTOMER",
             content: seed,
             createdAt: selectedTicket.createdAt || new Date().toISOString(),
             sender: {
               userId: null,
+              type: "CUSTOMER",
               name: selectedTicket.customer?.name || "Customer",
               email: selectedTicket.customer?.email || "",
             },
@@ -435,8 +455,11 @@ export default function LiveChat() {
       id: optimisticId,
       content,
       createdAt: new Date().toISOString(),
+      role: "agent",
+      senderType: "AGENT",
       sender: {
         userId: user?.id || user?.userId,
+        type: "AGENT",
         name: user?.name || user?.email || "You",
         email: user?.email,
       },
