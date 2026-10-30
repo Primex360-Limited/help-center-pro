@@ -320,10 +320,10 @@ function readTicketPolicy(settings = {}) {
         settings && typeof settings === "object" && !Array.isArray(settings)
             ? settings.tickets || {}
             : {};
-    const hours = Math.max(0, Number(tickets.inactivityAutoCloseHours ?? 72) || 0);
+    const minutes = Math.max(0, Number(tickets.inactivityAutoCloseMinutes ?? 4320) || 0);
     return {
-        ticketInactivityHours: hours,
-        inactivityAutoCloseEnabled: hours > 0,
+        ticketInactivityMinutes: minutes,
+        inactivityAutoCloseEnabled: minutes > 0,
         defaultTicketPriority: String(tickets.defaultPriority || "medium").toLowerCase()
     };
 }
@@ -348,8 +348,8 @@ export async function getWidgetTicketSettings({ tenant, mode, keyKind }) {
         },
         ...policy,
         description:
-            policy.ticketInactivityHours > 0
-                ? `Open tickets with no activity auto-close after ${policy.ticketInactivityHours} hour(s).`
+            policy.ticketInactivityMinutes > 0
+                ? `Open tickets with no activity auto-close after ${policy.ticketInactivityMinutes} minute(s).`
                 : "Ticket inactivity auto-close is disabled for this workspace."
     };
 }

@@ -423,7 +423,7 @@ async function sendVisitorMessage(ticketId, message) {
                       <code>/public/widget/ticket-settings</code>
                     </td>
                     <td>
-                      Ticket inactivity auto-close policy (hours) for your
+                      Ticket inactivity auto-close policy (minutes) for your
                       workspace
                     </td>
                   </tr>
@@ -646,14 +646,14 @@ X-HCP-API-Key: pk_test_…
   "data": {
     "mode": "test",
     "workspace": { "id": "…", "name": "Acme Support", "slug": "acme" },
-    "ticketInactivityHours": 72,
+    "ticketInactivityMinutes": 4320,
     "inactivityAutoCloseEnabled": true,
     "defaultTicketPriority": "medium",
-    "description": "Open tickets with no activity auto-close after 72 hour(s)."
+    "description": "Open tickets with no activity auto-close after 4320 minute(s)."
   }
 }
 
-// ticketInactivityHours = 0 means auto-close is disabled`}</CodeBlock>
+// ticketInactivityMinutes = 0 means auto-close is disabled`}</CodeBlock>
             <ul className="idocs-list">
               <li>
                 Public Swagger at <code>{API_HOST}/api-docs</code> only lists

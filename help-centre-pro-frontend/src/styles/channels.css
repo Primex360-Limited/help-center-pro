@@ -293,6 +293,160 @@
   margin-bottom: 8px;
 }
 
+/* ── Create email ticket (mock-accurate 3-card layout) ───────────────────── */
+
+.ch-email-create {
+  --ch-blue: #1570ef;
+  --ch-blue-soft: #eff8ff;
+  --ch-ink: #101828;
+  --ch-muted: #667085;
+  --ch-faint: #98a2b3;
+  --ch-line: #eaecf0;
+  --ch-border: #d0d5dd;
+  --ch-bg: #f9fafb;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 12px 8px 112px;
+  background: transparent;
+}
+
+.ch-email-create__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ch-email-card {
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 16px;
+  padding: 22px 24px 8px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.ch-email-card--collapse {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ch-email-card--collapse .ch-collapse__toggle {
+  padding: 16px 20px;
+}
+
+.ch-email-card--collapse .ch-collapse__body {
+  padding: 0 20px 18px;
+}
+
+.ch-email-card--collapse .ch-field {
+  margin-bottom: 0;
+}
+
+.ch-email-card__hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.ch-email-card__hero-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: #eff8ff;
+  color: #1570ef;
+  border: 1px solid #b2ddff;
+}
+
+.ch-email-card__hero h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #101828;
+  line-height: 1.3;
+}
+
+.ch-email-card__hero p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: #667085;
+  line-height: 1.4;
+}
+
+.ch-email-card .ch-field {
+  margin-bottom: 18px;
+}
+
+.ch-email-card .ch-field--message {
+  margin-bottom: 20px;
+}
+
+.ch-link--arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ch-search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ch-search-input > svg {
+  position: absolute;
+  left: 14px;
+  color: #98a2b3;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ch-search-input .ch-input {
+  padding-left: 40px;
+}
+
+.ch-email-create .ch-customer-card {
+  margin-top: 12px;
+  background: #fff;
+  border: 1px solid #eaecf0;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.ch-email-create .ch-editor {
+  min-height: 200px;
+}
+
+.ch-footer-bar--email {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 4px;
+  padding: 16px 4px 8px;
+  background: linear-gradient(
+    180deg,
+    rgba(249, 250, 251, 0) 0%,
+    #f9fafb 32%,
+    #f9fafb 100%
+  );
+}
+
+@media (max-width: 640px) {
+  .ch-email-create {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .ch-email-card {
+    padding: 18px 16px 6px;
+    border-radius: 14px;
+  }
+}
+
 .ch-form-page > .ch-form-head {
   display: flex;
   flex-direction: column;

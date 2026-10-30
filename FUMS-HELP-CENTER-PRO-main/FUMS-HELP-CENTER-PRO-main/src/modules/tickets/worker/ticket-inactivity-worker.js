@@ -8,25 +8,25 @@ const OPEN_STATUSES = [
     TICKET_STATUS.WAITING_FOR_REPLY
 ];
 
-const DEFAULT_HOURS = 72;
+const DEFAULT_MINUTES = 4320;
 let timer = null;
 let running = false;
 
-function readInactivityHours(settings) {
+function readInactivityMinutes(settings) {
     const tickets =
         settings && typeof settings === "object" && !Array.isArray(settings)
             ? settings.tickets || {}
             : {};
-    const hours = Number(tickets.inactivityAutoCloseHours);
-    if (!Number.isFinite(hours) || hours < 0) return DEFAULT_HOURS;
-    return Math.floor(hours);
+    const minutes = Number(tickets.inactivityAutoCloseMinutes);
+    if (!Number.isFinite(minutes) || minutes < 0) return DEFAULT_MINUTES;
+    return Math.floor(minutes);
 }
 
 async function closeInactiveTicketsForTenant(tenant) {
-    const hours = readInactivityHours(tenant.settings);
-    if (hours <= 0) return 0;
+    const minutes = readInactivityMinutes(tenant.settings);
+    if (minutes <= 0) return 0;
 
-    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+    const cutoff = new Date(Date.now() - minutes * 60 * 1000);
     const result = await prisma.ticket.updateMany({
         where: {
             tenantId: tenant.id,

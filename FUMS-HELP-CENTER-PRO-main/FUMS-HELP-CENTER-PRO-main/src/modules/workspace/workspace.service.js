@@ -77,12 +77,12 @@ function buildWorkspaceProfile(tenant) {
             ownNumber: settings.calling?.ownNumber || null
         },
         /**
-         * Auto-close open tickets after N hours without customer/agent activity.
+         * Auto-close open tickets after N minutes without customer/agent activity.
          * `0` disables the policy. Integrators can read this via the public widget API.
          */
-        ticketInactivityHours: Math.max(
+        ticketInactivityMinutes: Math.max(
             0,
-            Number(settings.tickets?.inactivityAutoCloseHours ?? 72) || 0
+            Number(settings.tickets?.inactivityAutoCloseMinutes ?? 4320) || 0
         ),
         defaultTicketPriority: String(
             settings.tickets?.defaultPriority || "medium"
@@ -152,7 +152,7 @@ export async function updateWorkspaceProfile({
         logoUrl,
         timezone,
         supportEmail,
-        ticketInactivityHours,
+        ticketInactivityMinutes,
         defaultTicketPriority
     } = payload;
     const currentSettings = asSettings(tenant.settings);
@@ -167,12 +167,12 @@ export async function updateWorkspaceProfile({
             supportEmailConnected: Boolean(supportEmail.trim()),
             supportEmailProvider: supportEmail.trim() ? "connected" : null
         }),
-        ...((ticketInactivityHours !== undefined ||
+        ...((ticketInactivityMinutes !== undefined ||
             defaultTicketPriority !== undefined) && {
             tickets: {
                 ...currentTickets,
-                ...(ticketInactivityHours !== undefined && {
-                    inactivityAutoCloseHours: Number(ticketInactivityHours)
+                ...(ticketInactivityMinutes !== undefined && {
+                    inactivityAutoCloseMinutes: Number(ticketInactivityMinutes)
                 }),
                 ...(defaultTicketPriority !== undefined && {
                     defaultPriority: String(defaultTicketPriority).toLowerCase()

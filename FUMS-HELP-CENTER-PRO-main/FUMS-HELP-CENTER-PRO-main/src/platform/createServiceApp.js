@@ -136,12 +136,10 @@ export function createServiceApp({
                     include: { role: true }
                 });
                 const roleName = user?.role?.name || "";
-                const allowed =
-                    isSuperAdminRoleName(roleName) ||
-                    roleName === TENANT_ROLE.ADMIN;
+                const allowed = isSuperAdminRoleName(roleName);
                 if (!allowed) {
                     throw new AppError(
-                        "Only workspace administrators can open internal API docs",
+                        "Only platform administrators can open internal API docs",
                         403
                     );
                 }

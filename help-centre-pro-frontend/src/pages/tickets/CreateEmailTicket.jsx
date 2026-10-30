@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bold,
   ChevronDown,
+  ChevronRight,
   Italic,
   Link2,
   Mail,
   Redo2,
+  Search,
   Send,
   Underline,
   Undo2,
@@ -38,21 +40,6 @@ function htmlToPlain(html) {
   return (el.innerText || el.textContent || "").trim();
 }
 
-function accountLabel(account) {
-  if (!account?.email) return "";
-  const name = account.displayName?.trim();
-  const provider =
-    account.provider === "gmail"
-      ? "Gmail"
-      : account.provider === "outlook"
-        ? "Outlook"
-        : "Mailbox";
-  const def = account.isDefault ? " · Default" : "";
-  return name
-    ? `${name} <${account.email}> (${provider}${def})`
-    : `${account.email} (${provider}${def})`;
-}
-
 export default function CreateEmailTicket() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -82,7 +69,7 @@ export default function CreateEmailTicket() {
       : null
   );
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [ccOpen, setCcOpen] = useState(false);
+  const [ccOpen, setCcOpen] = useState(true);
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
   const [subject, setSubject] = useState("");
@@ -337,151 +324,156 @@ export default function CreateEmailTicket() {
     editorRef.current.innerHTML = `<p><br></p><p>${lines.join("<br>")}</p>`;
   }, [signature]);
 
-  return (
-    <div className="ch-page ch-form-page ch-form-page--email">
-      <header className="ch-form-hero ch-form-hero--inline">
-        <div className="ch-form-hero__icon" aria-hidden="true">
-          <Mail size={22} strokeWidth={1.75} />
-        </div>
-        <div>
-          <h1>Create email ticket</h1>
-          <p>Send an email to create a new support ticket</p>
-        </div>
-      </header>
+  const fromDisplay =
+    mailboxesLoading
+      ? "Loading mailboxes…"
+      : noMailbox
+        ? "Connect your email in Settings"
+        : fromEmail || "Support@company.com";
 
-      <form className="ch-panel" onSubmit={handleSubmit}>
+  return (
+    <div className="ch-page ch-email-create">
+      <form className="ch-email-create__form" onSubmit={handleSubmit}>
         {error ? <p className="ch-alert ch-alert--error">{error}</p> : null}
         {notice ? <p className="ch-alert ch-alert--info">{notice}</p> : null}
 
-        <div className="ch-field">
-          <div className="ch-field__label-row">
+        {/* Card 1 — title + From / To (matches mock) */}
+        <section className="ch-email-card">
+          <header className="ch-email-card__hero">
+            <div className="ch-email-card__hero-icon" aria-hidden="true">
+              <Mail size={22} strokeWidth={1.75} />
+            </div>
+            <div>
+              <h1>Create email ticket</h1>
+              <p>Send an email to create a new support ticket</p>
+            </div>
+          </header>
+
+          <div className="ch-field">
             <label htmlFor="email-from">From</label>
-            {noMailbox ? (
-              <Link to="/workspace/settings/configuration" className="ch-link">
-                Connect mailbox →
-              </Link>
-            ) : (
-              <Link to="/workspace/settings/configuration" className="ch-link">
-                Manage mailboxes →
-              </Link>
-            )}
-          </div>
-          {mailboxesLoading ? (
-            <input
-              id="email-from"
-              className="ch-input"
-              value="Loading mailboxes…"
-              readOnly
-              disabled
-            />
-          ) : noMailbox ? (
-            <div className="ch-from-empty">
+            {mailboxesLoading || noMailbox ? (
               <input
                 id="email-from"
                 className="ch-input"
-                value="Connect your email in Settings"
+                value={fromDisplay}
+                readOnly
+                disabled={mailboxesLoading}
+              />
+            ) : mailboxes.length === 1 ? (
+              <input
+                id="email-from"
+                className="ch-input"
+                value={fromEmail}
                 readOnly
               />
+            ) : (
+              <select
+                id="email-from"
+                className="ch-select"
+                value={fromAccountId}
+                onChange={(e) => setFromAccountId(e.target.value)}
+                required
+              >
+                {mailboxes.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.email}
+                  </option>
+                ))}
+              </select>
+            )}
+            {noMailbox ? (
               <p className="ch-field-hint">
-                Integrate Gmail, Outlook, or a custom mailbox under Settings →
-                Configuration, then return here to choose your From address.
+                <Link to="/workspace/settings/configuration" className="ch-link">
+                  Connect a mailbox in Settings → Configuration
+                </Link>
               </p>
-            </div>
-          ) : (
-            <select
-              id="email-from"
-              className="ch-select ch-select--premium"
-              value={fromAccountId}
-              onChange={(e) => setFromAccountId(e.target.value)}
-              required
-            >
-              {mailboxes.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {accountLabel(account)}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        <div className="ch-field">
-          <div className="ch-field__label-row">
-            <label htmlFor="email-to">To</label>
-            <Link to="/tickets" className="ch-link">
-              View all customers
-            </Link>
+            ) : null}
           </div>
-          <input
-            id="email-to"
-            className="ch-input"
-            value={selectedCustomer ? "" : toQuery}
-            onChange={(e) => {
-              setSelectedCustomer(null);
-              setToQuery(e.target.value);
-              setShowSuggestions(true);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-            placeholder="Search Customers by name or email..."
-            autoComplete="off"
-            disabled={Boolean(selectedCustomer)}
-          />
-          {selectedCustomer ? (
-            <div className="ch-customer-card">
-              <div
-                className={`ch-avatar ch-avatar--${avatarTone(
-                  selectedCustomer.email || selectedCustomer.name
-                )}`}
-              >
-                {initialsFromName(selectedCustomer.name)}
-              </div>
-              <div>
-                <strong>{selectedCustomer.name}</strong>
-                <span>{selectedCustomer.email}</span>
-              </div>
-              <button
-                type="button"
-                className="ch-customer-card__clear"
-                aria-label="Clear customer"
-                onClick={() => {
-                  setSelectedCustomer(null);
-                  setToQuery("");
-                }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ) : null}
-          {showSuggestions && !selectedCustomer && filteredCustomers.length ? (
-            <ul className="ch-suggest">
-              {filteredCustomers.map((customer) => (
-                <li key={customer.key}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCustomer(customer);
-                      setToQuery(customer.email || customer.name);
-                      setShowSuggestions(false);
-                    }}
-                  >
-                    <div
-                      className={`ch-avatar ch-avatar--sm ch-avatar--${avatarTone(
-                        customer.email || customer.name
-                      )}`}
-                    >
-                      {initialsFromName(customer.name)}
-                    </div>
-                    <div>
-                      <strong>{customer.name}</strong>
-                      <span>{customer.email || "No email"}</span>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
 
-        <div className="ch-collapse">
+          <div className="ch-field ch-field--to">
+            <div className="ch-field__label-row">
+              <label htmlFor="email-to">To</label>
+              <Link to="/tickets" className="ch-link ch-link--arrow">
+                View all customer
+                <ChevronRight size={14} aria-hidden="true" />
+              </Link>
+            </div>
+            <div className="ch-search-input">
+              <Search size={16} aria-hidden="true" />
+              <input
+                id="email-to"
+                className="ch-input"
+                value={selectedCustomer ? "" : toQuery}
+                onChange={(e) => {
+                  setSelectedCustomer(null);
+                  setToQuery(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder="Search Customers by name or email..."
+                autoComplete="off"
+                disabled={Boolean(selectedCustomer)}
+              />
+            </div>
+            {selectedCustomer ? (
+              <div className="ch-customer-card">
+                <div
+                  className={`ch-avatar ch-avatar--${avatarTone(
+                    selectedCustomer.email || selectedCustomer.name
+                  )}`}
+                >
+                  {initialsFromName(selectedCustomer.name)}
+                </div>
+                <div>
+                  <strong>{selectedCustomer.name}</strong>
+                  <span>{selectedCustomer.email}</span>
+                </div>
+                <button
+                  type="button"
+                  className="ch-customer-card__clear"
+                  aria-label="Clear customer"
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setToQuery("");
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : null}
+            {showSuggestions && !selectedCustomer && filteredCustomers.length ? (
+              <ul className="ch-suggest">
+                {filteredCustomers.map((customer) => (
+                  <li key={customer.key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCustomer(customer);
+                        setToQuery(customer.email || customer.name);
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      <div
+                        className={`ch-avatar ch-avatar--sm ch-avatar--${avatarTone(
+                          customer.email || customer.name
+                        )}`}
+                      >
+                        {initialsFromName(customer.name)}
+                      </div>
+                      <div>
+                        <strong>{customer.name}</strong>
+                        <span>{customer.email || "No email"}</span>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </section>
+
+        {/* Card 2 — CC / BCC */}
+        <section className="ch-email-card ch-email-card--collapse">
           <button
             type="button"
             className="ch-collapse__toggle"
@@ -521,101 +513,84 @@ export default function CreateEmailTicket() {
               </div>
             </div>
           ) : null}
-        </div>
+        </section>
 
-        <div className="ch-field">
-          <label htmlFor="email-subject">
-            Subject<span className="ch-req">*</span>
-          </label>
-          <input
-            id="email-subject"
-            className="ch-input"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Brief description of the issue."
-            required
-          />
-        </div>
-
-        <div className="ch-field">
-          <label>
-            Message<span className="ch-req">*</span>
-          </label>
-          <div className="ch-editor-shell">
-            <div className="ch-toolbar" role="toolbar" aria-label="Formatting">
-              <button type="button" onClick={() => exec("bold")} title="Bold">
-                <Bold size={15} />
-              </button>
-              <button type="button" onClick={() => exec("italic")} title="Italic">
-                <Italic size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => exec("underline")}
-                title="Underline"
-              >
-                <Underline size={15} />
-              </button>
-              <button type="button" onClick={handleLink} title="Link">
-                <Link2 size={15} />
-              </button>
-              <select
-                aria-label="Paragraph style"
-                defaultValue="p"
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === "p") exec("formatBlock", "p");
-                  else exec("formatBlock", value);
-                }}
-              >
-                <option value="p">Paragraph</option>
-                <option value="h2">Heading</option>
-                <option value="h3">Subheading</option>
-              </select>
-              <button type="button" onClick={() => exec("undo")} title="Undo">
-                <Undo2 size={15} />
-              </button>
-              <button type="button" onClick={() => exec("redo")} title="Redo">
-                <Redo2 size={15} />
-              </button>
-            </div>
-            <div
-              ref={editorRef}
-              className="ch-editor"
-              contentEditable
-              role="textbox"
-              aria-multiline="true"
-              data-placeholder="Write your message here..."
-              suppressContentEditableWarning
+        {/* Card 3 — Subject + Message */}
+        <section className="ch-email-card">
+          <div className="ch-field">
+            <label htmlFor="email-subject">
+              Subject<span className="ch-req">*</span>
+            </label>
+            <input
+              id="email-subject"
+              className="ch-input"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Brief description of the issue."
+              required
             />
           </div>
-          <p className="ch-field-hint ch-field-hint--tight">
-            Signature is included in the message.{" "}
-            <button
-              type="button"
-              className="ch-link"
-              onClick={() => {
-                const next = defaultSignature(userName);
-                persistSignature(next);
-                if (editorRef.current) {
-                  const lines = next
-                    .split("\n")
-                    .map((line) =>
-                      line.replace(/</g, "&lt;").replace(/>/g, "&gt;")
-                    );
-                  const body = String(editorRef.current.innerHTML || "");
-                  if (!body.includes("Best regards")) {
-                    editorRef.current.innerHTML = `${body}<p><br></p><p>${lines.join("<br>")}</p>`;
-                  }
-                }
-              }}
-            >
-              Reset signature
-            </button>
-          </p>
-        </div>
 
-        <div className="ch-footer-bar">
+          <div className="ch-field ch-field--message">
+            <label>
+              Message<span className="ch-req">*</span>
+            </label>
+            <div className="ch-editor-shell">
+              <div className="ch-toolbar" role="toolbar" aria-label="Formatting">
+                <button type="button" onClick={() => exec("bold")} title="Bold">
+                  <Bold size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exec("italic")}
+                  title="Italic"
+                >
+                  <Italic size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exec("underline")}
+                  title="Underline"
+                >
+                  <Underline size={15} />
+                </button>
+                <button type="button" onClick={handleLink} title="Link">
+                  <Link2 size={15} />
+                </button>
+                <select
+                  aria-label="Paragraph style"
+                  defaultValue="p"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === "p") exec("formatBlock", "p");
+                    else exec("formatBlock", value);
+                  }}
+                >
+                  <option value="p">Paragraph</option>
+                  <option value="h2">Heading</option>
+                  <option value="h3">Subheading</option>
+                </select>
+                <button type="button" onClick={() => exec("undo")} title="Undo">
+                  <Undo2 size={15} />
+                </button>
+                <button type="button" onClick={() => exec("redo")} title="Redo">
+                  <Redo2 size={15} />
+                </button>
+              </div>
+              <div
+                ref={editorRef}
+                className="ch-editor"
+                contentEditable
+                role="textbox"
+                aria-multiline="true"
+                data-placeholder="Write your message here..."
+                suppressContentEditableWarning
+              />
+            </div>
+          </div>
+        </section>
+
+        <div className="ch-footer-bar ch-footer-bar--email">
           <div className="ch-footer-bar__left">
             <button
               type="button"

@@ -109,13 +109,13 @@ function readDefaultPriority(profile) {
   );
 }
 
-function readInactivityHours(profile) {
+function readInactivityMinutes(profile) {
   const raw =
-    profile?.ticketInactivityHours ??
-    profile?.settings?.tickets?.inactivityAutoCloseHours;
+    profile?.ticketInactivityMinutes ??
+    profile?.settings?.tickets?.inactivityAutoCloseMinutes;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return 72;
-  return Math.min(8760, Math.floor(n));
+  if (!Number.isFinite(n) || n < 0) return 4320;
+  return Math.min(525600, Math.floor(n));
 }
 
 function snapshotOf(profile) {
@@ -125,7 +125,7 @@ function snapshotOf(profile) {
     logoUrl: profile?.logoUrl || "",
     supportEmail: profile?.supportEmail || "",
     defaultTicketPriority: readDefaultPriority(profile),
-    ticketInactivityHours: readInactivityHours(profile),
+    ticketInactivityMinutes: readInactivityMinutes(profile),
   };
 }
 
@@ -140,14 +140,14 @@ export default function WorkspaceProfile() {
     logoUrl: "",
     supportEmail: "",
     defaultTicketPriority: "medium",
-    ticketInactivityHours: 72,
+    ticketInactivityMinutes: 4320,
   });
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   const [defaultTicketPriority, setDefaultTicketPriority] = useState("medium");
-  const [ticketInactivityHours, setTicketInactivityHours] = useState(72);
+  const [ticketInactivityMinutes, setTicketInactivityMinutes] = useState(4320);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -175,7 +175,7 @@ export default function WorkspaceProfile() {
       setLogoUrl(snap.logoUrl);
       setSupportEmail(snap.supportEmail);
       setDefaultTicketPriority(snap.defaultTicketPriority);
-      setTicketInactivityHours(snap.ticketInactivityHours);
+      setTicketInactivityMinutes(snap.ticketInactivityMinutes);
       setCallingMode(next?.calling?.mode || "hcp");
       setHcpPaused(Boolean(next?.calling?.hcpPaused));
       setOwnNumber(next?.calling?.ownNumber || "");
@@ -209,14 +209,14 @@ export default function WorkspaceProfile() {
       logoUrl.trim() !== saved.logoUrl ||
       supportEmail.trim() !== saved.supportEmail ||
       defaultTicketPriority !== saved.defaultTicketPriority ||
-      Number(ticketInactivityHours) !== Number(saved.ticketInactivityHours),
+      Number(ticketInactivityMinutes) !== Number(saved.ticketInactivityMinutes),
     [
       name,
       timezone,
       logoUrl,
       supportEmail,
       defaultTicketPriority,
-      ticketInactivityHours,
+      ticketInactivityMinutes,
       saved,
     ]
   );
@@ -229,7 +229,7 @@ export default function WorkspaceProfile() {
     setName(saved.name);
     setTimezone(saved.timezone);
     setLogoUrl(saved.logoUrl);
-    setTicketInactivityHours(saved.ticketInactivityHours);
+    setTicketInactivityMinutes(saved.ticketInactivityMinutes);
     setSupportEmail(saved.supportEmail);
     setDefaultTicketPriority(saved.defaultTicketPriority);
     setLogoError("");
@@ -371,11 +371,11 @@ export default function WorkspaceProfile() {
       payload.defaultTicketPriority = defaultTicketPriority;
     }
     if (
-      Number(ticketInactivityHours) !== Number(saved.ticketInactivityHours)
+      Number(ticketInactivityMinutes) !== Number(saved.ticketInactivityMinutes)
     ) {
-      payload.ticketInactivityHours = Math.max(
+      payload.ticketInactivityMinutes = Math.max(
         0,
-        Math.min(8760, Math.floor(Number(ticketInactivityHours) || 0))
+        Math.min(525600, Math.floor(Number(ticketInactivityMinutes) || 0))
       );
     }
 
@@ -404,7 +404,7 @@ export default function WorkspaceProfile() {
         setLogoUrl(snap.logoUrl);
         setSupportEmail(snap.supportEmail);
         setDefaultTicketPriority(snap.defaultTicketPriority);
-        setTicketInactivityHours(snap.ticketInactivityHours);
+        setTicketInactivityMinutes(snap.ticketInactivityMinutes);
       } else {
         setSaved((prev) => ({
           ...prev,
@@ -412,7 +412,7 @@ export default function WorkspaceProfile() {
           timezone: trimmedTimezone || prev.timezone,
           supportEmail: supportEmail.trim(),
           defaultTicketPriority,
-          ticketInactivityHours: Number(ticketInactivityHours),
+          ticketInactivityMinutes: Number(ticketInactivityMinutes),
           logoUrl: trimmedLogo,
         }));
       }
@@ -423,7 +423,7 @@ export default function WorkspaceProfile() {
       const msg = String(err?.message || "");
       const looksLikeUnknownField =
         status === 400 &&
-        /defaultTicketPriority|ticketInactivityHours|settings|validation|unknown|not allowed/i.test(
+        /defaultTicketPriority|ticketInactivityMinutes|settings|validation|unknown|not allowed/i.test(
           msg
         );
 
@@ -561,25 +561,25 @@ export default function WorkspaceProfile() {
           </div>
 
           <div className="settings-field">
-            <label htmlFor="ws-inactivity-hours">
-              Ticket inactivity auto-close (hours)
+            <label htmlFor="ws-inactivity-minutes">
+              Ticket inactivity auto-close (minutes)
             </label>
             <input
-              id="ws-inactivity-hours"
+              id="ws-inactivity-minutes"
               type="number"
               min={0}
-              max={8760}
+              max={525600}
               step={1}
-              value={ticketInactivityHours}
+              value={ticketInactivityMinutes}
               disabled={!canWrite}
               onChange={(e) =>
-                setTicketInactivityHours(
-                  Math.max(0, Math.min(8760, Number(e.target.value) || 0))
+                setTicketInactivityMinutes(
+                  Math.max(0, Math.min(525600, Number(e.target.value) || 0))
                 )
               }
             />
             <p className="settings-field__hint">
-              Open tickets with no activity close after this many hours. Use{" "}
+              Open tickets with no activity close after this many minutes. Use{" "}
               <strong>0</strong> to disable. Integrators can read the policy via{" "}
               <code>GET /public/widget/ticket-settings</code>.
             </p>

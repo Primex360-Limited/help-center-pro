@@ -56,12 +56,12 @@ export const updateWorkspaceProfileSchema = z
         supportEmail: z
             .union([z.literal(""), z.string().trim().email().max(254)])
             .optional(),
-        /** Hours with no activity before an open ticket auto-closes. 0 = disabled. */
-        ticketInactivityHours: z.coerce
+        /** Minutes with no activity before an open ticket auto-closes. 0 = disabled. */
+        ticketInactivityMinutes: z.coerce
             .number()
             .int()
             .min(0, "Use 0 to disable auto-close")
-            .max(8760, "Maximum is 8760 hours (1 year)")
+            .max(525600, "Maximum is 525600 minutes (1 year)")
             .optional(),
         defaultTicketPriority: z
             .enum(["low", "medium", "high", "urgent", "LOW", "MEDIUM", "HIGH", "URGENT"])
