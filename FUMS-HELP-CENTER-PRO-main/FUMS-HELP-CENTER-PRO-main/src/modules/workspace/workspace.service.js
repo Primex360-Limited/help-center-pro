@@ -76,6 +76,17 @@ function buildWorkspaceProfile(tenant) {
             hcpPaused: Boolean(settings.calling?.hcpPaused),
             ownNumber: settings.calling?.ownNumber || null
         },
+        /**
+         * Auto-close open tickets after N hours without customer/agent activity.
+         * `0` disables the policy. Integrators can read this via the public widget API.
+         */
+        ticketInactivityHours: Math.max(
+            0,
+            Number(settings.tickets?.inactivityAutoCloseHours ?? 72) || 0
+        ),
+        defaultTicketPriority: String(
+            settings.tickets?.defaultPriority || "medium"
+        ).toLowerCase(),
         /** Widget / chat integration — customers appear when the app uses this key. */
         widgetApiKeyPrefix:
             settings.apiKeys?.live?.secretKeyPrefix ||
@@ -136,16 +147,37 @@ export async function updateWorkspaceProfile({
     actorId = null
 }) {
     const tenant = await findWorkspaceOrFail(tenantId);
-    const { name, logoUrl, timezone, supportEmail } = payload;
+    const {
+        name,
+        logoUrl,
+        timezone,
+        supportEmail,
+        ticketInactivityHours,
+        defaultTicketPriority
+    } = payload;
+    const currentSettings = asSettings(tenant.settings);
+    const currentTickets = asSettings(currentSettings.tickets);
 
     const updatedSettings = {
-        ...asSettings(tenant.settings),
+        ...currentSettings,
         ...(logoUrl !== undefined && { logoUrl: logoUrl.trim() || null }),
         ...(timezone !== undefined && { timezone: timezone.trim() }),
         ...(supportEmail !== undefined && {
             supportEmail: supportEmail.trim().toLowerCase() || null,
             supportEmailConnected: Boolean(supportEmail.trim()),
             supportEmailProvider: supportEmail.trim() ? "connected" : null
+        }),
+        ...((ticketInactivityHours !== undefined ||
+            defaultTicketPriority !== undefined) && {
+            tickets: {
+                ...currentTickets,
+                ...(ticketInactivityHours !== undefined && {
+                    inactivityAutoCloseHours: Number(ticketInactivityHours)
+                }),
+                ...(defaultTicketPriority !== undefined && {
+                    defaultPriority: String(defaultTicketPriority).toLowerCase()
+                })
+            }
         })
     };
 

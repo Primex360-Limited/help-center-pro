@@ -15,6 +15,10 @@ import {
 import { buildPaginationMeta, getPagination } from "./ticket.utils.js";
 import { isTicketIdUniqueConflict } from "./helpers/ticket-id-generator.js";
 import { buildTicketFilters } from "./helpers/build-ticket-filters.js";
+import {
+    applyTicketVisibilityFilter,
+    canAccessTicketRecord
+} from "./helpers/ticket-visibility.js";
 import { resolveCustomerIdentity } from "./helpers/resolve-customer-identity.js";
 import { getAssignableUserSnapshot } from "./helpers/ticket-assignee.js";
 import { requireTenantId } from "./helpers/tenant-scope.js";
@@ -181,10 +185,11 @@ export async function createTicket(data, actor) {
     );
 }
 
-export async function getTickets(query = {}) {
+export async function getTickets(query = {}, viewer = null) {
     const tenantId = requireTenantId(query, "Workspace context is required to list tickets");
     const pagination = getPagination(query);
-    const where = buildTicketFilters({ ...query, tenantId });
+    const baseWhere = buildTicketFilters({ ...query, tenantId });
+    const where = applyTicketVisibilityFilter(baseWhere, viewer);
 
     const [tickets, total] = await Promise.all([
         listTickets({
@@ -210,7 +215,7 @@ export async function getTickets(query = {}) {
     };
 }
 
-export async function getTicketDetail(ticketId, tenantId) {
+export async function getTicketDetail(ticketId, tenantId, viewer = null) {
     const scopedTenantId = requireTenantId(
         { tenantId },
         "Workspace context is required to view a ticket"
@@ -221,6 +226,10 @@ export async function getTicketDetail(ticketId, tenantId) {
     });
 
     if (!ticket) {
+        throw new AppError("Ticket not found", 404);
+    }
+
+    if (viewer && !canAccessTicketRecord(ticket, viewer)) {
         throw new AppError("Ticket not found", 404);
     }
 

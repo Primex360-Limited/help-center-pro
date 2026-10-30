@@ -6,7 +6,8 @@ import {
     createVisitorHandler,
     listMessagesHandler,
     sendMessageHandler,
-    sessionHandler
+    sessionHandler,
+    ticketSettingsHandler
 } from "./widget.controller.js";
 import {
     widgetListMessagesQuerySchema,
@@ -146,6 +147,29 @@ widgetPublicRoutes.get(
     "/public/widget/session",
     requireWidgetApiKey,
     asyncHandler(sessionHandler)
+);
+
+/**
+ * @openapi
+ * /public/widget/ticket-settings:
+ *   get:
+ *     tags: [Public Widget]
+ *     summary: Read workspace ticket inactivity policy
+ *     description: |
+ *       Returns how long an open ticket may sit without activity before
+ *       Help Centre Pro auto-closes it. Configure in Settings → General.
+ *       Authenticate with your workspace API key (`pk_` / `sk_`).
+ *     security:
+ *       - hcpApiKey: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Ticket policy for the authenticated workspace
+ */
+widgetPublicRoutes.get(
+    "/public/widget/ticket-settings",
+    requireWidgetApiKey,
+    asyncHandler(ticketSettingsHandler)
 );
 
 export default widgetPublicRoutes;

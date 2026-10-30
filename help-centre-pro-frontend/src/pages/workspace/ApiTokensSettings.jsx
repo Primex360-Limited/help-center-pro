@@ -61,6 +61,15 @@ const WIDGET_ENDPOINTS = [
     icon: KeyRound,
     required: false,
   },
+  {
+    method: "GET",
+    path: "/public/widget/ticket-settings",
+    title: "Ticket inactivity policy",
+    detail:
+      "Read how long open tickets stay idle before auto-close (configured in Settings → General).",
+    icon: Radio,
+    required: false,
+  },
 ];
 
 function isFullKey(value) {

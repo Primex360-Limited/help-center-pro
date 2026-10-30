@@ -3,6 +3,7 @@ import { getClientIpFromRequest } from "../../tickets/ticket.utils.js";
 import {
     createWidgetVisitor,
     getWidgetSession,
+    getWidgetTicketSettings,
     listWidgetMessages,
     sendWidgetMessage
 } from "./widget.service.js";
@@ -78,4 +79,13 @@ export async function sessionHandler(req, res) {
         keyKind: req.widgetKeyKind
     });
     return successResponse(res, "Widget session", result);
+}
+
+export async function ticketSettingsHandler(req, res) {
+    const result = await getWidgetTicketSettings({
+        tenant: req.widgetTenant,
+        mode: req.widgetMode,
+        keyKind: req.widgetKeyKind
+    });
+    return successResponse(res, "Ticket policy settings", result);
 }

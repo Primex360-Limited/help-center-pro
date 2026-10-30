@@ -19,7 +19,8 @@ export async function listTicketMessagesHandler(req, res) {
         req.validatedParams.ticketId,
         req.validatedQuery,
         MESSAGE_TYPE.MESSAGE,
-        req.tenantId ?? req.currentUser?.tenantId ?? req.user?.tenant_id ?? null
+        req.tenantId ?? req.currentUser?.tenantId ?? req.user?.tenant_id ?? null,
+        req.currentUser
     );
 
     return successResponse(

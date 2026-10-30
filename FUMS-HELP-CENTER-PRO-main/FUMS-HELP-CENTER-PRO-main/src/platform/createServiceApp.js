@@ -8,9 +8,17 @@ import swaggerUi from "swagger-ui-express";
 import errorHandler from "../middleware/error.middleware.js";
 import rateLimiter from "../middleware/rateLimiter.middleware.js";
 import { isAllowedCorsOrigin } from "../config/corsConfig.js";
+import { env } from "../config/env.js";
 import swaggerSpec from "../config/swagger.js";
+import { buildPublicSwaggerSpec } from "../config/swaggerPublic.js";
 import { attachTenantContext } from "../modules/tenants/tenant.middleware.js";
 import asyncHandler from "../middleware/async.middleware.js";
+import { AppError } from "../shared/errors/AppError.js";
+import { extractAccessToken } from "../modules/middleware/auth.middleware.js";
+import { verifyAccessToken } from "../modules/auth/auth.utils.js";
+import { isSuperAdminRoleName, TENANT_ROLE } from "../shared/constants/roles.js";
+import prisma from "../database/prisma/client.js";
+import { toUuidOrNull } from "../shared/utils/auditLogger.js";
 
 /**
  * Shared Express bootstrap for every microservice and the monolith.
@@ -87,13 +95,98 @@ export function createServiceApp({
     }
 
     if (enableDocs) {
+        const publicSpec = buildPublicSwaggerSpec(swaggerSpec);
+
+        /**
+         * Full internal OpenAPI — locked behind workspace admin JWT or
+         * `X-Docs-Key` matching SWAGGER_INTERNAL_KEY.
+         * Registered BEFORE `/api-docs` so the public mount cannot shadow it.
+         */
+        async function requireInternalDocsAccess(req, _res, next) {
+            try {
+                const docsKey = String(
+                    req.headers["x-docs-key"] ||
+                        req.headers["x-swagger-key"] ||
+                        ""
+                ).trim();
+                if (
+                    env.SWAGGER_INTERNAL_KEY &&
+                    docsKey &&
+                    docsKey === env.SWAGGER_INTERNAL_KEY
+                ) {
+                    return next();
+                }
+
+                const token = extractAccessToken(req);
+                if (!token) {
+                    throw new AppError(
+                        "Internal API docs require an admin session or X-Docs-Key",
+                        401
+                    );
+                }
+
+                const decoded = verifyAccessToken(token);
+                const userId = toUuidOrNull(decoded.sub || decoded.user_id);
+                if (!userId) {
+                    throw new AppError("Invalid session for internal docs", 401);
+                }
+
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    include: { role: true }
+                });
+                const roleName = user?.role?.name || "";
+                const allowed =
+                    isSuperAdminRoleName(roleName) ||
+                    roleName === TENANT_ROLE.ADMIN;
+                if (!allowed) {
+                    throw new AppError(
+                        "Only workspace administrators can open internal API docs",
+                        403
+                    );
+                }
+                return next();
+            } catch (error) {
+                return next(
+                    error instanceof AppError
+                        ? error
+                        : new AppError("Internal API docs access denied", 401)
+                );
+            }
+        }
+
+        app.get(
+            "/api-docs/internal.json",
+            asyncHandler(requireInternalDocsAccess),
+            (_req, res) => {
+                res.json(swaggerSpec);
+            }
+        );
+
         app.use(
-            "/api-docs",
-            swaggerUi.serve,
+            "/api-docs/internal",
+            asyncHandler(requireInternalDocsAccess),
+            swaggerUi.serveFiles(swaggerSpec, {
+                swaggerUrl: "/api-docs/internal.json"
+            }),
             swaggerUi.setup(swaggerSpec, {
-                customSiteTitle: "Help Centre Pro API Docs",
+                customSiteTitle: "Help Centre Pro — Internal API (restricted)",
                 swaggerOptions: {
                     withCredentials: true,
+                    persistAuthorization: true,
+                    displayRequestDuration: true,
+                    url: "/api-docs/internal.json"
+                }
+            })
+        );
+
+        /** Public integrator surface — Public Widget + Health only. */
+        app.use(
+            "/api-docs",
+            swaggerUi.serveFiles(publicSpec),
+            swaggerUi.setup(publicSpec, {
+                customSiteTitle: "Help Centre Pro — Public Integration API",
+                swaggerOptions: {
                     persistAuthorization: true,
                     displayRequestDuration: true
                 }
@@ -101,7 +194,7 @@ export function createServiceApp({
         );
 
         app.get("/api-docs.json", (_req, res) => {
-            res.json(swaggerSpec);
+            res.json(publicSpec);
         });
     }
 

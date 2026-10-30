@@ -20,7 +20,10 @@ export function buildActorSnapshotFromRequest(req) {
         userId,
         name,
         email: req.currentUser.email,
-        tenantId: req.tenantId ?? req.currentUser.tenantId ?? req.user?.tenant_id ?? null
+        tenantId: req.tenantId ?? req.currentUser.tenantId ?? req.user?.tenant_id ?? null,
+        roleName: req.currentUser.role?.name || null,
+        /** Full Prisma user — used for ticket visibility (admin vs agent). */
+        user: req.currentUser
     };
 }
 

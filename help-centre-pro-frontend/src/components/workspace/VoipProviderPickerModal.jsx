@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { ChevronRight, Globe2, Search, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Globe2, Search, X } from "lucide-react";
 import {
   VOIP_PROVIDERS,
   PROVIDER_CATEGORIES,
@@ -119,31 +119,56 @@ export default function VoipProviderPickerModal({
                 const region = primaryRegionLabel(item.regions);
                 const categoryLabel =
                   PROVIDER_CATEGORIES[item.category] || item.category || "SIP";
+                const websiteUrl = String(item.website || "").trim();
+                const href = websiteUrl
+                  ? /^https?:\/\//i.test(websiteUrl)
+                    ? websiteUrl
+                    : `https://${websiteUrl}`
+                  : "";
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="voip-picker__card"
-                    disabled={!canWrite}
-                    onClick={() => onSelect?.(item.id)}
-                    aria-label={`Configure ${item.name}`}
-                  >
-                    <VoipProviderLogo
-                      name={item.name}
-                      website={item.website}
-                      domain={item.logoDomain}
-                      size={48}
-                    />
-                    <div className="voip-picker__card-body">
-                      <strong>{item.name}</strong>
-                      <span>{categoryLabel}</span>
-                      <span className="voip-picker__region">
-                        <Globe2 size={12} aria-hidden="true" />
-                        {region}
-                      </span>
-                    </div>
-                    <ChevronRight size={16} className="voip-picker__chevron" />
-                  </button>
+                  <div key={item.id} className="voip-picker__card-wrap">
+                    <button
+                      type="button"
+                      className="voip-picker__card"
+                      disabled={!canWrite}
+                      onClick={() => onSelect?.(item.id)}
+                      aria-label={`Configure ${item.name}`}
+                    >
+                      <VoipProviderLogo
+                        name={item.name}
+                        website={item.website}
+                        domain={item.logoDomain}
+                        size={48}
+                      />
+                      <div className="voip-picker__card-body">
+                        <strong>{item.name}</strong>
+                        <span>{categoryLabel}</span>
+                        <span className="voip-picker__region">
+                          <Globe2 size={12} aria-hidden="true" />
+                          {region}
+                        </span>
+                        {href ? (
+                          <span className="voip-picker__site" title={href}>
+                            {href.replace(/^https?:\/\//i, "")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <ChevronRight size={16} className="voip-picker__chevron" />
+                    </button>
+                    {href ? (
+                      <a
+                        className="voip-picker__visit"
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        title={`Open ${item.name} website`}
+                      >
+                        <ExternalLink size={14} aria-hidden="true" />
+                        <span>Visit site</span>
+                      </a>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

@@ -5,8 +5,9 @@ import { MESSAGE_TYPE, SENDER_TYPE } from "../ticket.constants.js";
 import { mapTicketMessageResponse } from "../helpers/map-ticket-response.js";
 import { buildAgentChatEvent } from "../timeline/timeline.service.js";
 import { requireTenantId } from "../helpers/tenant-scope.js";
+import { canAccessTicketRecord } from "../helpers/ticket-visibility.js";
 
-async function getTicketOrThrow(ticketId, tenantId) {
+async function getTicketOrThrow(ticketId, tenantId, viewer = null) {
     const scopedTenantId = requireTenantId({ tenantId });
     const ticket = await findTicketByPublicId(ticketId, { tenantId: scopedTenantId });
 
@@ -14,11 +15,19 @@ async function getTicketOrThrow(ticketId, tenantId) {
         throw new AppError("Ticket not found", 404);
     }
 
+    if (viewer && !canAccessTicketRecord(ticket, viewer)) {
+        throw new AppError("Ticket not found", 404);
+    }
+
     return ticket;
 }
 
 export async function sendTicketMessage(ticketId, content, actor, messageType = MESSAGE_TYPE.MESSAGE) {
-    const ticket = await getTicketOrThrow(ticketId, actor?.tenantId);
+    const ticket = await getTicketOrThrow(
+        ticketId,
+        actor?.tenantId,
+        actor?.user || null
+    );
 
     const trimmedContent = content.trim();
     const message = await createTicketMessageWithEvent({
@@ -105,8 +114,18 @@ function descriptionAsMessage(ticket) {
     };
 }
 
-export async function getTicketMessages(ticketId, query = {}, messageType = MESSAGE_TYPE.MESSAGE, tenantId = null) {
-    const ticket = await getTicketOrThrow(ticketId, tenantId ?? query.tenantId);
+export async function getTicketMessages(
+    ticketId,
+    query = {},
+    messageType = MESSAGE_TYPE.MESSAGE,
+    tenantId = null,
+    viewer = null
+) {
+    const ticket = await getTicketOrThrow(
+        ticketId,
+        tenantId ?? query.tenantId,
+        viewer
+    );
     const pagination = getPagination(query);
     const [{ messages }, events] = await Promise.all([
         listTicketMessages({

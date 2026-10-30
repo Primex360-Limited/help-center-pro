@@ -25,10 +25,13 @@ export async function createTicketHandler(req, res) {
 
 export async function listTicketsHandler(req, res) {
     const tenantId = requireTenantId({ req });
-    const result = await getTickets({
-        ...req.validatedQuery,
-        tenantId
-    });
+    const result = await getTickets(
+        {
+            ...req.validatedQuery,
+            tenantId
+        },
+        req.currentUser
+    );
 
     return successResponse(
         res,
@@ -41,13 +44,23 @@ export async function listTicketsHandler(req, res) {
 
 export async function getTicketDetailHandler(req, res) {
     const tenantId = requireTenantId({ req });
-    const ticket = await getTicketDetail(req.validatedParams.ticketId, tenantId);
+    const ticket = await getTicketDetail(
+        req.validatedParams.ticketId,
+        tenantId,
+        req.currentUser
+    );
 
     return successResponse(res, "Ticket fetched successfully", { ticket });
 }
 
 export async function getTicketThreadHandler(req, res) {
     const tenantId = requireTenantId({ req });
+    // Enforce the same visibility as detail — agents cannot peek assigned threads.
+    await getTicketDetail(
+        req.validatedParams.ticketId,
+        tenantId,
+        req.currentUser
+    );
     const thread = await getTicketThread(req.validatedParams.ticketId, tenantId);
 
     return successResponse(res, "Ticket thread fetched successfully", { thread });

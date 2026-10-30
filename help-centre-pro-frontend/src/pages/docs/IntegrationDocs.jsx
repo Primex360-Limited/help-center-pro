@@ -25,6 +25,7 @@ const SECTIONS = [
   { id: "messages", label: "Send messages" },
   { id: "poll-messages", label: "Receive replies" },
   { id: "session", label: "Validate key" },
+  { id: "ticket-settings", label: "Ticket policy" },
   { id: "errors", label: "Errors & tips" },
   { id: "webhooks", label: "Webhooks" },
   { id: "test", label: "Test scripts" },
@@ -414,6 +415,18 @@ async function sendVisitorMessage(ticketId, message) {
                     </td>
                     <td>Validate API key and resolve workspace</td>
                   </tr>
+                  <tr>
+                    <td>
+                      <code>GET</code>
+                    </td>
+                    <td>
+                      <code>/public/widget/ticket-settings</code>
+                    </td>
+                    <td>
+                      Ticket inactivity auto-close policy (hours) for your
+                      workspace
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -607,6 +620,47 @@ Authorization: Bearer sk_test_…
     }
   }
 }`}</CodeBlock>
+          </section>
+
+          <section className="idocs-section" id="ticket-settings">
+            <div className="idocs-section__head">
+              <span className="idocs-icon" aria-hidden="true">
+                <Shield size={18} />
+              </span>
+              <div>
+                <h2>Ticket inactivity policy</h2>
+                <p>
+                  Workspaces configure how long an open ticket may sit without
+                  activity before Help Centre Pro auto-closes it (Settings →
+                  General). Your integration can read that policy and mirror it
+                  in the visitor UI.
+                </p>
+              </div>
+            </div>
+            <CodeBlock label="GET /public/widget/ticket-settings">{`GET ${BASE}/public/widget/ticket-settings
+X-HCP-API-Key: pk_test_…
+
+// 200
+{
+  "success": true,
+  "data": {
+    "mode": "test",
+    "workspace": { "id": "…", "name": "Acme Support", "slug": "acme" },
+    "ticketInactivityHours": 72,
+    "inactivityAutoCloseEnabled": true,
+    "defaultTicketPriority": "medium",
+    "description": "Open tickets with no activity auto-close after 72 hour(s)."
+  }
+}
+
+// ticketInactivityHours = 0 means auto-close is disabled`}</CodeBlock>
+            <ul className="idocs-list">
+              <li>
+                Public Swagger at <code>{API_HOST}/api-docs</code> only lists
+                these integration endpoints. Internal platform routes are locked
+                down.
+              </li>
+            </ul>
           </section>
 
           <section className="idocs-section" id="errors">

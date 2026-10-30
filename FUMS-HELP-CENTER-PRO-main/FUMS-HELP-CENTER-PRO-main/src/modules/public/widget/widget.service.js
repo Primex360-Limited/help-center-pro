@@ -315,7 +315,29 @@ export async function listWidgetMessages({
     };
 }
 
-export async function getWidgetSession({ tenant, mode, keyKind }) {
+function readTicketPolicy(settings = {}) {
+    const tickets =
+        settings && typeof settings === "object" && !Array.isArray(settings)
+            ? settings.tickets || {}
+            : {};
+    const hours = Math.max(0, Number(tickets.inactivityAutoCloseHours ?? 72) || 0);
+    return {
+        ticketInactivityHours: hours,
+        inactivityAutoCloseEnabled: hours > 0,
+        defaultTicketPriority: String(tickets.defaultPriority || "medium").toLowerCase()
+    };
+}
+
+/**
+ * Public ticket / workspace policy for external integrators.
+ * Authenticated with the same widget API key as visitor/chat endpoints.
+ */
+export async function getWidgetTicketSettings({ tenant, mode, keyKind }) {
+    const settings =
+        tenant?.settings && typeof tenant.settings === "object"
+            ? tenant.settings
+            : {};
+    const policy = readTicketPolicy(settings);
     return {
         mode,
         keyKind,
@@ -323,7 +345,29 @@ export async function getWidgetSession({ tenant, mode, keyKind }) {
             id: tenant.id,
             name: tenant.name,
             slug: tenant.slug
-        }
+        },
+        ...policy,
+        description:
+            policy.ticketInactivityHours > 0
+                ? `Open tickets with no activity auto-close after ${policy.ticketInactivityHours} hour(s).`
+                : "Ticket inactivity auto-close is disabled for this workspace."
+    };
+}
+
+export async function getWidgetSession({ tenant, mode, keyKind }) {
+    const settings =
+        tenant?.settings && typeof tenant.settings === "object"
+            ? tenant.settings
+            : {};
+    return {
+        mode,
+        keyKind,
+        workspace: {
+            id: tenant.id,
+            name: tenant.name,
+            slug: tenant.slug
+        },
+        tickets: readTicketPolicy(settings)
     };
 }
 
@@ -331,5 +375,6 @@ export default {
     createWidgetVisitor,
     sendWidgetMessage,
     listWidgetMessages,
-    getWidgetSession
+    getWidgetSession,
+    getWidgetTicketSettings
 };

@@ -97,6 +97,16 @@ export const env = {
     PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY || "",
     PAYSTACK_PUBLIC_KEY: process.env.PAYSTACK_PUBLIC_KEY || "",
     PREMIUM_PRICE_MONTHLY_USD: Number(process.env.PREMIUM_PRICE_MONTHLY_USD) || 49,
+
+    /**
+     * Protects full internal Swagger (`/api-docs/internal`).
+     * Public `/api-docs` only exposes Public Widget + Health for integrators.
+     * Set a long random value in production.
+     */
+    SWAGGER_INTERNAL_KEY:
+        process.env.SWAGGER_INTERNAL_KEY ||
+        process.env.INTERNAL_SERVICE_KEY ||
+        "",
 };
 
 export function assertCriticalEnv() {

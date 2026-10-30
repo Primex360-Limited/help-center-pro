@@ -55,6 +55,16 @@ export const updateWorkspaceProfileSchema = z
         /** Tenant mailbox used when agents send email from Help Centre Pro. */
         supportEmail: z
             .union([z.literal(""), z.string().trim().email().max(254)])
+            .optional(),
+        /** Hours with no activity before an open ticket auto-closes. 0 = disabled. */
+        ticketInactivityHours: z.coerce
+            .number()
+            .int()
+            .min(0, "Use 0 to disable auto-close")
+            .max(8760, "Maximum is 8760 hours (1 year)")
+            .optional(),
+        defaultTicketPriority: z
+            .enum(["low", "medium", "high", "urgent", "LOW", "MEDIUM", "HIGH", "URGENT"])
             .optional()
     })
     .refine((data) => Object.keys(data).length > 0, {

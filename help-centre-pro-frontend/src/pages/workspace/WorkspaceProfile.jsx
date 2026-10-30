@@ -109,6 +109,15 @@ function readDefaultPriority(profile) {
   );
 }
 
+function readInactivityHours(profile) {
+  const raw =
+    profile?.ticketInactivityHours ??
+    profile?.settings?.tickets?.inactivityAutoCloseHours;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 72;
+  return Math.min(8760, Math.floor(n));
+}
+
 function snapshotOf(profile) {
   return {
     name: profile?.name || "",
@@ -116,6 +125,7 @@ function snapshotOf(profile) {
     logoUrl: profile?.logoUrl || "",
     supportEmail: profile?.supportEmail || "",
     defaultTicketPriority: readDefaultPriority(profile),
+    ticketInactivityHours: readInactivityHours(profile),
   };
 }
 
@@ -130,12 +140,14 @@ export default function WorkspaceProfile() {
     logoUrl: "",
     supportEmail: "",
     defaultTicketPriority: "medium",
+    ticketInactivityHours: 72,
   });
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
   const [defaultTicketPriority, setDefaultTicketPriority] = useState("medium");
+  const [ticketInactivityHours, setTicketInactivityHours] = useState(72);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -163,6 +175,7 @@ export default function WorkspaceProfile() {
       setLogoUrl(snap.logoUrl);
       setSupportEmail(snap.supportEmail);
       setDefaultTicketPriority(snap.defaultTicketPriority);
+      setTicketInactivityHours(snap.ticketInactivityHours);
       setCallingMode(next?.calling?.mode || "hcp");
       setHcpPaused(Boolean(next?.calling?.hcpPaused));
       setOwnNumber(next?.calling?.ownNumber || "");
@@ -195,8 +208,17 @@ export default function WorkspaceProfile() {
       timezone.trim() !== saved.timezone ||
       logoUrl.trim() !== saved.logoUrl ||
       supportEmail.trim() !== saved.supportEmail ||
-      defaultTicketPriority !== saved.defaultTicketPriority,
-    [name, timezone, logoUrl, supportEmail, defaultTicketPriority, saved]
+      defaultTicketPriority !== saved.defaultTicketPriority ||
+      Number(ticketInactivityHours) !== Number(saved.ticketInactivityHours),
+    [
+      name,
+      timezone,
+      logoUrl,
+      supportEmail,
+      defaultTicketPriority,
+      ticketInactivityHours,
+      saved,
+    ]
   );
 
   const initials = initialsFrom(name || profile?.name);
@@ -207,6 +229,7 @@ export default function WorkspaceProfile() {
     setName(saved.name);
     setTimezone(saved.timezone);
     setLogoUrl(saved.logoUrl);
+    setTicketInactivityHours(saved.ticketInactivityHours);
     setSupportEmail(saved.supportEmail);
     setDefaultTicketPriority(saved.defaultTicketPriority);
     setLogoError("");
@@ -346,10 +369,14 @@ export default function WorkspaceProfile() {
     }
     if (defaultTicketPriority !== saved.defaultTicketPriority) {
       payload.defaultTicketPriority = defaultTicketPriority;
-      payload.settings = {
-        ...(profile?.settings || {}),
-        defaultTicketPriority,
-      };
+    }
+    if (
+      Number(ticketInactivityHours) !== Number(saved.ticketInactivityHours)
+    ) {
+      payload.ticketInactivityHours = Math.max(
+        0,
+        Math.min(8760, Math.floor(Number(ticketInactivityHours) || 0))
+      );
     }
 
     if (!Object.keys(payload).length) {
@@ -377,6 +404,7 @@ export default function WorkspaceProfile() {
         setLogoUrl(snap.logoUrl);
         setSupportEmail(snap.supportEmail);
         setDefaultTicketPriority(snap.defaultTicketPriority);
+        setTicketInactivityHours(snap.ticketInactivityHours);
       } else {
         setSaved((prev) => ({
           ...prev,
@@ -384,6 +412,7 @@ export default function WorkspaceProfile() {
           timezone: trimmedTimezone || prev.timezone,
           supportEmail: supportEmail.trim(),
           defaultTicketPriority,
+          ticketInactivityHours: Number(ticketInactivityHours),
           logoUrl: trimmedLogo,
         }));
       }
@@ -394,7 +423,9 @@ export default function WorkspaceProfile() {
       const msg = String(err?.message || "");
       const looksLikeUnknownField =
         status === 400 &&
-        /defaultTicketPriority|settings|validation|unknown|not allowed/i.test(msg);
+        /defaultTicketPriority|ticketInactivityHours|settings|validation|unknown|not allowed/i.test(
+          msg
+        );
 
       if (looksLikeUnknownField && (payload.defaultTicketPriority || payload.settings)) {
         const fallback = { ...payload };
@@ -527,6 +558,31 @@ export default function WorkspaceProfile() {
                 disabled={!canWrite}
               />
             </div>
+          </div>
+
+          <div className="settings-field">
+            <label htmlFor="ws-inactivity-hours">
+              Ticket inactivity auto-close (hours)
+            </label>
+            <input
+              id="ws-inactivity-hours"
+              type="number"
+              min={0}
+              max={8760}
+              step={1}
+              value={ticketInactivityHours}
+              disabled={!canWrite}
+              onChange={(e) =>
+                setTicketInactivityHours(
+                  Math.max(0, Math.min(8760, Number(e.target.value) || 0))
+                )
+              }
+            />
+            <p className="settings-field__hint">
+              Open tickets with no activity close after this many hours. Use{" "}
+              <strong>0</strong> to disable. Integrators can read the policy via{" "}
+              <code>GET /public/widget/ticket-settings</code>.
+            </p>
           </div>
 
           <div className="settings-form__actions">

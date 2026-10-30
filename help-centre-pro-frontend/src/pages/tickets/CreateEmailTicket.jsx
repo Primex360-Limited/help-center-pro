@@ -322,14 +322,31 @@ export default function CreateEmailTicket() {
 
   const noMailbox = !mailboxesLoading && mailboxes.length === 0;
 
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const hasContent = Boolean(
+      String(editorRef.current.innerHTML || "")
+        .replace(/<br\s*\/?>/gi, "")
+        .replace(/&nbsp;/gi, " ")
+        .trim()
+    );
+    if (hasContent) return;
+    const lines = String(signature || "")
+      .split("\n")
+      .map((line) => line.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+    editorRef.current.innerHTML = `<p><br></p><p>${lines.join("<br>")}</p>`;
+  }, [signature]);
+
   return (
-    <div className="ch-page ch-form-page">
-      <header className="ch-form-hero">
+    <div className="ch-page ch-form-page ch-form-page--email">
+      <header className="ch-form-hero ch-form-hero--inline">
         <div className="ch-form-hero__icon" aria-hidden="true">
-          <Mail size={28} strokeWidth={1.75} />
+          <Mail size={22} strokeWidth={1.75} />
         </div>
-        <h1>Create email ticket</h1>
-        <p>Send an email to create a new support ticket</p>
+        <div>
+          <h1>Create email ticket</h1>
+          <p>Send an email to create a new support ticket</p>
+        </div>
       </header>
 
       <form className="ch-panel" onSubmit={handleSubmit}>
@@ -391,7 +408,7 @@ export default function CreateEmailTicket() {
           <div className="ch-field__label-row">
             <label htmlFor="email-to">To</label>
             <Link to="/tickets" className="ch-link">
-              View all customers →
+              View all customers
             </Link>
           </div>
           <input
@@ -571,27 +588,31 @@ export default function CreateEmailTicket() {
               data-placeholder="Write your message here..."
               suppressContentEditableWarning
             />
-            <div className="ch-signature-block">
-              <div className="ch-signature-block__head">
-                <span>Email signature</span>
-                <button
-                  type="button"
-                  className="ch-link"
-                  onClick={() => persistSignature(defaultSignature(userName))}
-                >
-                  Reset default
-                </button>
-              </div>
-              <textarea
-                className="ch-signature-editor"
-                value={signature}
-                onChange={(e) => persistSignature(e.target.value)}
-                rows={4}
-                aria-label="Editable email signature"
-                placeholder={"---\nBest regards,\nYour name\nSupport team"}
-              />
-            </div>
           </div>
+          <p className="ch-field-hint ch-field-hint--tight">
+            Signature is included in the message.{" "}
+            <button
+              type="button"
+              className="ch-link"
+              onClick={() => {
+                const next = defaultSignature(userName);
+                persistSignature(next);
+                if (editorRef.current) {
+                  const lines = next
+                    .split("\n")
+                    .map((line) =>
+                      line.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                    );
+                  const body = String(editorRef.current.innerHTML || "");
+                  if (!body.includes("Best regards")) {
+                    editorRef.current.innerHTML = `${body}<p><br></p><p>${lines.join("<br>")}</p>`;
+                  }
+                }
+              }}
+            >
+              Reset signature
+            </button>
+          </p>
         </div>
 
         <div className="ch-footer-bar">
