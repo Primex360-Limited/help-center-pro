@@ -54,15 +54,102 @@ const SIMPLE_TENANT_FIELDS = [
     required: false,
     default: true,
   },
+];
+
+/**
+ * Optional overrides shown under "Advanced SIP settings" for branded
+ * providers. Branded hosts come from the catalog, but plenty of operators
+ * (e.g. Stuncall) hand out a raw IP + port in their welcome email, so the
+ * tenant must be able to correct the host. Without these the saved config had
+ * no `sipServer` and every Test failed with
+ * "SIP credentials incomplete. Server, username, and password are required."
+ */
+const BRANDED_ADVANCED_FIELDS = [
   {
-    key: "sipWsUrl",
-    label: "WebSocket URL override (optional)",
+    key: "sipServer",
+    label: "SIP server / IP",
     type: "text",
     required: false,
+    group: "advanced",
+    placeholder: "e.g. 46.62.134.9 or sip.provider.com",
+    hint: "Prefilled when the provider publishes a public endpoint. Otherwise copy the SIP host/IP from the provider's welcome email.",
+  },
+  {
+    key: "sipPort",
+    label: "SIP port",
+    type: "text",
+    required: false,
+    group: "advanced",
+    placeholder: "e.g. 5060",
+    hint: "Signalling port from the provider. Leave empty to use 5060.",
+  },
+  {
+    key: "sipWsUrl",
+    label: "WebSocket URL (WSS)",
+    type: "text",
+    required: false,
+    group: "advanced",
     placeholder: "wss://sip.provider.com:8089/ws",
-    hint: "Only if Test fails — paste the WSS URL from your provider’s docs.",
+    hint: "Required for calling from the browser. Raw IP / UDP-only trunks cannot register in a browser without it.",
   },
 ];
+
+/**
+ * Providers whose SIP endpoint was verified by DNS on 2026-11-02.
+ *
+ * Everything else has an account-specific host — carriers and UCaaS vendors
+ * assign `<customer>.sip.brand.tld`, so a guessed hostname only produces a
+ * guaranteed failure. Those providers keep an empty host and the tenant enters
+ * the one from their provider portal (the field becomes required).
+ */
+const VERIFIED_ENDPOINTS = new Set([
+  "twotalk",
+  "nine_mobile_voip",
+  "binotel",
+  "bt_sip",
+  "callnigeria",
+  "callcentric",
+  "cloudtalk",
+  "deutsche_telekom",
+  "didww",
+  "entel_cl",
+  "flowroute",
+  "freepbx_hosted",
+  "gamma",
+  "google_voice_sip",
+  "gradwell",
+  "maroc_telecom",
+  "mikrotik_voip",
+  "myoperator",
+  "nextiva",
+  "opensips_cloud",
+  "orange_business",
+  "plivo",
+  "ringcentral",
+  "ringover",
+  "signalwire",
+  "sinch",
+  "sipgate_de",
+  "sipgate_uk",
+  "stc_sa",
+  "swift_networks",
+  "microsoft_teams_dr",
+  "telefonica_ar",
+  "telia",
+  "telmex",
+  "telnyx",
+  "twilio_sip",
+  "vivo_br",
+  "vodacom_business",
+  "vodacom_tz",
+  "vodafone_de",
+  "voipms",
+  "vonage_sip",
+  "zadarma",
+  "zoom_phone",
+  // Static IP issued in Stuncall's welcome email (no DNS record needed).
+  "stuncall",
+]);
 
 const CUSTOM_SIP_FIELDS = [
   {
@@ -129,8 +216,16 @@ const CUSTOM_SIP_FIELDS = [
   },
 ];
 
-function wssFor(host, port = 8089) {
+export function wssFor(host, port = 8089) {
   return `wss://${host}:${port}/ws`;
+}
+
+/** Raw IPv4/host:port SIP endpoints cannot host a guessed WSS path. */
+export function isRawHostEndpoint(host) {
+  const value = String(host || "").trim();
+  if (!value) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(value)) return true;
+  return /^\[[0-9a-f:]+\](:\d+)?$/i.test(value);
 }
 
 const REGION_LABELS = {
@@ -213,6 +308,7 @@ function brandedProvider({
   regions = ["GLOBAL"],
   sipServer,
   sipWsUrl,
+  sipVerified = false,
   dialOutPrefix = "",
   sipPort = "",
 }) {
@@ -221,6 +317,13 @@ function brandedProvider({
   const sipBrandDomain = String(host || "")
     .replace(/^sip\./i, "")
     .replace(/^[\w-]+\./, (m) => (m.toLowerCase() === "sip." ? "" : m));
+  const sipServerField = {
+    ...BRANDED_ADVANCED_FIELDS[0],
+    required: !host,
+    hint: host
+      ? `Verified endpoint: ${host}. Change it only if ${name} gave you a different host.`
+      : `Required — ${name} assigns the SIP host/IP per account. Copy it from their welcome email or portal.`,
+  };
   return {
     id,
     name,
@@ -236,15 +339,25 @@ function brandedProvider({
       `${name} SIP — enter your number, username, and password from ${name}.`,
     features,
     authFields: [],
-    sipFields: SIMPLE_TENANT_FIELDS,
+    sipFields: [
+      ...SIMPLE_TENANT_FIELDS,
+      sipServerField,
+      ...BRANDED_ADVANCED_FIELDS.slice(1),
+    ],
     defaults: {
-      sipServer: host,
-      sipWsUrl: sipWsUrl || (host ? wssFor(host) : ""),
+      sipServer: host || "",
+      // Never invent a WebSocket URL: a wrong guess only hides the real
+      // problem. Tenants paste the WSS from the provider when they have one.
+      sipWsUrl: sipWsUrl || "",
       sipPort: sipPort || "",
       dialOutPrefix,
       stunServer: "stun:stun.l.google.com:19302",
     },
     simpleSetup: true,
+    /** Public endpoint confirmed (DNS / provider sheet) — safe to prefill. */
+    verifiedHost: Boolean(host && sipVerified),
+    /** Tenant must supply the host before this provider can work. */
+    requiresHost: !host,
     regions,
     supportsRecording: true,
     supportsTranscription: false,
@@ -256,7 +369,9 @@ function brandedProvider({
 const BRANDED_CATALOG = [
   // ——— Nigeria ———
   ["twotalk", "2talk", "global", "https://2talk.com/", "sip.2talk.com", ["US", "GLOBAL"], "003"],
-  ["stuncall", "Stuncall", "nigeria", "https://stuncall.com", "sip.stuncall.com", ["NG", "GH", "KE", "ZA"]],
+  // Stuncall hands out a raw SIP IP + port in its welcome email
+  // ("IP Address: 46.62.134.9 / Port Number: 5060"), not a hostname.
+  ["stuncall", "Stuncall", "nigeria", "https://stuncall.com", "46.62.134.9", ["NG", "GH", "KE", "ZA"], "", "", "5060"],
   ["smilecoms", "SmileComs", "nigeria", "https://smilecoms.com", "sip.smilecoms.com", ["NG", "ZA", "KE", "GH", "TZ"]],
   ["terragon", "Terragon", "nigeria", "https://terragon.net", "sip.terragon.net", ["NG"]],
   ["cloudfone", "CloudFone", "nigeria", "https://cloudfone.ng", "sip.cloudfone.ng", ["NG"]],
@@ -271,9 +386,7 @@ const BRANDED_CATALOG = [
   ["mainone_voip", "MainOne VoIP", "nigeria", "https://mainone.net", "sip.mainone.net", ["NG"]],
   ["tizeti_voip", "Tizeti VoIP", "nigeria", "https://tizeti.com", "sip.tizeti.com", ["NG"]],
   ["smile_ng_voip", "Smile Nigeria VoIP", "nigeria", "https://smile.com.ng", "sip.smile.com.ng", ["NG"]],
-  ["nigerian_comms", "Nigerian Communications", "nigeria", "https://ncc.gov.ng", "sip.nigeriancomms.com", ["NG"]],
   ["africell_voip", "Africell VoIP", "nigeria", "https://africell.com", "sip.africell.com", ["NG", "UG", "SL"]],
-  ["bubbletalk_ng", "BubbleTalk NG", "nigeria", "", "sip.bubbletalk.ng", ["NG"]],
   ["callnigeria", "Call Nigeria SIP", "nigeria", "", "sip.callnigeria.com", ["NG"]],
 
   // ——— Africa ———
@@ -405,21 +518,34 @@ const BRANDED_CATALOG = [
   ["mikrotik_voip", "MikroTik SIP", "europe", "https://mikrotik.com", "sip.mikrotik.com", ["GLOBAL"]],
   ["kamailio_cloud", "Kamailio Hosted", "europe", "https://www.kamailio.org", "sip.kamailio.org", ["GLOBAL"]],
   ["opensips_cloud", "OpenSIPS Hosted", "europe", "https://www.opensips.org", "sip.opensips.org", ["GLOBAL"]],
-  ["freepbx_vultr", "BYO FreePBX (generic)", "custom", "", "sip.your-pbx.example", ["GLOBAL"]],
 ];
 
 function fromCatalogRow(row) {
-  const [id, name, category, website, sipServer, regions, dialOutPrefix, sipWsUrl] =
-    row;
-  return brandedProvider({
+  const [
     id,
     name,
     category,
     website,
     sipServer,
+    regions,
+    dialOutPrefix,
+    sipWsUrl,
+    sipPort,
+  ] = row;
+  const verified = VERIFIED_ENDPOINTS.has(id);
+  return brandedProvider({
+    id,
+    name,
+    category,
+    website,
+    // Only prefill endpoints we could verify; a guessed host fails 100% of the
+    // time and makes the whole provider look broken.
+    sipServer: verified ? sipServer : "",
+    sipVerified: verified,
     regions: regions || ["GLOBAL"],
     dialOutPrefix: dialOutPrefix || "",
     sipWsUrl: sipWsUrl || undefined,
+    sipPort: sipPort || "",
     features: ["SIP trunk", "Browser softphone", "Call recording"],
   });
 }
@@ -439,6 +565,8 @@ export const VOIP_PROVIDERS = [
     sipFields: CUSTOM_SIP_FIELDS,
     defaults: {},
     simpleSetup: false,
+    verifiedHost: false,
+    requiresHost: true,
     regions: ["GLOBAL"],
     supportsRecording: true,
     supportsTranscription: false,
@@ -517,9 +645,11 @@ export function resolveSipCredentials(providerId, credentials = {}) {
     merged.sipWsUrl = /^wss?:\/\//i.test(tenantWs)
       ? tenantWs
       : `wss://${tenantWs}`;
-  } else if (!merged.sipWsUrl && host) {
-    merged.sipWsUrl = wssFor(host);
   }
+
+  // Deliberately no guessed WSS here: inventing `wss://<ip>:8089/ws` hides the
+  // real problem. The softphone reports exactly what is missing instead.
+  if (!merged.sipServer && host) merged.sipServer = host;
 
   return merged;
 }

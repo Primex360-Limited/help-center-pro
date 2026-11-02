@@ -6,7 +6,9 @@
 import { getVoipSettings } from "../api/workspace.api.js";
 import {
   getProviderById,
+  isRawHostEndpoint,
   resolveSipCredentials,
+  wssFor,
 } from "../constants/voipProviders.js";
 
 function pickSipHost(credentials = {}) {
@@ -20,6 +22,8 @@ function pickSipHost(credentials = {}) {
     credentials.sipProxy ||
     credentials.sipGateway ||
     credentials.sipTrunk ||
+    credentials.ipAddress ||
+    credentials.ip ||
     ""
   );
 }
@@ -45,6 +49,44 @@ function pickSipPassword(credentials = {}) {
   );
 }
 
+/**
+ * ICE URLs must carry their scheme exactly once. Provider defaults store
+ * `stun:host`; older code prefixed another `stun:`, producing the invalid
+ * `stun:stun:stun.l.google.com` for every branded provider — no STUN, no
+ * NAT traversal, one-way audio.
+ */
+function normalizeIceServer(value, fallbackScheme = "stun") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^(stuns?|turns?):/i.test(text)) return text;
+  return `${fallbackScheme}:${text}`;
+}
+
+function buildIceServers(credentials = {}) {
+  if (Array.isArray(credentials.iceServers) && credentials.iceServers.length) {
+    return credentials.iceServers;
+  }
+
+  const stunUrl =
+    normalizeIceServer(credentials.stunServer || credentials.stunUrl, "stun") ||
+    "stun:stun.l.google.com:19302";
+  const iceServers = [{ urls: stunUrl }];
+
+  const turnUrl = normalizeIceServer(
+    credentials.turnServer || credentials.turnUrl,
+    "turn"
+  );
+  if (turnUrl && credentials.turnUsername && credentials.turnPassword) {
+    iceServers.push({
+      urls: turnUrl,
+      username: credentials.turnUsername,
+      credential: credentials.turnPassword,
+    });
+  }
+
+  return iceServers;
+}
+
 function buildWsUrl(credentials = {}, host) {
   const explicit =
     credentials.sipWsUrl ||
@@ -56,9 +98,17 @@ function buildWsUrl(credentials = {}, host) {
     if (/^wss?:\/\//i.test(explicit)) return explicit;
     return `wss://${explicit}`;
   }
-  // Common browser SIP ports used by Asterisk / FreeSWITCH / Kamailio
-  const port = credentials.sipPort || "8089";
-  return `wss://${host}:${port}/ws`;
+
+  // A bare IP / IP:port SIP endpoint cannot be turned into a WebSocket URL by
+  // guessing — say so instead of failing with a misleading socket error.
+  if (isRawHostEndpoint(host)) {
+    throw new Error(
+      `Browser calling needs the WebSocket (WSS) URL from your provider — “${host}” is a SIP host/IP only. Add it under Settings → VoIP/SIP → Edit → Advanced SIP settings.`
+    );
+  }
+
+  // Hostname default used by Asterisk / FreeSWITCH / Kamailio deployments.
+  return wssFor(host);
 }
 
 function remoteIdentity(session) {
@@ -172,7 +222,13 @@ class VoipService {
     const password = pickSipPassword(credentials);
 
     if (!host || !user || !password) {
-      throw new Error("SIP server, username, and password are required");
+      const missing = [];
+      if (!host) missing.push("SIP server");
+      if (!user) missing.push("username");
+      if (!password) missing.push("password");
+      throw new Error(
+        `Missing ${missing.join(", ")}. Open Settings → VoIP/SIP → Edit and add it, then test again.`
+      );
     }
 
     const wsUrl = buildWsUrl(credentials, host);
@@ -187,19 +243,7 @@ class VoipService {
       register_expires: 300,
     };
 
-    const iceServers = [];
-    if (credentials.stunServer) {
-      iceServers.push({ urls: `stun:${credentials.stunServer}` });
-    } else {
-      iceServers.push({ urls: "stun:stun.l.google.com:19302" });
-    }
-    if (credentials.turnServer && credentials.turnUsername && credentials.turnPassword) {
-      iceServers.push({
-        urls: credentials.turnServer,
-        username: credentials.turnUsername,
-        credential: credentials.turnPassword,
-      });
-    }
+    const iceServers = buildIceServers(credentials);
     configuration.pcConfig = { iceServers };
     return { configuration, host, user, wsUrl };
   }
@@ -207,44 +251,68 @@ class VoipService {
   async initializeJsSip(credentials) {
     const mod = await import("jssip");
     const JsSIP = mod.default || mod;
-    const { configuration } = this.buildUaConfiguration(credentials, JsSIP);
+    const { configuration, wsUrl } = this.buildUaConfiguration(credentials, JsSIP);
     this.pcConfig = configuration.pcConfig;
 
     this.device = new JsSIP.UA(configuration);
     this.setupSipListeners();
 
+    const stopDevice = () => {
+      try {
+        this.device?.unregister?.();
+        this.device?.stop?.();
+      } catch {
+        /* ignore */
+      }
+      this.device = null;
+      this.registered = false;
+    };
+
     await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const fail = (message) => {
         cleanup();
-        reject(
-          new Error(
-            "SIP registration timed out. Check WebSocket URL (WSS), server, and credentials."
-          )
-        );
-      }, 20000);
+        stopDevice();
+        reject(new Error(message));
+      };
+
+      const timeout = setTimeout(
+        () =>
+          fail(
+            "SIP registration timed out. Verify the WebSocket (WSS) URL, the server/port, and the username/password."
+          ),
+        20000
+      );
 
       const onRegistered = () => {
         cleanup();
         this.registered = true;
         resolve();
       };
-      const onFailed = (e) => {
-        cleanup();
-        reject(
-          new Error(
-            e?.cause || e?.response?.reason_phrase || "SIP registration failed"
-          )
+      const onFailed = (event) => {
+        const reason =
+          event?.cause ||
+          event?.response?.reason_phrase ||
+          "SIP registration failed";
+        fail(
+          /websocket|connect/i.test(String(reason))
+            ? `Cannot open the SIP WebSocket (${wsUrl}). Check the WSS URL, port and firewall.`
+            : String(reason)
         );
       };
       const cleanup = () => {
         clearTimeout(timeout);
-        this.device.off("registered", onRegistered);
-        this.device.off("registrationFailed", onFailed);
+        this.device?.off("registered", onRegistered);
+        this.device?.off("registrationFailed", onFailed);
       };
 
       this.device.on("registered", onRegistered);
       this.device.on("registrationFailed", onFailed);
-      this.device.start();
+
+      try {
+        this.device.start();
+      } catch (error) {
+        fail(error?.message || "Unable to start the SIP stack");
+      }
     });
   }
 
@@ -255,7 +323,7 @@ class VoipService {
     const mod = await import("jssip");
     const JsSIP = mod.default || mod;
     const merged = resolveSipCredentials(providerId, credentials || {});
-    const { configuration, host, user, wsUrl } = this.buildUaConfiguration(
+    const { configuration, host, user, wsUrl } = await this.buildUaConfiguration(
       merged,
       JsSIP
     );

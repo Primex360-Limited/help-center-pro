@@ -141,6 +141,26 @@ export async function sendPasswordResetEmail({ to, firstName, token }) {
     });
 }
 
+export async function sendPlatformTeamInviteEmail({
+    to,
+    firstName,
+    roleName,
+    temporaryPassword
+}) {
+    const template = inviteUserTemplate({
+        firstName,
+        invitationLink: resolveAdminSignInUrl(),
+        roleName,
+        temporaryPassword
+    });
+
+    return dispatchEmail({
+        to,
+        subject: template.subject,
+        html: template.html
+    });
+}
+
 export async function sendTenantInvitationEmail({
     to,
     firstName,

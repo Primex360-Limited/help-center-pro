@@ -63,7 +63,10 @@ services:
       JWT_REFRESH_SECRET: help_center_pro_dev_refresh_secret_change_me_32chars
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
-      SEED_TEST_USER: "true"
+      # Never seed demo workspaces/users — the portal must show real data only.
+      SEED_TEST_USER: "false"
+      SEED_DEMO_TICKETS: "false"
+      PURGE_DEMO_DATA: "true"
       INTERNAL_SERVICE_KEY: help_center_pro_internal_dev_key_change_me
     ports:
       - "4008:4008"
@@ -87,7 +90,10 @@ services:
     env_file:
       - ./help-centre-pro-frontend/.env
     environment:
-      VITE_API_URL: http://localhost:4008
+      # Keep VITE_API_URL empty so the app calls same-origin /api (httpOnly
+      # cookies survive); the dev server proxies it to the API service below.
+      VITE_API_URL: ""
+      VITE_PROXY_TARGET: http://backend:4008
       VITE_APP_NAME: HelpCentre Pro
     ports:
       - "5173:5173"

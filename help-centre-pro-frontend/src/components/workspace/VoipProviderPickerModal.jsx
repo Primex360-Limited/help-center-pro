@@ -8,6 +8,57 @@ import {
 } from "../../constants/voipProviders.js";
 import VoipProviderLogo from "./VoipProviderLogo.jsx";
 
+/** Country names so “nigeria”, “kenya”, “uk”… match the region codes. */
+const REGION_NAMES = {
+  NG: "nigeria",
+  GH: "ghana",
+  KE: "kenya",
+  ZA: "south africa",
+  TZ: "tanzania",
+  UG: "uganda",
+  CI: "cote divoire ivory coast",
+  SN: "senegal",
+  MA: "morocco",
+  EG: "egypt",
+  SL: "sierra leone",
+  US: "united states usa",
+  CA: "canada",
+  BR: "brazil",
+  MX: "mexico",
+  AR: "argentina",
+  CL: "chile",
+  CO: "colombia",
+  UK: "united kingdom britain",
+  DE: "germany",
+  FR: "france",
+  ES: "spain",
+  IT: "italy",
+  NL: "netherlands",
+  BE: "belgium",
+  CH: "switzerland",
+  SE: "sweden",
+  NO: "norway",
+  DK: "denmark",
+  FI: "finland",
+  PL: "poland",
+  PT: "portugal",
+  IE: "ireland",
+  IN: "india",
+  JP: "japan",
+  CN: "china",
+  HK: "hong kong",
+  SG: "singapore",
+  MY: "malaysia",
+  PH: "philippines",
+  AU: "australia",
+  NZ: "new zealand",
+  AE: "uae united arab emirates",
+  SA: "saudi arabia",
+  QA: "qatar",
+  KW: "kuwait",
+  GLOBAL: "global worldwide",
+};
+
 /**
  * Premium catalog picker — shown only when "Add provider" is clicked.
  */
@@ -38,14 +89,19 @@ export default function VoipProviderPickerModal({
     return VOIP_PROVIDERS.filter((item) => {
       if (category !== "all" && item.category !== category) return false;
       if (!q) return true;
-      return (
-        item.name.toLowerCase().includes(q) ||
-        item.id.toLowerCase().includes(q) ||
-        String(item.description || "")
-          .toLowerCase()
-          .includes(q) ||
-        (item.regions || []).some((r) => String(r).toLowerCase().includes(q))
-      );
+      const haystack = [
+        item.name,
+        item.id,
+        item.description,
+        item.website,
+        item.defaults?.sipServer,
+        ...(item.regions || []),
+        ...(item.regions || []).map((code) => REGION_NAMES[code] || ""),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
     });
   }, [query, category]);
 
@@ -146,6 +202,13 @@ export default function VoipProviderPickerModal({
                         <span className="voip-picker__region">
                           <Globe2 size={12} aria-hidden="true" />
                           {region}
+                        </span>
+                        <span
+                          className={`voip-picker__cap${
+                            item.requiresHost ? " is-host" : ""
+                          }`}
+                        >
+                          {item.requiresHost ? "Your host" : "Verified endpoint"}
                         </span>
                         {href ? (
                           <span className="voip-picker__site" title={href}>

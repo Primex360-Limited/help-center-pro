@@ -1,22 +1,18 @@
 import prisma from "../../database/prisma/client.js";
 import { env } from "../../config/env.js";
-import { TENANT_STATUS, USER_STATUS, USER_TYPE } from "../../shared/constants/system.js";
-import { SUPER_ADMIN_ROLE_NAMES, TENANT_ROLE } from "../../shared/constants/roles.js";
+import { USER_STATUS, USER_TYPE } from "../../shared/constants/system.js";
+import { SUPER_ADMIN_ROLE_NAMES } from "../../shared/constants/roles.js";
 import { hashPassword } from "./auth.utils.js";
-import { provisionTenantRoles, seedSystemRoles } from "../roles/seedSystemRoles.js";
+import { seedSystemRoles } from "../roles/seedSystemRoles.js";
 
-const DEMO_TENANT = Object.freeze({
-    name: "Primex360",
-    slug: "primex360",
-    primaryDomain: "primex360.com",
-    plan: "scale",
-    seatLimit: 20,
-    settings: {
-        country: "Nigeria",
-        trial: false,
-        mrr: 199
-    }
-});
+/**
+ * Bootstrap-only seeding.
+ *
+ * The platform never creates demo workspaces, demo tickets or test tenant
+ * accounts: every workspace, invoice and audit row an operator sees is real.
+ * The only row seeded here is the default platform super admin, so a fresh
+ * install can be signed into (see `ensureDefaultSuperAdmin`).
+ */
 
 /** Default platform super admin (seeded when SEED_PROVIDER_SUPER_ADMIN=true). */
 export const DEFAULT_SUPER_ADMIN = Object.freeze({
@@ -30,36 +26,14 @@ const LEGACY_SUPER_ADMIN_EMAILS = Object.freeze([
     "ebube.okechukwu@gmail.com"
 ]);
 
-const PROVIDER_TEST_USERS = [
-    DEFAULT_SUPER_ADMIN,
-    {
-        email: "test@test.com",
-        password: "test",
-        firstName: "Test",
-        lastName: "User"
-    }
-];
+/** Emails created by older builds' demo seeding — used by the purge script. */
+export const LEGACY_DEMO_EMAILS = Object.freeze([
+    "test@test.com",
+    "amaka@primex360.com",
+    "admin@helpcentrepro.com"
+]);
 
-const TENANT_ADMIN_TEST_USERS = [
-    {
-        email: "amaka@primex360.com",
-        password: "2020/EN/12566",
-        firstName: "Amaka",
-        lastName: "Okoro"
-    },
-    {
-        email: "jetsamjoseph@gmail.com",
-        password: "2020/EN/12566",
-        firstName: "Joseph",
-        lastName: "Jetsam"
-    },
-    {
-        email: "admin@helpcentrepro.com",
-        password: "test",
-        firstName: "Olivia",
-        lastName: "Rhye"
-    }
-];
+export const LEGACY_DEMO_TENANT_SLUGS = Object.freeze(["primex360", "demo"]);
 
 function normalizeEmail(email) {
     return String(email || "").trim().toLowerCase();
@@ -83,41 +57,6 @@ export async function resolveProviderSuperAdminRole(client = prisma) {
     }
 
     return role;
-}
-
-async function ensureDemoTenant(client = prisma) {
-    const existing = await client.tenant.findFirst({
-        where: {
-            OR: [{ slug: DEMO_TENANT.slug }, { slug: "demo" }]
-        }
-    });
-
-    if (existing) {
-        return client.tenant.update({
-            where: { id: existing.id },
-            data: {
-                name: DEMO_TENANT.name,
-                slug: DEMO_TENANT.slug,
-                primaryDomain: DEMO_TENANT.primaryDomain,
-                plan: DEMO_TENANT.plan,
-                seatLimit: DEMO_TENANT.seatLimit,
-                settings: DEMO_TENANT.settings,
-                status: TENANT_STATUS.ACTIVE
-            }
-        });
-    }
-
-    return client.tenant.create({
-        data: {
-            name: DEMO_TENANT.name,
-            slug: DEMO_TENANT.slug,
-            primaryDomain: DEMO_TENANT.primaryDomain,
-            plan: DEMO_TENANT.plan,
-            seatLimit: DEMO_TENANT.seatLimit,
-            settings: DEMO_TENANT.settings,
-            status: TENANT_STATUS.ACTIVE
-        }
-    });
 }
 
 async function upsertProviderUser(role, account) {
@@ -243,103 +182,25 @@ export async function ensureDefaultSuperAdmin() {
     return upsertProviderUser(role, DEFAULT_SUPER_ADMIN);
 }
 
-async function upsertTenantAdmin(tenantId, adminRoleId, account) {
-    const email = normalizeEmail(account.email);
-    const passwordHash = await hashPassword(account.password);
-
-    const existingInTenant = await prisma.user.findFirst({
-        where: { tenantId, email },
-        select: { id: true, emailVerifiedAt: true }
-    });
-    const existingProvider = await prisma.user.findFirst({
-        where: { tenantId: null, email },
-        select: { id: true }
-    });
-
-    const baseData = {
-        tenantId,
-        userType: USER_TYPE.TENANT,
-        email,
-        passwordHash,
-        firstName: account.firstName,
-        lastName: account.lastName,
-        roleId: adminRoleId,
-        status: USER_STATUS.ACTIVE,
-        emailVerified: true,
-        mustChangePassword: false,
-        deniedPermissions: []
-    };
-
-    if (existingInTenant) {
-        const user = await prisma.user.update({
-            where: { id: existingInTenant.id },
-            data: {
-                ...baseData,
-                emailVerifiedAt: existingInTenant.emailVerifiedAt ?? new Date()
-            }
-        });
-        console.log(`♻️  Dev tenant admin updated: ${email}`);
-        return user;
-    }
-
-    if (existingProvider) {
-        const user = await prisma.user.update({
-            where: { id: existingProvider.id },
-            data: {
-                ...baseData,
-                emailVerifiedAt: new Date()
-            }
-        });
-        console.log(`♻️  Dev account moved to tenant admin: ${email}`);
-        return user;
-    }
-
-    const user = await prisma.user.create({
-        data: {
-            ...baseData,
-            emailVerifiedAt: new Date()
-        }
-    });
-    console.log(`✅ Dev tenant admin created: ${email}`);
-    return user;
-}
-
+/**
+ * Demo/test-data seeding was removed on purpose.
+ *
+ * Earlier builds created a demo workspace ("Primex360") plus test tenant admins
+ * here, which made the Admin Portal report workspaces, seats and MRR that never
+ * existed. Seeding is now a no-op: workspaces only ever come from the real
+ * provisioning flow (Admin -> Tenants -> New tenant) or self-serve signup.
+ *
+ * Kept as an exported no-op so server.js and the microservice entry points keep
+ * working without a wider refactor.
+ */
 export async function seedTestUser() {
-    if (env.NODE_ENV === "production" || !env.SEED_TEST_USER) {
-        return null;
+    if (env.SEED_TEST_USER && env.NODE_ENV !== "production") {
+        console.log(
+            "[seedTestUser] Demo seeding is disabled - workspaces come from real signups only."
+        );
     }
 
-    const users = [];
-
-    // Default super admin is handled by ensureDefaultSuperAdmin() (keeps changed passwords).
-    // Extra local-only provider test users may still be upserted here.
-    if (env.SEED_PROVIDER_SUPER_ADMIN) {
-        const superAdminRole = await resolveProviderSuperAdminRole();
-        const defaultEmail = normalizeEmail(DEFAULT_SUPER_ADMIN.email);
-        for (const account of PROVIDER_TEST_USERS) {
-            if (normalizeEmail(account.email) === defaultEmail) {
-                continue;
-            }
-            users.push(await upsertProviderUser(superAdminRole, account));
-        }
-    }
-
-    const tenant = await ensureDemoTenant();
-    const tenantRoles = await provisionTenantRoles(tenant.id);
-    const adminRole =
-        tenantRoles[TENANT_ROLE.ADMIN] ||
-        Object.values(tenantRoles).find((role) => role.name === TENANT_ROLE.ADMIN);
-
-    if (!adminRole) {
-        throw new Error("Demo Tenant Admin role missing after provisioning");
-    }
-
-    for (const account of TENANT_ADMIN_TEST_USERS) {
-        users.push(await upsertTenantAdmin(tenant.id, adminRole.id, account));
-    }
-
-    console.log(`✅ Demo workspace ready: ${tenant.slug} (${tenant.id})`);
-    return users;
+    return null;
 }
 
 export default seedTestUser;

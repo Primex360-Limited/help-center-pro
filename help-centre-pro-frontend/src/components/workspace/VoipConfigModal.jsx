@@ -17,20 +17,33 @@ function uniqueFields(fields = []) {
 }
 
 function buildInitialForm(providerId, credentials = null) {
-  if (credentials && typeof credentials === "object") {
-    return { ...credentials };
-  }
   const provider = getProviderById(providerId);
+  const defaults =
+    provider?.defaults && typeof provider.defaults === "object"
+      ? provider.defaults
+      : {};
   const initial = {};
+
+  // Provider defaults first (SIP host / port), so a branded provider never
+  // saves an empty server, then the tenant's own values on top.
   uniqueFields([
     ...(provider?.authFields || []),
     ...(provider?.sipFields || []),
   ]).forEach((field) => {
+    if (defaults[field.key] !== undefined && defaults[field.key] !== "") {
+      initial[field.key] = defaults[field.key];
+    }
     if (field.default !== undefined) initial[field.key] = field.default;
   });
-  if (provider?.defaults?.dialOutPrefix && initial.dialOutPrefix === undefined) {
-    initial.dialOutPrefix = provider.defaults.dialOutPrefix;
+
+  if (credentials && typeof credentials === "object") {
+    Object.entries(credentials).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        initial[key] = value;
+      }
+    });
   }
+
   return initial;
 }
 
@@ -67,9 +80,26 @@ export default function VoipConfigModal({
     [provider]
   );
 
+  const { primaryFields, advancedFields } = useMemo(() => {
+    const primary = [];
+    const advanced = [];
+    for (const field of sipFields) {
+      if (field.group === "advanced") advanced.push(field);
+      else primary.push(field);
+    }
+    return { primaryFields: primary, advancedFields: advanced };
+  }, [sipFields]);
+
+  // Providers without a verified public endpoint need the host up front, so the
+  // advanced section starts expanded instead of silently failing validation.
+  const [advancedOpen, setAdvancedOpen] = useState(
+    () => Boolean(getProviderById(providerId)?.requiresHost)
+  );
+
   useEffect(() => {
     setFormData(buildInitialForm(providerId, initialCredentials));
     setLocalError("");
+    setAdvancedOpen(Boolean(getProviderById(providerId)?.requiresHost));
   }, [providerId, initialCredentials]);
 
   useEffect(() => {
@@ -105,7 +135,10 @@ export default function VoipConfigModal({
     for (const field of allFields) {
       if (field.type === "checkbox") continue;
       if (field.required && !String(formData[field.key] || "").trim()) {
-        setLocalError(`${field.label} is required`);
+        if (field.group === "advanced") setAdvancedOpen(true);
+        setLocalError(
+          `${field.label} is required${field.group === "advanced" ? " — open Advanced SIP settings below" : ""}`
+        );
         return;
       }
     }
@@ -200,6 +233,25 @@ export default function VoipConfigModal({
               </span>
             </div>
 
+            {provider.requiresHost ? (
+              <p className="voip-modal__notice">
+                {provider.id === "custom_sip" ? (
+                  <>
+                    Enter the SIP host/IP and the WebSocket (WSS) URL from your PBX
+                    admin — both are required for browser calling.{" "}
+                    <strong>Advanced SIP settings</strong> is open below.
+                  </>
+                ) : (
+                  <>
+                    {provider.name} assigns the SIP host per account. Paste the host /
+                    IP from their welcome email under{" "}
+                    <strong>Advanced SIP settings</strong> — without it the provider
+                    cannot register.
+                  </>
+                )}
+              </p>
+            ) : null}
+
             {localError ? (
               <p className="voip-modal__error" role="alert">
                 {localError}
@@ -208,7 +260,7 @@ export default function VoipConfigModal({
 
             <div className="voip-modal__fields">
               <h3>{provider.simpleSetup ? "Account details" : "SIP configuration"}</h3>
-              {sipFields.map((field) =>
+              {primaryFields.map((field) =>
                 field.type === "checkbox" ? (
                   <label
                     key={field.key}
@@ -260,6 +312,49 @@ export default function VoipConfigModal({
                   </div>
                 )
               )}
+              {advancedFields.length ? (
+                <details
+                  className="voip-modal__advanced"
+                  open={advancedOpen}
+                  onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}
+                >
+                  <summary>
+                    Advanced SIP settings
+                    <span>
+                      {provider.requiresHost
+                        ? "Host required"
+                        : "Server, port, WebSocket"}
+                    </span>
+                  </summary>
+                  <div className="voip-modal__advanced-body">
+                    {advancedFields.map((field) => (
+                      <div key={field.key} className="voip-modal__field">
+                        <label htmlFor={`voip-modal-${field.key}`}>
+                          {field.label}
+                          {field.required ? (
+                            <span className="voip-required">*</span>
+                          ) : null}
+                        </label>
+                        <input
+                          id={`voip-modal-${field.key}`}
+                          className="voip-modal__input"
+                          type="text"
+                          value={formData[field.key] || ""}
+                          onChange={(e) =>
+                            handleFieldChange(field.key, e.target.value)
+                          }
+                          disabled={!canWrite || saving}
+                          placeholder={field.placeholder || ""}
+                          autoComplete="off"
+                        />
+                        {field.hint ? (
+                          <p className="voip-modal__hint">{field.hint}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
           </div>
 

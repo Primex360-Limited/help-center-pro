@@ -1,0 +1,50 @@
+{
+  "tenants": [
+    {
+      "id": "893ba3fc-c551-452b-9fdf-de4081acb0b0",
+      "name": "Primex360",
+      "slug": "primex360",
+      "plan": "scale",
+      "status": "active",
+      "createdAt": "2026-10-26T15:45:17.440Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "662750f7-3ce7-4e7c-90b7-08309bbaa2e9",
+      "email": "test@test.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "userType": "provider",
+      "tenantId": null,
+      "createdAt": "2026-10-26T15:45:17.431Z"
+    },
+    {
+      "id": "5c42c299-03f6-4445-ab3a-80bcf0fd8fd1",
+      "email": "amaka@primex360.com",
+      "firstName": "Amaka",
+      "lastName": "Okoro",
+      "userType": "tenant",
+      "tenantId": "893ba3fc-c551-452b-9fdf-de4081acb0b0",
+      "createdAt": "2026-10-26T15:45:17.719Z"
+    },
+    {
+      "id": "647bc51d-0e8f-4447-8f01-9ab8e631893e",
+      "email": "jetsamjoseph@gmail.com",
+      "firstName": "Joseph",
+      "lastName": "Jetsam",
+      "userType": "tenant",
+      "tenantId": "893ba3fc-c551-452b-9fdf-de4081acb0b0",
+      "createdAt": "2026-10-26T15:45:17.814Z"
+    },
+    {
+      "id": "1bca3aa3-564b-479d-8b13-e590e8955319",
+      "email": "admin@helpcentrepro.com",
+      "firstName": "Olivia",
+      "lastName": "Rhye",
+      "userType": "tenant",
+      "tenantId": "893ba3fc-c551-452b-9fdf-de4081acb0b0",
+      "createdAt": "2026-10-26T15:45:17.907Z"
+    }
+  ]
+}

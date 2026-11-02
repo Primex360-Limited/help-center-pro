@@ -15,18 +15,30 @@ function extractSipCredentials(credentials = {}) {
         credentials.sipEndpoint ||
         credentials.sipProxy ||
         credentials.sipGateway ||
-        credentials.sipTrunk;
+        credentials.sipTrunk ||
+        // Plain-language aliases providers/tenants commonly paste in.
+        credentials.sipIp ||
+        credentials.ipAddress ||
+        credentials.ip ||
+        credentials.server ||
+        credentials.host;
     const sipUsername =
         credentials.sipUsername ||
         credentials.sipUser ||
         credentials.sipAuthUser ||
         credentials.sipExtension ||
-        credentials.sipAuth;
+        credentials.sipAuth ||
+        credentials.username ||
+        credentials.user;
     const sipPassword =
         credentials.sipPassword ||
         credentials.sipPass ||
         credentials.sipSecret ||
-        credentials.sipAuthPass;
+        credentials.sipAuthPass ||
+        credentials.password;
+    const sipPort = String(
+        credentials.sipPort || credentials.port || ""
+    ).trim();
     const callerId = toE164(
         String(
             credentials.sipCallerId ||
@@ -36,7 +48,7 @@ function extractSipCredentials(credentials = {}) {
                 ""
         )
     );
-    return { sipServer, sipUsername, sipPassword, callerId };
+    return { sipServer, sipUsername, sipPassword, callerId, sipPort };
 }
 
 /**
@@ -387,19 +399,55 @@ export async function updateCallingSettings({
 }
 
 /**
+ * Credential readiness for a stored provider configuration. Kept beside the
+ * settings endpoints so every client (web app, mobile, API consumer) sees the
+ * same answer instead of re-implementing the check.
+ */
+function voipReadiness(config = {}) {
+    const credentials = config.credentials || {};
+    const { sipServer, sipUsername, sipPassword } = extractSipCredentials(credentials);
+    const missing = [];
+    if (!sipServer) missing.push("server");
+    if (!sipUsername) missing.push("username");
+    if (!sipPassword) missing.push("password");
+
+    // Browser calling needs a WebSocket. We can derive one for hostnames, but a
+    // bare IP only works when the provider supplied an explicit WSS URL.
+    const wsUrl = String(credentials.sipWsUrl || credentials.wssUrl || "").trim();
+    const isRawIp = /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(String(sipServer || ""));
+    const browserReady = Boolean(wsUrl) || (Boolean(sipServer) && !isRawIp);
+
+    return {
+        ready: missing.length === 0,
+        missing,
+        browserReady,
+        needsWsUrl: missing.length === 0 && !browserReady
+    };
+}
+
+/**
  * Get VoIP/SIP provider configurations for the workspace.
  */
 export async function getVoipSettings({ tenantId }) {
     const tenant = await findWorkspaceOrFail(tenantId);
     const settings = asSettings(tenant.settings);
+    const configurations = Array.isArray(settings.voipConfigurations)
+        ? settings.voipConfigurations
+        : [];
+
+    const readiness = {};
+    for (const config of configurations) {
+        if (config?.id) readiness[config.id] = voipReadiness(config);
+    }
 
     return {
-        configurations: Array.isArray(settings.voipConfigurations) ? settings.voipConfigurations : [],
+        configurations,
         activeConfigId: settings.voipActiveConfigId || "",
         acceptInbound:
             settings.voipAcceptInbound === undefined
                 ? true
-                : Boolean(settings.voipAcceptInbound)
+                : Boolean(settings.voipAcceptInbound),
+        readiness
     };
 }
 
@@ -415,17 +463,38 @@ export async function saveVoipSettings({ tenantId, payload = {}, actorId = null 
         acceptInbound
     } = payload;
 
+    // Never persist derived client state (reactivity field) back into JSON.
+    const cleanConfigurations = (Array.isArray(configurations) ? configurations : []).map(
+        (config) => {
+            if (!config || typeof config !== "object") return config;
+            const { readiness, ...rest } = config;
+            return rest;
+        }
+    );
+
     // Validate that activeConfigId exists in configurations
-    if (activeConfigId && configurations.length > 0) {
-        const activeExists = configurations.some(c => c.id === activeConfigId);
+    if (activeConfigId && cleanConfigurations.length > 0) {
+        const activeExists = cleanConfigurations.some(c => c.id === activeConfigId);
         if (!activeExists) {
             throw new AppError("Active configuration ID must be one of the configured providers", 400);
+        }
+
+        // An active provider with missing credentials cannot place or receive
+        // calls — block it here so nobody ends up with a silently dead line.
+        const active = cleanConfigurations.find(c => c.id === activeConfigId);
+        const { ready, missing } = voipReadiness(active);
+        if (!ready) {
+            throw new AppError(
+                `Cannot activate ${active.providerName || "this provider"} — missing ${missing.join(", ")}. ` +
+                    "Add them in Settings → VoIP/SIP → Edit → Advanced SIP settings.",
+                400
+            );
         }
     }
 
     const updatedSettings = {
         ...settings,
-        voipConfigurations: configurations,
+        voipConfigurations: cleanConfigurations,
         voipActiveConfigId: activeConfigId,
         ...(acceptInbound === undefined
             ? {}
@@ -453,6 +522,43 @@ export async function saveVoipSettings({ tenantId, payload = {}, actorId = null 
 }
 
 /**
+ * Remember the outcome of the last live registration test on the config, so the
+ * UI can distinguish "configured" from "actually verified".
+ */
+async function persistVoipTestResult({
+    tenantId,
+    settings,
+    configurations,
+    configId,
+    success,
+    message
+}) {
+    try {
+        const next = configurations.map((config) =>
+            config.id === configId
+                ? {
+                      ...config,
+                      lastTest: {
+                          at: new Date().toISOString(),
+                          success: Boolean(success),
+                          // "fields" = server-side credential check; the browser
+                          // records "registration" after a real SIP REGISTER.
+                          source: "fields",
+                          message: String(message || "").slice(0, 240)
+                      }
+                  }
+                : config
+        );
+        await prisma.tenant.update({
+            where: { id: tenantId },
+            data: { settings: { ...settings, voipConfigurations: next } }
+        });
+    } catch {
+        // Bookkeeping must never break the connection test.
+    }
+}
+
+/**
  * Test connection to a configured VoIP provider.
  * This validates credentials and connectivity.
  */
@@ -475,12 +581,17 @@ export async function testVoipConnection({ tenantId, configId, actorId = null })
         let message = "";
         let details = null;
 
-        const { sipServer, sipUsername, sipPassword, callerId } =
+        const { sipServer, sipUsername, sipPassword, callerId, sipPort } =
             extractSipCredentials(credentials);
 
         if (!sipServer || !sipUsername || !sipPassword) {
+            const missing = [];
+            if (!sipServer) missing.push("SIP server (host or IP)");
+            if (!sipUsername) missing.push("username");
+            if (!sipPassword) missing.push("password");
             throw new AppError(
-                "SIP credentials incomplete. Server, username, and password are required.",
+                `SIP credentials incomplete — missing ${missing.join(", ")}. ` +
+                    "Open Settings → VoIP/SIP → Edit → Advanced SIP settings to add the provider's host and port.",
                 400
             );
         }
@@ -491,10 +602,20 @@ export async function testVoipConnection({ tenantId, configId, actorId = null })
         details = {
             providerId,
             server: sipServer,
+            port: sipPort || "5060",
             username: sipUsername,
             callerId: callerId || null,
             softphoneReady: true
         };
+
+        await persistVoipTestResult({
+            tenantId: tenant.id,
+            settings,
+            configurations,
+            configId: config.id,
+            success,
+            message
+        });
 
         await recordAuditLog({
             tenantId: tenant.id,
@@ -508,6 +629,15 @@ export async function testVoipConnection({ tenantId, configId, actorId = null })
         return { success, message, details };
     } catch (error) {
         if (error instanceof AppError) throw error;
+
+        await persistVoipTestResult({
+            tenantId: tenant.id,
+            settings,
+            configurations,
+            configId: config.id,
+            success: false,
+            message: error.message
+        });
 
         await recordAuditLog({
             tenantId: tenant.id,

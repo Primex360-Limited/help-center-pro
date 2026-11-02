@@ -8,6 +8,7 @@ import ticketRoutes from "./modules/tickets/ticket.routes.js";
 import tenantRoutes from "./modules/tenants/tenant.routes.js";
 import workspaceRoutes from "./modules/workspace/workspace.routes.js";
 import platformContentRoutes from "./modules/platform/platform-content.routes.js";
+import adminOpsRoutes from "./modules/platform/admin-ops.routes.js";
 import emailAccountRoutes from "./modules/email/email-account.routes.js";
 import customerRoutes from "./modules/customers/customer.routes.js";
 import templateRoutes from "./modules/templates/template.routes.js";
@@ -38,6 +39,7 @@ const app = createServiceApp({
         expressApp.use("/api/v1", invitationRoutes);
         expressApp.use("/api/v1", tenantRoutes);
         expressApp.use("/api/v1", platformContentRoutes);
+        expressApp.use("/api/v1", adminOpsRoutes);
         expressApp.use("/api/v1", workspaceRoutes);
         expressApp.use("/api/v1", widgetPublicRoutes);
         expressApp.use("/api/v1", emailAccountRoutes);

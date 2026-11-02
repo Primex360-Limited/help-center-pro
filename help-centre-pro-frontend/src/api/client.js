@@ -164,12 +164,22 @@ export async function apiRequest(path, options = {}) {
       `Request failed (${response.status})`;
 
     // Vite proxy returns bare 500/text when the local API (:4008) is down.
+    // Only show the generic "Cannot reach API" message if there's truly no response body.
     if (
       response.status >= 500 &&
       (!text || !String(text).trim() || String(text).trim() === "Internal Server Error")
     ) {
+      // Typically a dead dev-server proxy: no backend on :4008, or another
+      // stack (e.g. a Docker container) squatting on ports 4008/5173.
+      const target = API_BASE || "/api/v1";
       message =
-        "Cannot reach the API. Start the backend on port 4008 (or check VITE_API_URL), then try again.";
+        `Cannot reach the API (${target}). Start the backend on port 4008 (or check VITE_API_URL) ` +
+        `and make sure no other server or Docker container is also using ports 4008/5173, then try again.`;
+    }
+
+    // If we got a 401 with a message, show it instead of the generic message
+    if (response.status === 401 && payload?.message) {
+      message = payload.message;
     }
 
     if (typeof message === "string") {

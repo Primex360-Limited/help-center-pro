@@ -18,6 +18,7 @@ import {
 import {
   PROVIDER_CATEGORIES,
   getProviderById,
+  resolveSipCredentials,
 } from "../../constants/voipProviders.js";
 import VoipProviderLogo from "../../components/workspace/VoipProviderLogo.jsx";
 import VoipProviderPickerModal from "../../components/workspace/VoipProviderPickerModal.jsx";
@@ -29,6 +30,79 @@ import "../../styles/auth.css";
 import "../../styles/admin.css";
 import "../../styles/workspace.css";
 import "../../styles/voip-settings.css";
+
+/**
+ * Merge provider defaults (SIP host / port) into every stored configuration.
+ * Old rows only carried number/username/password, which made the API answer
+ * "SIP credentials incomplete. Server, username, and password are required."
+ */
+function normalizeConfigs(configs = []) {
+  return (Array.isArray(configs) ? configs : []).map((config) => ({
+    ...config,
+    credentials: resolveSipCredentials(config.providerId, config.credentials || {}),
+  }));
+}
+
+/** What this provider still needs before calls can work. */
+function configReadiness(config) {
+  const credentials = resolveSipCredentials(
+    config.providerId,
+    config.credentials || {}
+  );
+  const host =
+    credentials.sipServer ||
+    credentials.sipDomain ||
+    credentials.sipHost ||
+    credentials.ipAddress ||
+    credentials.ip ||
+    "";
+  const missing = [];
+  if (!host) missing.push("server");
+  if (!credentials.sipUsername) missing.push("username");
+  if (!credentials.sipPassword) missing.push("password");
+
+  if (missing.length) {
+    return {
+      tone: "red",
+      label: `Missing ${missing.join(", ")}`,
+      hint: "Open Edit and complete the provider credentials.",
+    };
+  }
+
+  if (config.lastTest?.success && config.lastTest.source === "registration") {
+    return {
+      tone: "green",
+      label: "Verified",
+      hint: `Live SIP registration succeeded ${new Date(
+        config.lastTest.at
+      ).toLocaleString()}.`,
+    };
+  }
+
+  if (!credentials.sipWsUrl) {
+    return {
+      tone: "amber",
+      label: "Fields complete · WSS needed",
+      hint: "Browser calling needs the WebSocket (WSS) URL from the provider — add it under Edit → Advanced SIP settings.",
+    };
+  }
+
+  if (config.lastTest?.success) {
+    return {
+      tone: "amber",
+      label: "Fields validated · run Test",
+      hint: "Credentials are complete. Press Test to confirm the provider accepts a live browser registration.",
+    };
+  }
+
+  return {
+    tone: "amber",
+    label: "Configured · test to verify",
+    hint:
+      config.lastTest?.message ||
+      "Credentials are saved. Press Test to confirm the provider accepts the registration.",
+  };
+}
 
 export default function VoipSettings({ embedded = false } = {}) {
   const { hasPermission } = useAuth();
@@ -45,6 +119,7 @@ export default function VoipSettings({ embedded = false } = {}) {
   const [selectedProvider, setSelectedProvider] = useState("");
   const [editingIndex, setEditingIndex] = useState(null);
   const [testResult, setTestResult] = useState(null);
+  const [liveTests, setLiveTests] = useState({});
   const [configurations, setConfigurations] = useState([]);
   const [activeConfigId, setActiveConfigId] = useState("");
   const [acceptInbound, setAcceptInbound] = useState(true);
@@ -55,8 +130,9 @@ export default function VoipSettings({ embedded = false } = {}) {
     try {
       const res = await getVoipSettings();
       const data = res?.data || {};
-      setSettings(data);
-      setConfigurations(data.configurations || []);
+      const normalized = normalizeConfigs(data.configurations);
+      setSettings({ ...data, configurations: normalized });
+      setConfigurations(normalized);
       setActiveConfigId(data.activeConfigId || "");
       setAcceptInbound(
         data.acceptInbound === undefined ? true : Boolean(data.acceptInbound)
@@ -213,7 +289,9 @@ export default function VoipSettings({ embedded = false } = {}) {
           : `voip-${Date.now()}`,
       providerId,
       providerName,
-      credentials: { ...credentials },
+      // Persist the resolved credentials (provider host/port included) — the
+      // API requires a server, and branded forms do not show one by default.
+      credentials: resolveSipCredentials(providerId, credentials),
       enabled: true,
       createdAt:
         editingIndex !== null
@@ -251,7 +329,7 @@ export default function VoipSettings({ embedded = false } = {}) {
     if (!canWrite || saving) return;
     try {
       await persistConfigs(
-        configurations,
+        normalizeConfigs(configurations),
         activeConfigId,
         "VoIP settings saved successfully"
       );
@@ -272,9 +350,10 @@ export default function VoipSettings({ embedded = false } = {}) {
     try {
       let live = null;
       try {
-        live = await voipService.testRegistration(config.credentials || {}, {
-          providerId: config.providerId,
-        });
+        live = await voipService.testRegistration(
+          resolveSipCredentials(config.providerId, config.credentials || {}),
+          { providerId: config.providerId }
+        );
       } catch (liveErr) {
         live = {
           success: false,
@@ -289,6 +368,15 @@ export default function VoipSettings({ embedded = false } = {}) {
           message: live.message,
           details: live.details || null,
         });
+        setLiveTests((prev) => ({
+          ...prev,
+          [config.id]: {
+            at: new Date().toISOString(),
+            success: true,
+            source: "registration",
+            message: live.message,
+          },
+        }));
         setBanner(live.message);
         return;
       }
@@ -311,7 +399,18 @@ export default function VoipSettings({ embedded = false } = {}) {
           liveRegistration: live,
         },
       });
-      setError(message);
+      setLiveTests((prev) => ({
+        ...prev,
+        [config.id]: {
+          at: new Date().toISOString(),
+          success: false,
+          source: "registration",
+          message,
+        },
+      }));
+      // Fields may be perfectly valid while the browser still cannot register
+      // (no WSS). Only raise the page-level error when the API rejects them.
+      if (!payload.success) setError(message);
     } catch (err) {
       setTestResult({
         configId,
@@ -476,6 +575,10 @@ export default function VoipSettings({ embedded = false } = {}) {
                 const cfgProvider = getProviderById(config.providerId);
                 const testRes =
                   testResult?.configId === config.id ? testResult : null;
+                const readiness = configReadiness({
+                  ...config,
+                  lastTest: liveTests[config.id] || config.lastTest,
+                });
 
                 return (
                   <div
@@ -502,11 +605,19 @@ export default function VoipSettings({ embedded = false } = {}) {
                             </span>
                           </div>
                         </div>
-                        {isActive ? (
-                          <span className="voip-badge voip-badge--active">
-                            Active
+                        <div className="voip-config-card__badges">
+                          {isActive ? (
+                            <span className="voip-badge voip-badge--active">
+                              Active
+                            </span>
+                          ) : null}
+                          <span
+                            className={`voip-badge voip-badge--${readiness.tone}`}
+                            title={readiness.hint}
+                          >
+                            {readiness.label}
                           </span>
-                        ) : null}
+                        </div>
                       </div>
                       <p className="voip-config-card__meta">
                         Added {new Date(config.createdAt).toLocaleDateString()}

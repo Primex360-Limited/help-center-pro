@@ -6,6 +6,7 @@ import {
   initializeBillingUpgrade,
 } from "../../api/settings.api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { formatNaira } from "../../utils/currency.js";
 import "../../styles/settings-premium.css";
 
 const FREE_FEATURES = [
@@ -42,12 +43,13 @@ export default function BillingUpgrade() {
       const billing = res?.data?.billing || res?.data || res || {};
       const priceUsd = billing.premiumPriceMonthlyUsd ?? 49;
       setPlans({
-        premiumPrice: priceUsd,
+        // Naira is the only billing currency (Paystack settles in NGN).
+        premiumPriceNgn: Number(billing.amountNgn ?? priceUsd * 1500),
         currentPlan: billing.plan || "free",
       });
     } catch (err) {
       setError(err.message || "Failed to load plans");
-      setPlans({ premiumPrice: 49, currentPlan: "free" });
+      setPlans({ premiumPriceNgn: 73500, currentPlan: "free" });
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ export default function BillingUpgrade() {
     );
   }
 
-  const premiumPrice = plans?.premiumPrice ?? 49;
+  const premiumPriceNgn = plans?.premiumPriceNgn ?? 73500;
   const isAlreadyPremium =
     String(plans?.currentPlan || "").toLowerCase() === "premium";
 
@@ -127,7 +129,7 @@ export default function BillingUpgrade() {
           <h3 className="settings-plan-card__name">Free</h3>
           <p className="settings-plan-card__tagline">For small teams getting started</p>
           <p className="settings-plan-card__price">
-            $0 <span>/ month</span>
+            {formatNaira(0)} <span>/ month</span>
           </p>
           <ul className="settings-plan-card__features">
             {FREE_FEATURES.map((f) => (
@@ -149,7 +151,7 @@ export default function BillingUpgrade() {
           <h3 className="settings-plan-card__name">Premium</h3>
           <p className="settings-plan-card__tagline">For growing support teams</p>
           <p className="settings-plan-card__price">
-            ${premiumPrice} <span>/ month</span>
+            {formatNaira(premiumPriceNgn)} <span>/ month</span>
           </p>
           <ul className="settings-plan-card__features">
             {PREMIUM_FEATURES.map((f) => (

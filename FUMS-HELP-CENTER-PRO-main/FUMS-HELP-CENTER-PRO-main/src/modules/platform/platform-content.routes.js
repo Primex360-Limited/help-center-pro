@@ -6,7 +6,12 @@ import {
     requireAdminPortalOrigin,
     requireProviderScope
 } from "../tenants/tenant.middleware.js";
-import { getHowtoHandler, updateHowtoHandler } from "./platform-content.controller.js";
+import {
+    getAnnouncementHandler,
+    getHowtoHandler,
+    updateAnnouncementHandler,
+    updateHowtoHandler
+} from "./platform-content.controller.js";
 
 const platformContentRoutes = express.Router();
 
@@ -138,6 +143,60 @@ platformContentRoutes.post(
     "/admin/howto",
     ...adminHowtoGuards,
     asyncHandler(updateHowtoHandler)
+);
+
+/* ------------------------------------------------------------ Announcement */
+
+/**
+ * @openapi
+ * /admin/announcement:
+ *   get:
+ *     tags: [Platform]
+ *     summary: Read the platform-wide announcement (Super Admin)
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Current announcement draft or published message
+ *       403:
+ *         description: Provider Super Admin only
+ *   put:
+ *     tags: [Platform]
+ *     summary: Publish or draft the platform-wide announcement
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Announcement saved
+ *       400:
+ *         description: Missing title or invalid link
+ */
+platformContentRoutes.get(
+    "/admin/announcement",
+    ...adminHowtoGuards,
+    asyncHandler(getAnnouncementHandler)
+);
+
+platformContentRoutes.put(
+    "/admin/announcement",
+    ...adminHowtoGuards,
+    asyncHandler(updateAnnouncementHandler)
+);
+
+/** Alias for clients that only allow POST for updates. */
+platformContentRoutes.post(
+    "/admin/announcement",
+    ...adminHowtoGuards,
+    asyncHandler(updateAnnouncementHandler)
+);
+
+/** Any signed-in user can read the live banner (tenant shells). */
+platformContentRoutes.get(
+    "/platform/announcement",
+    requireAuth,
+    asyncHandler(getAnnouncementHandler)
 );
 
 export default platformContentRoutes;

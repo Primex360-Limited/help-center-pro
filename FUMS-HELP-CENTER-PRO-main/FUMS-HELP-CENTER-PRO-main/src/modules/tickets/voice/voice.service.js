@@ -65,21 +65,34 @@ function assertSipCredentials(credentials = {}) {
         credentials.sipEndpoint ||
         credentials.sipProxy ||
         credentials.sipGateway ||
-        credentials.sipTrunk;
+        credentials.sipTrunk ||
+        credentials.sipIp ||
+        credentials.ipAddress ||
+        credentials.ip ||
+        credentials.server ||
+        credentials.host;
     const user =
         credentials.sipUsername ||
         credentials.sipUser ||
         credentials.sipAuthUser ||
         credentials.sipExtension ||
-        credentials.sipAuth;
+        credentials.sipAuth ||
+        credentials.username ||
+        credentials.user;
     const password =
         credentials.sipPassword ||
         credentials.sipPass ||
         credentials.sipSecret ||
-        credentials.sipAuthPass;
+        credentials.sipAuthPass ||
+        credentials.password;
     if (!host || !user || !password) {
+        const missing = [];
+        if (!host) missing.push("server");
+        if (!user) missing.push("username");
+        if (!password) missing.push("password");
         throw new AppError(
-            "Your active VoIP/SIP provider is missing server, username, or password. Update it in Settings → VoIP/SIP.",
+            `Your active VoIP/SIP provider is missing ${missing.join(", ")}. ` +
+                "Update it in Settings → VoIP/SIP → Edit → Advanced SIP settings.",
             400
         );
     }

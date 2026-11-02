@@ -21,7 +21,15 @@ import Automations from "./pages/automations/Automations.jsx";
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
 import PlatformOverview from "./pages/admin/PlatformOverview.jsx";
 import PlatformHowto from "./pages/admin/PlatformHowto.jsx";
+import AdminAnnouncements from "./pages/admin/AdminAnnouncements.jsx";
+import PlatformSettings from "./pages/admin/PlatformSettings.jsx";
 import Tenants from "./pages/admin/Tenants.jsx";
+import TenantDetail from "./pages/admin/TenantDetail.jsx";
+import Billing from "./pages/admin/Billing.jsx";
+import Plans from "./pages/admin/Plans.jsx";
+import PlatformAnalytics from "./pages/admin/PlatformAnalytics.jsx";
+import Staff from "./pages/admin/Staff.jsx";
+import AuditLog from "./pages/admin/AuditLog.jsx";
 import IntegrationDocs from "./pages/docs/IntegrationDocs.jsx";
 import PrivacyPolicy from "./pages/docs/PrivacyPolicy.jsx";
 import TermsOfService from "./pages/docs/TermsOfService.jsx";
@@ -49,6 +57,45 @@ import EmailOAuthCallback from "./pages/workspace/EmailOAuthCallback.jsx";
 import VoipSettings from "./pages/workspace/VoipSettings.jsx";
 
 const SETTINGS_PERMS = ["settings:read", "settings:write"];
+
+/**
+ * Admin Portal screens, shared by the dedicated admin host and the combined
+ * local tree so both portals always expose the same destinations.
+ */
+function AdminScreenRoutes() {
+  return [
+    <Route key="admin-root" path="/admin" element={<Navigate to="/admin/overview" replace />} />,
+    <Route key="admin-overview" path="/admin/overview" element={<PlatformOverview />} />,
+    <Route key="admin-tenants" path="/admin/tenants" element={<Tenants />} />,
+    <Route key="admin-tenant" path="/admin/tenants/:tenantId" element={<TenantDetail />} />,
+    <Route key="admin-billing" path="/admin/billing" element={<Billing />} />,
+    <Route key="admin-plans" path="/admin/plans" element={<Plans />} />,
+    <Route key="admin-analytics" path="/admin/analytics" element={<PlatformAnalytics />} />,
+    <Route key="admin-staff" path="/admin/staff" element={<Staff />} />,
+    <Route key="admin-audit" path="/admin/audit" element={<AuditLog />} />,
+    <Route key="admin-howto" path="/admin/howto" element={<PlatformHowto />} />,
+    <Route
+      key="admin-announcements"
+      path="/admin/announcements"
+      element={<AdminAnnouncements />}
+    />,
+    <Route
+      key="admin-sso"
+      path="/admin/sso"
+      element={<Navigate to="/admin/overview" replace />}
+    />,
+    <Route
+      key="admin-flags"
+      path="/admin/flags"
+      element={<Navigate to="/admin/overview" replace />}
+    />,
+    <Route
+      key="admin-settings"
+      path="/admin/settings"
+      element={<PlatformSettings />}
+    />,
+  ];
+}
 
 /** Nested settings routes shared by tenant-only and combined trees. */
 function SettingsRoutes() {
@@ -344,10 +391,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
-          <Route path="/admin/overview" element={<PlatformOverview />} />
-          <Route path="/admin/tenants" element={<Tenants />} />
-          <Route path="/admin/howto" element={<PlatformHowto />} />
+          {AdminScreenRoutes()}
           <Route path="/overview" element={<Navigate to="/admin/overview" replace />} />
           <Route path="/tenants" element={<Navigate to="/admin/tenants" replace />} />
         </Route>
@@ -404,10 +448,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
-        <Route path="/admin/overview" element={<PlatformOverview />} />
-        <Route path="/admin/tenants" element={<Tenants />} />
-        <Route path="/admin/howto" element={<PlatformHowto />} />
+        {AdminScreenRoutes()}
       </Route>
 
       <Route

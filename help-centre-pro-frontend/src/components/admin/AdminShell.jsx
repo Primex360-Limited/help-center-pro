@@ -1,45 +1,42 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell,
   Building2,
   CreditCard,
   Film,
-  Flag,
   LayoutDashboard,
   LogOut,
   Megaphone,
   Search,
   Settings,
-  Shield,
   ToggleLeft,
   Users,
   BarChart3,
   ScrollText,
-  KeyRound,
   Lock,
 } from "lucide-react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { adminLoginPath } from "../../config/env.js";
+import { getPlatformOverview } from "../../api/admin.api.js";
 import SidebarBrand from "../layout/SidebarBrand.jsx";
 import "../../styles/admin.css";
+import "../../styles/admin-platform.css";
 
 const BUSINESS_NAV = [
   { to: "/admin/overview", label: "Overview", icon: LayoutDashboard, ready: true, end: true },
   { to: "/admin/tenants", label: "Tenants", icon: Building2, ready: true },
-  { to: "/admin/billing", label: "Billing", icon: CreditCard, ready: false },
-  { to: "/admin/plans", label: "Plans", icon: ToggleLeft, ready: false },
-  { to: "/admin/analytics", label: "Platform Analytics", icon: BarChart3, ready: false },
+  { to: "/admin/billing", label: "Billing", icon: CreditCard, ready: true },
+  { to: "/admin/plans", label: "Plans", icon: ToggleLeft, ready: true },
+  { to: "/admin/analytics", label: "Platform Analytics", icon: BarChart3, ready: true },
 ];
 
 const OPERATIONS_NAV = [
-  { to: "/admin/staff", label: "Staff and access", icon: Users, ready: false },
-  { to: "/admin/sso", label: "Single Sign-on", icon: KeyRound, ready: false },
-  { to: "/admin/audit", label: "Audit log", icon: ScrollText, ready: false },
-  { to: "/admin/announcements", label: "Announcement", icon: Megaphone, ready: false },
-  { to: "/admin/flags", label: "Feature flags", icon: Flag, ready: false },
+  { to: "/admin/staff", label: "Staff and access", icon: Users, ready: true },
+  { to: "/admin/audit", label: "Audit log", icon: ScrollText, ready: true },
+  { to: "/admin/announcements", label: "Announcement", icon: Megaphone, ready: true },
   { to: "/admin/howto", label: "How it works video", icon: Film, ready: true },
-  { to: "/admin/settings", label: "Platform setting", icon: Settings, ready: false },
+  { to: "/admin/settings", label: "Platform setting", icon: Settings, ready: true },
 ];
 
 function NavItem({ item }) {
@@ -68,7 +65,26 @@ function NavItem({ item }) {
 export default function AdminShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [search, setSearch] = useState("");
+  const [pastDue, setPastDue] = useState(0);
+
+  // Real notification count: invoices the platform has not collected yet.
+  useEffect(() => {
+    let cancelled = false;
+    getPlatformOverview()
+      .then((result) => {
+        if (cancelled) return;
+        const metrics = result?.data?.overview?.metrics || {};
+        setPastDue(Number(metrics.pastDueInvoices) || 0);
+      })
+      .catch(() => {
+        /* the bell is decorative if the metrics call fails */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
 
   const displayName = useMemo(
     () => [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Admin",
@@ -90,6 +106,10 @@ export default function AdminShell() {
     }
     navigate(path);
   }
+
+  const handleBell = useCallback(() => {
+    navigate(pastDue > 0 ? "/admin/billing?status=past_due" : "/admin/billing");
+  }, [navigate, pastDue]);
 
   function handleSearch(event) {
     event.preventDefault();
@@ -155,9 +175,21 @@ export default function AdminShell() {
               placeholder="Search Tenants by name, email, or ID..."
             />
           </form>
-          <button type="button" className="admin-bell" aria-label="Notifications">
+          <button
+            type="button"
+            className="admin-bell"
+            aria-label={
+              pastDue > 0
+                ? `${pastDue} past-due invoice${pastDue === 1 ? "" : "s"}`
+                : "Notifications"
+            }
+            title={pastDue > 0 ? `${pastDue} past-due invoice${pastDue === 1 ? "" : "s"}` : "No billing alerts"}
+            onClick={handleBell}
+          >
             <Bell size={18} />
-            <span className="admin-bell__badge">2</span>
+            {pastDue > 0 ? (
+              <span className="admin-bell__badge">{pastDue > 9 ? "9+" : pastDue}</span>
+            ) : null}
           </button>
         </header>
         <div className="admin-content">

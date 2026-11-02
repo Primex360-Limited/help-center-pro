@@ -22,6 +22,23 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem Docker publishes the API on 4008 and the frontend on 5173. If a local
+rem "npm run dev" / "node server.js" already owns those ports, the containers
+rem still start but logins fail with a bare 500 from the container's Vite proxy
+rem ("Cannot reach the API"). Bail out early instead.
+echo Checking ports 4008 and 5173...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "foreach($p in 4008,5173){$c=Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue|Select-Object -First 1;if($c){$n=(Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName;if($n -and $n -notmatch 'docker|wsl'){Write-Host ('  port '+$p+' is used by '+$n+' PID '+$c.OwningProcess);exit 1}}};exit 0"
+if errorlevel 1 (
+  echo.
+  echo Those ports are already in use by a local dev server.
+  echo.
+  echo Keep using it:   open http://localhost:5173
+  echo Or stop it first - npm run dev / node server.js - then run this file again.
+  echo.
+  pause
+  exit /b 1
+)
+
 if not exist "FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\.env" (
   echo Missing backend .env file.
   echo Expected: FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\.env

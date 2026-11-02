@@ -3,6 +3,7 @@ import { CheckCircle2, Loader2, Sun } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getBillingStatus, verifyBillingPayment } from "../../api/settings.api.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { formatNaira } from "../../utils/currency.js";
 import "../../styles/settings-premium.css";
 
 export default function BillingSettings() {
@@ -77,6 +78,8 @@ export default function BillingSettings() {
 
   const isPremium = String(billing?.plan || "free").toLowerCase() === "premium";
   const priceUsd = Number(billing?.premiumPriceMonthlyUsd ?? 49);
+  // HelpCentre Pro bills in Naira through Paystack — never show USD here.
+  const priceNgn = Number(billing?.amountNgn ?? priceUsd * 1500);
 
   return (
     <div className="settings-stack">
@@ -106,7 +109,7 @@ export default function BillingSettings() {
             </div>
           </div>
           <div className="settings-billing-amount">
-            <strong>{isPremium ? `$${priceUsd}` : "$0"}</strong>
+            <strong>{isPremium ? formatNaira(priceNgn) : formatNaira(0)}</strong>
             <span>per month</span>
           </div>
         </div>

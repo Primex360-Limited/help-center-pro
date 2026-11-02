@@ -968,3 +968,113 @@
     justify-content: center;
   }
 }
+
+/* Provider readiness + advanced SIP fields */
+.voip-config-card__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.voip-badge--green {
+  background: #dcfae6;
+  color: #027a48;
+  text-transform: none;
+}
+
+.voip-badge--amber {
+  background: #fef0c7;
+  color: #b54708;
+  text-transform: none;
+}
+
+.voip-badge--red {
+  background: #fee4e2;
+  color: #b42318;
+  text-transform: none;
+}
+
+.voip-modal__advanced {
+  margin-top: 4px;
+  padding: 12px 14px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.voip-modal__advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+}
+
+.voip-modal__advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.voip-modal__advanced summary::before {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: #e4e7ec;
+  color: #475467;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.voip-modal__advanced[open] summary::before {
+  content: "\2212";
+}
+
+.voip-modal__advanced summary span {
+  font-weight: 500;
+  font-size: 11.5px;
+  color: #667085;
+  text-transform: none;
+}
+
+.voip-modal__advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* Provider capability badges + host notice */
+.voip-picker__cap {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dcfae6;
+  color: #027a48;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.voip-picker__cap.is-host {
+  background: #fef0c7;
+  color: #b54708;
+}
+
+.voip-modal__notice {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fedf89;
+  background: #fffaeb;
+  color: #b54708;
+  font-size: 12.5px;
+  line-height: 1.5;
+}

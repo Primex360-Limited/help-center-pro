@@ -10,7 +10,11 @@ import {
 } from "../../shared/constants/system.js";
 import { TENANT_ROLE } from "../../shared/constants/roles.js";
 import { resolvePlan } from "../../shared/constants/plans.js";
+import { toNaira } from "../../shared/utils/currency.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
+import { getPlanCatalogMap, priceNgnFromMap } from "../platform/plan-catalog.service.js";
+import { syncBillingLedger, summarizeInvoices } from "../platform/billing-ledger.service.js";
+import { getLiveAnnouncement } from "../platform/platform-content.service.js";
 import {
     generateRandomToken,
     generateTemporaryPassword,
@@ -27,10 +31,6 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 function asSettings(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     return value;
-}
-
-function formatMoney(amount) {
-    return Math.round(Number(amount) || 0);
 }
 
 async function ticketCountsByUserIds(userIds, since) {
@@ -85,9 +85,16 @@ function pickPrimaryAdmin(users = []) {
 function buildTenantView(tenant, extras = {}) {
     const settings = asSettings(tenant.settings);
     const plan = resolvePlan(tenant.plan || settings.plan);
+    const catalogPlan = extras.catalog?.get?.(plan.key);
     const seatsUsed = extras.seatsUsed ?? 0;
-    const seatLimit = tenant.seatLimit ?? plan.seatLimit;
-    const mrr = formatMoney(settings.mrr ?? plan.mrr);
+    const seatLimit = tenant.seatLimit ?? catalogPlan?.seatLimit ?? plan.seatLimit;
+    // Naira MRR: an explicit per-tenant override wins, otherwise the workspace
+    // follows the (admin editable) plan catalog price.
+    const customMrrNgn = Number(settings.mrrNgn);
+    const mrr =
+        Number.isFinite(customMrrNgn) && customMrrNgn > 0
+            ? toNaira(customMrrNgn)
+            : priceNgnFromMap(extras.catalog, plan.key, plan.priceNgn ?? toNaira(plan.mrr));
     const isTrial = plan.key === "trial" || Boolean(settings.trial);
     const admin = extras.admin || null;
 
@@ -103,9 +110,12 @@ function buildTenantView(tenant, extras = {}) {
         seatsUsed,
         seatsLabel: `${seatsUsed}/${seatLimit}`,
         mrr,
+        planPriceNgn: mrr,
+        currency: "NGN",
         ticketsLast30d: extras.ticketsLast30d ?? 0,
         lastActiveAt: extras.lastActiveAt ?? null,
         country: settings.country || null,
+        industry: settings.industry || null,
         trial: isTrial,
         suspendedAt: tenant.suspendedAt,
         suspendedReason: tenant.suspendedReason,
@@ -125,7 +135,7 @@ function buildTenantView(tenant, extras = {}) {
     };
 }
 
-async function hydrateTenants(tenants) {
+async function hydrateTenants(tenants, catalog = null) {
     if (!tenants.length) return [];
 
     const tenantIds = tenants.map((tenant) => tenant.id);
@@ -166,6 +176,7 @@ async function hydrateTenants(tenants) {
             : tenant.updatedAt;
 
         return buildTenantView(tenant, {
+            catalog,
             seatsUsed,
             ticketsLast30d,
             lastActiveAt,
@@ -185,11 +196,14 @@ async function hydrateTenants(tenants) {
 }
 
 export async function listTenants({ q = "", status = "all", plan = "all" } = {}) {
-    const tenants = await prisma.tenant.findMany({
-        orderBy: { createdAt: "desc" }
-    });
+    const [tenants, catalog] = await Promise.all([
+        prisma.tenant.findMany({
+            orderBy: { createdAt: "desc" }
+        }),
+        getPlanCatalogMap()
+    ]);
 
-    let views = await hydrateTenants(tenants);
+    let views = await hydrateTenants(tenants, catalog);
     const query = String(q || "").trim().toLowerCase();
 
     if (query) {
@@ -228,8 +242,46 @@ export async function listTenants({ q = "", status = "all", plan = "all" } = {})
 export async function getTenantById(tenantId) {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new AppError("Tenant not found", 404);
-    const [view] = await hydrateTenants([tenant]);
+    const catalog = await getPlanCatalogMap();
+    const [view] = await hydrateTenants([tenant], catalog);
     return view;
+}
+
+const TREND_WEEKS = 12;
+
+/** MRR carried by each week, based on when each paid workspace went live. */
+function buildMrrTrend(tenants, currentMrr) {
+    const now = new Date();
+    const paidTenants = tenants.filter(
+        (tenant) => !tenant.trial && tenant.mrr > 0 && tenant.status === TENANT_STATUS.ACTIVE
+    );
+
+    const weeks = Array.from({ length: TREND_WEEKS }, (_, index) => {
+        const weekEnd = new Date(now);
+        weekEnd.setHours(23, 59, 59, 999);
+        weekEnd.setDate(weekEnd.getDate() - (TREND_WEEKS - 1 - index) * 7);
+
+        const mrrAtWeek = paidTenants.reduce((sum, tenant) => {
+            const startedAt = tenant.createdAt ? new Date(tenant.createdAt) : weekEnd;
+            return startedAt <= weekEnd ? sum + tenant.mrr : sum;
+        }, 0);
+
+        return {
+            weekStart: weekEnd.toISOString(),
+            label: `W${index + 1}`,
+            mrr: mrrAtWeek
+        };
+    });
+
+    const first = weeks[0]?.mrr || 0;
+    const changePercent =
+        first > 0 ? ((currentMrr - first) / first) * 100 : currentMrr > 0 ? 100 : 0;
+
+    return {
+        currentMrr,
+        changePercent: Math.round(changePercent * 10) / 10,
+        weeks
+    };
 }
 
 export async function getPlatformOverview() {
@@ -240,37 +292,39 @@ export async function getPlatformOverview() {
     const seatsInUse = tenants.reduce((sum, tenant) => sum + tenant.seatsUsed, 0);
     const ticketsLast30d = tenants.reduce((sum, tenant) => sum + tenant.ticketsLast30d, 0);
 
-    // Honest billing stub until a ledger exists — never invent past-due amounts.
-    const pastDueInvoices = 0;
-    const pastDueAmount = 0;
-
-    const weekBuckets = Array.from({ length: 12 }, (_, index) => {
-        const end = new Date();
-        end.setHours(0, 0, 0, 0);
-        end.setDate(end.getDate() - (11 - index) * 7);
-        return {
-            weekStart: end.toISOString(),
-            label: `W${index + 1}`,
-            mrr
-        };
-    });
+    // Past-due figures come from the same ledger the Billing screen uses.
+    let pastDueInvoices = 0;
+    let pastDueAmount = 0;
+    try {
+        const ledger = await syncBillingLedger(tenants);
+        const summary = summarizeInvoices(ledger.invoices);
+        pastDueInvoices = summary.pastDueCount;
+        pastDueAmount = summary.pastDueAmount;
+    } catch {
+        // Never break the overview if the ledger is unavailable.
+    }
 
     const newest = tenants.slice(0, 5);
-    const recentActivity = await prisma.auditLog.findMany({
-        where: {
-            action: {
-                in: [
-                    AUDIT_ACTION.TENANT_PROVISIONED,
-                    AUDIT_ACTION.TENANT_SUSPENDED,
-                    AUDIT_ACTION.TENANT_REACTIVATED,
-                    AUDIT_ACTION.TENANT_ADMIN_INVITED,
-                    AUDIT_ACTION.TENANT_UPDATED
-                ]
-            }
-        },
+    // Prefer operator-meaningful events; sign-in noise is only a fallback.
+    let recentActivity = await prisma.auditLog.findMany({
+        where: { action: { notIn: ["LOGIN_SUCCESS"] } },
         orderBy: { createdAt: "desc" },
-        take: 8
+        take: 8,
+        include: {
+            user: { select: { firstName: true, lastName: true, email: true } },
+            tenant: { select: { name: true, slug: true } }
+        }
     });
+    if (!recentActivity.length) {
+        recentActivity = await prisma.auditLog.findMany({
+            orderBy: { createdAt: "desc" },
+            take: 8,
+            include: {
+                user: { select: { firstName: true, lastName: true, email: true } },
+                tenant: { select: { name: true, slug: true } }
+            }
+        });
+    }
 
     return {
         metrics: {
@@ -282,13 +336,10 @@ export async function getPlatformOverview() {
             seatsInUse,
             ticketsLast30d,
             pastDueInvoices,
-            pastDueAmount
+            pastDueAmount,
+            currency: "NGN"
         },
-        mrrTrend: {
-            currentMrr: mrr,
-            changePercent: 0,
-            weeks: weekBuckets
-        },
+        mrrTrend: buildMrrTrend(tenants, mrr),
         newestWorkspaces: newest,
         recentActivity: recentActivity.map((row) => ({
             id: row.id,
@@ -296,10 +347,13 @@ export async function getPlatformOverview() {
             entity: row.entity,
             entityId: row.entityId,
             tenantId: row.tenantId,
+            tenantName: row.tenant?.name || null,
+            actorName: [row.user?.firstName, row.user?.lastName].filter(Boolean).join(" "),
+            actorEmail: row.user?.email || null,
             createdAt: row.createdAt,
             metadata: row.metadata
         })),
-        liveAnnouncement: null
+        liveAnnouncement: await getLiveAnnouncement()
     };
 }
 
@@ -534,11 +588,25 @@ export async function updateTenant(tenantId, payload, actorId) {
 
     const planInfo = plan ? resolvePlan(plan) : null;
 
+    const nextSettings = { ...asSettings(tenant.settings) };
+    if (planInfo) {
+        // MRR follows the editable plan catalog — drop any stale per-tenant
+        // Naira override so the new plan price applies immediately.
+        delete nextSettings.mrrNgn;
+    }
+
     const updatedSettings = {
-        ...asSettings(tenant.settings),
+        ...nextSettings,
         ...(country !== undefined && { country }),
-        ...(planInfo && { mrr: planInfo.mrr })
+        ...(planInfo && { planKey: planInfo.key })
     };
+
+    const nextSeatLimit =
+        seatLimit !== undefined
+            ? seatLimit
+            : planInfo
+              ? planInfo.seatLimit
+              : undefined;
 
     const updatedTenant = await prisma.tenant.update({
         where: { id: tenantId },
@@ -546,7 +614,7 @@ export async function updateTenant(tenantId, payload, actorId) {
             ...(name !== undefined && { name }),
             ...(primaryDomain !== undefined && { primaryDomain }),
             ...(plan !== undefined && { plan }),
-            ...(seatLimit !== undefined && { seatLimit }),
+            ...(nextSeatLimit !== undefined && { seatLimit: nextSeatLimit }),
             settings: updatedSettings
         }
     });
