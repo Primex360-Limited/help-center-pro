@@ -61,3 +61,36 @@ export async function testVoipConnection(configId) {
   });
 }
 
+/**
+ * Ask the backend to find the provider's SIP-over-WebSocket endpoint.
+ *
+ * Servers can do what a browser cannot: DNS SRV lookups plus TCP/TLS probes of
+ * the usual Asterisk/FreeSWITCH/Kamailio ports, each confirmed with a real
+ * `101 Switching Protocols` handshake and a browser-trusted certificate. The
+ * result is ranked, so the softphone only has to verify a candidate or two.
+ */
+export async function discoverVoipWebSocket({
+  configId = "",
+  providerId = "",
+  host = "",
+  providerDomain = "",
+  providerWsUrl = "",
+  persist = false,
+  force = false,
+} = {}) {
+  return apiRequest("/workspace/voip/discover-ws", {
+    method: "POST",
+    auth: true,
+    body: {
+      configId,
+      providerId,
+      host,
+      providerDomain,
+      providerWsUrl,
+      persist,
+      force,
+    },
+    timeoutMs: 15000,
+  });
+}
+

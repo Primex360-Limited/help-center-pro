@@ -4,6 +4,20 @@ import { AppError } from "../../shared/errors/AppError.js";
 import { AUDIT_ACTION } from "../../shared/constants/system.js";
 import { recordAuditLog } from "../../shared/utils/auditLogger.js";
 import { toE164 } from "../tickets/voice/phone.utils.js";
+import {
+    discoverSipWebSocket,
+    normalizeWsUrl
+} from "./sip-websocket-discovery.service.js";
+
+/**
+ * Operator-supplied WebRTC gateway (Kamailio / FreeSWITCH / Asterisk
+ * `transport ws`). When set, tenants whose carrier only publishes a SIP IP can
+ * still call from the browser without pasting a WebSocket URL.
+ */
+export function platformDefaultWss() {
+    const value = process.env.SIP_DEFAULT_WSS || process.env.SIP_GATEWAY_WSS || "";
+    return normalizeWsUrl(value);
+}
 
 function extractSipCredentials(credentials = {}) {
     const sipServer =
@@ -412,16 +426,25 @@ function voipReadiness(config = {}) {
     if (!sipPassword) missing.push("password");
 
     // Browser calling needs a WebSocket. We can derive one for hostnames, but a
-    // bare IP only works when the provider supplied an explicit WSS URL.
-    const wsUrl = String(credentials.sipWsUrl || credentials.wssUrl || "").trim();
+    // bare IP only works when the provider supplied an explicit WSS URL, a
+    // discovery result was stored, or the operator runs a WebRTC gateway.
+    const wsUrl = normalizeWsUrl(
+        credentials.sipWsUrl || credentials.wssUrl || ""
+    );
     const isRawIp = /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(String(sipServer || ""));
-    const browserReady = Boolean(wsUrl) || (Boolean(sipServer) && !isRawIp);
+    const platformWss = platformDefaultWss();
+    const browserReady =
+        Boolean(wsUrl) ||
+        Boolean(platformWss) ||
+        (Boolean(sipServer) && !isRawIp);
 
     return {
         ready: missing.length === 0,
         missing,
         browserReady,
-        needsWsUrl: missing.length === 0 && !browserReady
+        needsWsUrl: missing.length === 0 && !browserReady,
+        /** `tenant` | `platform` | `derived` | `missing` */
+        wsSource: wsUrl ? "tenant" : platformWss ? "platform" : browserReady ? "derived" : "missing"
     };
 }
 
@@ -447,7 +470,9 @@ export async function getVoipSettings({ tenantId }) {
             settings.voipAcceptInbound === undefined
                 ? true
                 : Boolean(settings.voipAcceptInbound),
-        readiness
+        readiness,
+        /** Platform gateway the softphone falls back to (empty when unset). */
+        platformDefaultWss: platformDefaultWss()
     };
 }
 
@@ -518,6 +543,129 @@ export async function saveVoipSettings({ tenantId, payload = {}, actorId = null 
     return {
         configurations: updatedSettings.voipConfigurations,
         activeConfigId: updatedSettings.voipActiveConfigId
+    };
+}
+
+/**
+ * Discover the SIP-over-WebSocket endpoint for this workspace's provider.
+ *
+ * This is what makes a carrier that only published "IP: 46.62.134.9 / port:
+ * 5060" (Stuncall and friends) callable from the browser without an agent ever
+ * typing a WSS URL: the server probes DNS SRV records plus the conventional
+ * Asterisk/FreeSWITCH/Kamailio endpoints and returns the first one that
+ * completes a WebSocket upgrade with a browser-trusted certificate.
+ *
+ * `persist: true` (requires settings:write) stores the discovered URL on the
+ * provider config, so every agent inherits it and later sessions resolve with
+ * zero network work.
+ */
+export async function discoverVoipWebSocket({
+    tenantId,
+    payload = {},
+    canWrite = false,
+    actorId = null
+}) {
+    const tenant = await findWorkspaceOrFail(tenantId);
+    const settings = asSettings(tenant.settings);
+    const configurations = Array.isArray(settings.voipConfigurations)
+        ? settings.voipConfigurations
+        : [];
+
+    const configId = String(payload.configId || "").trim();
+    const config = configId
+        ? configurations.find((entry) => entry.id === configId)
+        : null;
+    if (configId && !config) {
+        throw new AppError("VoIP configuration not found", 404);
+    }
+
+    const credentials = config?.credentials || {};
+    const { sipServer } = extractSipCredentials(credentials);
+    const sipHost = String(payload.host || sipServer || "").trim();
+    if (!sipHost) {
+        throw new AppError(
+            "Add the provider's SIP host/IP first — discovery needs a host to probe.",
+            400
+        );
+    }
+
+    const explicit = normalizeWsUrl(
+        credentials.sipWsUrl || payload.providerWsUrl || ""
+    );
+    const platformDefault = platformDefaultWss();
+
+    const discovery = await discoverSipWebSocket({
+        providerId: String(payload.providerId || config?.providerId || ""),
+        sipHost,
+        providerDomain: String(payload.providerDomain || ""),
+        extraUrls: [explicit, platformDefault].filter(Boolean),
+        force: Boolean(payload.force)
+    });
+
+    // An explicit URL is a human decision: report it (verified when possible)
+    // instead of silently replacing it with something we found.
+    const verifiedCandidate = explicit
+        ? discovery.candidates.find(
+              (candidate) => normalizeWsUrl(candidate.url) === explicit
+          ) || null
+        : null;
+
+    const wsUrl = explicit || discovery.best?.url || platformDefault || "";
+    const source = explicit
+        ? "tenant"
+        : discovery.best
+          ? "discovered"
+          : platformDefault
+            ? "platform"
+            : "";
+
+    let saved = false;
+    if (payload.persist && canWrite && config && source === "discovered" && wsUrl) {
+        const nextConfigurations = configurations.map((entry) => {
+            if (entry?.id !== config.id) return entry;
+            return {
+                ...entry,
+                credentials: {
+                    ...(entry.credentials || {}),
+                    sipWsUrl: wsUrl,
+                    sipWsUrlSource: "auto",
+                    sipWsUrlDetectedAt: new Date().toISOString()
+                }
+            };
+        });
+
+        await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: {
+                settings: { ...settings, voipConfigurations: nextConfigurations }
+            }
+        });
+
+        await recordAuditLog({
+            tenantId: tenant.id,
+            userId: actorId,
+            action: AUDIT_ACTION.WORKSPACE_PROFILE_UPDATED,
+            entity: "Tenant",
+            entityId: tenant.id,
+            metadata: {
+                changes: {
+                    voipWsAutoDetected: { configId: config.id, wsUrl }
+                }
+            }
+        });
+
+        saved = true;
+    }
+
+    return {
+        wsUrl,
+        source,
+        verified: verifiedCandidate
+            ? Boolean(verifiedCandidate.upgraded && verifiedCandidate.certValid)
+            : Boolean(discovery.best),
+        saved,
+        platformDefaultWss: platformDefault,
+        discovery
     };
 }
 
@@ -596,17 +744,73 @@ export async function testVoipConnection({ tenantId, configId, actorId = null })
             );
         }
 
-        success = true;
-        message =
-            "SIP configuration validated. Agents can make and receive calls from the browser softphone once this provider is active.";
+        // Browser readiness is part of a "Test": a provider reachable only over
+        // UDP looks healthy here yet no agent can register. Discovering the
+        // WebSocket now is what makes Stuncall-style IP trunks actually work.
+        const explicit = normalizeWsUrl(credentials.sipWsUrl || credentials.wssUrl || "");
+        const platformDefault = platformDefaultWss();
+        const isRawIp = /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(String(sipServer));
+
+        let wsUrl = explicit || "";
+        let wsSource = explicit ? "tenant" : "";
+        let wsVerified = false;
+        let discovery = null;
+
+        if (!explicit) {
+            discovery = await discoverSipWebSocket({
+                providerId: String(providerId || ""),
+                sipHost: sipServer,
+                extraUrls: [platformDefault].filter(Boolean)
+            });
+            if (discovery.best?.url) {
+                wsUrl = discovery.best.url;
+                wsSource = "discovered";
+                wsVerified = true;
+            } else if (platformDefault) {
+                wsUrl = platformDefault;
+                wsSource = "platform";
+            }
+        } else {
+            const probe = await discoverSipWebSocket({
+                providerId: String(providerId || ""),
+                sipHost: sipServer,
+                extraUrls: [explicit]
+            });
+            discovery = probe;
+            const match = probe.candidates.find(
+                (candidate) => normalizeWsUrl(candidate.url) === explicit
+            );
+            wsVerified = Boolean(match?.upgraded && match?.certValid);
+        }
+
+        const browserReady = Boolean(wsUrl) || (!isRawIp && Boolean(sipServer));
+
+        success = browserReady;
         details = {
             providerId,
             server: sipServer,
             port: sipPort || "5060",
             username: sipUsername,
             callerId: callerId || null,
-            softphoneReady: true
+            softphoneReady: browserReady,
+            wsUrl: wsUrl || null,
+            wsSource: wsSource || "missing",
+            wsVerified,
+            wsCandidates: (discovery?.candidates || []).slice(0, 5)
         };
+
+        if (browserReady) {
+            message = wsVerified
+                ? `WebSocket endpoint verified (${wsUrl}). Agents can call from the browser as soon as this provider is active.`
+                : wsUrl
+                  ? `SIP configuration validated. Browser calls will use ${wsUrl}.`
+                  : "SIP configuration validated. Agents can call from the browser using the provider's conventional WebSocket endpoint.";
+        } else {
+            message =
+                `SIP credentials are valid, but “${sipServer}” is a raw IP/port with no WebSocket endpoint, ` +
+                "so a browser cannot register. Paste the provider's WSS URL once under Advanced SIP settings — " +
+                "or set SIP_DEFAULT_WSS on the server to route every provider through your own WebRTC gateway.";
+        }
 
         await persistVoipTestResult({
             tenantId: tenant.id,
@@ -660,5 +864,7 @@ export default {
     updateCallingSettings,
     getVoipSettings,
     saveVoipSettings,
-    testVoipConnection
+    testVoipConnection,
+    discoverVoipWebSocket,
+    platformDefaultWss
 };

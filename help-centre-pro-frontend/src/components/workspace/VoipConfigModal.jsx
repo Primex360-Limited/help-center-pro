@@ -1,10 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Loader2, ShieldCheck, X } from "lucide-react";
+import { Loader2, Radar, ShieldCheck, X } from "lucide-react";
+import { discoverVoipWebSocket } from "../../api/workspace.api.js";
 import {
   getProviderById,
   PROVIDER_CATEGORIES,
   primaryRegionLabel,
 } from "../../constants/voipProviders.js";
+import { providerWebDomain } from "../../utils/sipWebSocket.js";
 import VoipProviderLogo from "./VoipProviderLogo.jsx";
 
 function uniqueFields(fields = []) {
@@ -66,6 +68,8 @@ export default function VoipConfigModal({
     buildInitialForm(providerId, initialCredentials)
   );
   const [localError, setLocalError] = useState("");
+  const [detecting, setDetecting] = useState(false);
+  const [wsStatus, setWsStatus] = useState("");
 
   const sipFields = useMemo(
     () => uniqueFields(provider?.sipFields || []),
@@ -99,6 +103,7 @@ export default function VoipConfigModal({
   useEffect(() => {
     setFormData(buildInitialForm(providerId, initialCredentials));
     setLocalError("");
+    setWsStatus("");
     setAdvancedOpen(Boolean(getProviderById(providerId)?.requiresHost));
   }, [providerId, initialCredentials]);
 
@@ -126,6 +131,59 @@ export default function VoipConfigModal({
   function handleFieldChange(key, value) {
     setFormData((prev) => ({ ...prev, [key]: value }));
     if (localError) setLocalError("");
+  }
+
+  /**
+   * Probe the provider's network for its WebSocket endpoint and prefill the
+   * field. Agents never have to know this URL exists — this is only for admins
+   * who want to pin it — but it turns "ask your carrier and hope" into one click.
+   */
+  async function handleDetectWs() {
+    const host =
+      String(formData.sipServer || "").trim() ||
+      String(provider?.defaults?.sipServer || "").trim();
+
+    if (!host) {
+      setWsStatus("Add the SIP server / IP first — detection needs a host.");
+      return;
+    }
+
+    setDetecting(true);
+    setWsStatus("");
+    try {
+      const response = await discoverVoipWebSocket({
+        providerId: provider?.id || "",
+        host,
+        providerDomain: providerWebDomain(provider),
+        providerWsUrl: formData.sipWsUrl || "",
+        force: true,
+      });
+      const payload = response?.data || {};
+      const best = payload.wsUrl || payload.discovery?.best?.url || "";
+
+      if (!best) {
+        setWsStatus(
+          payload.discovery?.notes?.[0] ||
+            "No WebSocket endpoint answered. Leave this empty — the softphone keeps trying, or ask the provider for their WSS URL."
+        );
+        return;
+      }
+
+      setFormData((prev) => ({ ...prev, sipWsUrl: best }));
+      setWsStatus(
+        payload.source === "tenant"
+          ? payload.verified
+            ? "Your URL answered a real WebSocket handshake — keep it."
+            : "Your URL did not answer from the server. Keep it if your PBX is only reachable from your network."
+          : payload.source === "platform"
+            ? `No provider WebSocket found; using the platform gateway (${best}).`
+            : "Detected and verified with a real WebSocket handshake."
+      );
+    } catch (error) {
+      setWsStatus(error?.message || "Detection failed — you can paste the URL instead.");
+    } finally {
+      setDetecting(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -237,9 +295,11 @@ export default function VoipConfigModal({
               <p className="voip-modal__notice">
                 {provider.id === "custom_sip" ? (
                   <>
-                    Enter the SIP host/IP and the WebSocket (WSS) URL from your PBX
-                    admin — both are required for browser calling.{" "}
-                    <strong>Advanced SIP settings</strong> is open below.
+                    Enter the SIP host/IP from your PBX admin — that is all a
+                    browser needs. The WebSocket (WSS) URL is detected
+                    automatically, but you can pin it under{" "}
+                    <strong>Advanced SIP settings</strong> if your PBX uses a
+                    custom path.
                   </>
                 ) : (
                   <>
@@ -306,6 +366,27 @@ export default function VoipConfigModal({
                         field.type === "password" ? "new-password" : "off"
                       }
                     />
+                    {field.key === "sipWsUrl" ? (
+                      <div className="voip-modal__ws">
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--ghost voip-modal__ws-btn"
+                          onClick={handleDetectWs}
+                          disabled={!canWrite || saving || detecting}
+                        >
+                          {detecting ? (
+                            <Loader2 size={14} className="workspace-spin" />
+                          ) : (
+                            <Radar size={14} />
+                          )}
+                          {detecting ? "Scanning provider…" : "Detect automatically"}
+                        </button>
+                        <span className="voip-modal__ws-status" role="status">
+                          {wsStatus ||
+                            "Optional — leave empty and the endpoint is detected automatically."}
+                        </span>
+                      </div>
+                    ) : null}
                     {field.hint ? (
                       <p className="voip-modal__hint">{field.hint}</p>
                     ) : null}
@@ -347,6 +428,27 @@ export default function VoipConfigModal({
                           placeholder={field.placeholder || ""}
                           autoComplete="off"
                         />
+                        {field.key === "sipWsUrl" ? (
+                          <div className="voip-modal__ws">
+                            <button
+                              type="button"
+                              className="admin-btn admin-btn--ghost voip-modal__ws-btn"
+                              onClick={handleDetectWs}
+                              disabled={!canWrite || saving || detecting}
+                            >
+                              {detecting ? (
+                                <Loader2 size={14} className="workspace-spin" />
+                              ) : (
+                                <Radar size={14} />
+                              )}
+                              {detecting ? "Scanning provider…" : "Detect automatically"}
+                            </button>
+                            <span className="voip-modal__ws-status" role="status">
+                              {wsStatus ||
+                                "Optional — leave empty and the endpoint is detected automatically."}
+                            </span>
+                          </div>
+                        ) : null}
                         {field.hint ? (
                           <p className="voip-modal__hint">{field.hint}</p>
                         ) : null}

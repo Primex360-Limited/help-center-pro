@@ -93,3 +93,15 @@ export function adminSignupPath() {
   // Public admin creation is disabled — always send to admin sign-in.
   return adminLoginPath();
 }
+
+/**
+ * Platform-wide WebRTC gateway (Kamailio/FreeSWITCH/Asterisk `transport ws`).
+ *
+ * Carriers such as Stuncall only publish a SIP IP + UDP port, which a browser
+ * can never dial. When `VITE_SIP_DEFAULT_WSS` is set, every tenant/provider
+ * without its own WebSocket URL registers through this gateway, so agents never
+ * have to paste one. Tenants can still override it per provider.
+ */
+export const SIP_DEFAULT_WSS = String(
+  import.meta.env.VITE_SIP_DEFAULT_WSS || ""
+).trim();

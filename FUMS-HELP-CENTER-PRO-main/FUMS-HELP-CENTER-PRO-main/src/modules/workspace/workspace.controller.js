@@ -7,8 +7,11 @@ import {
     updateWorkspaceProfile,
     getVoipSettings,
     saveVoipSettings,
-    testVoipConnection
+    testVoipConnection,
+    discoverVoipWebSocket
 } from "./workspace.service.js";
+import { getEffectivePermissionsFromUser, isSuperAdminUser } from "../roles/role.service.js";
+import { normalizePermissionKey } from "../../shared/utils/permissionKey.js";
 import { getApiKeys, regenerateApiKeys } from "./api-keys.service.js";
 import { getWebhooks, saveWebhooks } from "./webhooks.service.js";
 import {
@@ -117,6 +120,43 @@ export async function testVoipConnectionHandler(req, res) {
         success: result.success,
         details: result.details
     });
+}
+
+/**
+ * Does the caller hold `settings:write`? Discovery only writes when it does, so
+ * an agent can trigger it from the softphone without gaining settings access.
+ */
+function callerCanWriteSettings(req) {
+    try {
+        if (isSuperAdminUser(req.currentUser || {})) return true;
+        const permissions = getEffectivePermissionsFromUser(req.currentUser || {}).map(
+            (permission) => normalizePermissionKey(permission)
+        );
+        return permissions.includes("settings:write");
+    } catch {
+        return false;
+    }
+}
+
+export async function discoverVoipWebSocketHandler(req, res) {
+    const result = await discoverVoipWebSocket({
+        tenantId: resolveTenantId(req),
+        payload: req.validatedBody || req.body || {},
+        canWrite: callerCanWriteSettings(req),
+        actorId: resolveActorId(req)
+    });
+
+    const message = result.wsUrl
+        ? result.source === "tenant"
+            ? result.verified
+                ? "Saved WebSocket URL verified"
+                : "Saved WebSocket URL did not answer the probe"
+            : result.source === "platform"
+              ? "Using the platform WebRTC gateway"
+              : "WebSocket endpoint discovered"
+        : "No WebSocket endpoint could be verified";
+
+    return successResponse(res, message, result);
 }
 
 export async function getApiKeysHandler(req, res) {

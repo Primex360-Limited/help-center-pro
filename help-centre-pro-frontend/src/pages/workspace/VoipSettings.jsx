@@ -5,16 +5,19 @@ import {
   Loader2,
   Phone,
   Plus,
+  Radar,
   RotateCcw,
   Save,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
 import {
+  discoverVoipWebSocket,
   getVoipSettings,
   saveVoipSettings,
   testVoipConnection,
 } from "../../api/workspace.api.js";
+import { SIP_DEFAULT_WSS } from "../../config/env.js";
 import {
   PROVIDER_CATEGORIES,
   getProviderById,
@@ -44,7 +47,7 @@ function normalizeConfigs(configs = []) {
 }
 
 /** What this provider still needs before calls can work. */
-function configReadiness(config) {
+function configReadiness(config, { platformDefaultWss = "" } = {}) {
   const credentials = resolveSipCredentials(
     config.providerId,
     config.credentials || {}
@@ -80,10 +83,22 @@ function configReadiness(config) {
   }
 
   if (!credentials.sipWsUrl) {
+    // No WebSocket URL is no longer a dead end: the softphone resolves one
+    // (platform gateway → server discovery → verified conventional endpoints)
+    // before it registers, and every agent inherits the result.
+    const gateway = platformDefaultWss || SIP_DEFAULT_WSS;
+    const isRawIp = /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(String(host));
+
     return {
       tone: "amber",
-      label: "Fields complete · WSS needed",
-      hint: "Browser calling needs the WebSocket (WSS) URL from the provider — add it under Edit → Advanced SIP settings.",
+      label: gateway
+        ? "Fields complete · gateway ready"
+        : isRawIp
+          ? "Fields complete · auto-detect"
+          : "Fields complete · WSS auto",
+      hint: gateway
+        ? `Agents register through the platform WebRTC gateway (${gateway}). Paste a provider WSS URL to bypass it.`
+        : "Help Centre Pro finds the provider's WebSocket automatically before each registration. Press “Detect WSS” to store the exact endpoint once, or paste one to override.",
     };
   }
 
@@ -123,6 +138,8 @@ export default function VoipSettings({ embedded = false } = {}) {
   const [configurations, setConfigurations] = useState([]);
   const [activeConfigId, setActiveConfigId] = useState("");
   const [acceptInbound, setAcceptInbound] = useState(true);
+  const [platformDefaultWss, setPlatformDefaultWss] = useState(SIP_DEFAULT_WSS);
+  const [detectingId, setDetectingId] = useState("");
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -137,6 +154,7 @@ export default function VoipSettings({ embedded = false } = {}) {
       setAcceptInbound(
         data.acceptInbound === undefined ? true : Boolean(data.acceptInbound)
       );
+      if (data.platformDefaultWss) setPlatformDefaultWss(data.platformDefaultWss);
     } catch (err) {
       setError(err.message || "Failed to load VoIP settings");
     } finally {
@@ -335,6 +353,81 @@ export default function VoipSettings({ embedded = false } = {}) {
       );
     } catch {
       /* error already set */
+    }
+  }
+
+  /**
+   * "Detect WSS" — ask the backend to probe the provider's network and store the
+   * endpoint it finds. This is the one-click answer to "Stuncall gave me an IP
+   * and a UDP port, and my agents cannot call".
+   */
+  async function handleDetectWs(configId) {
+    if (detectingId) return;
+    const config = configurations.find((entry) => entry.id === configId);
+    if (!config) return;
+
+    setDetectingId(configId);
+    setTestResult(null);
+    setError("");
+    setBanner("");
+    try {
+      const res = await discoverVoipWebSocket({
+        configId,
+        providerId: config.providerId,
+        persist: canWrite,
+        force: true,
+      });
+      const payload = res?.data || {};
+      const best = payload.wsUrl || payload.discovery?.best?.url || "";
+      const notes = payload.discovery?.notes || [];
+
+      if (!best) {
+        const reason =
+          notes[0] ||
+          "No WebSocket endpoint answered from this provider's network.";
+        setTestResult({
+          configId,
+          success: false,
+          message: `${reason} Ask the provider for their WSS URL once — it then works for every agent.`,
+          details: payload.discovery || null,
+        });
+        return;
+      }
+
+      if (payload.saved) {
+        // The server stored it on the provider config; re-read so the card and
+        // the "unsaved changes" indicator stay truthful.
+        await loadSettings();
+      } else {
+        setConfigurations((prev) =>
+          prev.map((entry) =>
+            entry.id === configId
+              ? {
+                  ...entry,
+                  credentials: { ...entry.credentials, sipWsUrl: best },
+                }
+              : entry
+          )
+        );
+      }
+
+      const message =
+        payload.source === "tenant"
+          ? payload.verified
+            ? `Saved WebSocket URL verified: ${best}`
+            : `Saved WebSocket URL could not be confirmed from the server (${best}). Keep it if your agents reach it.`
+          : payload.source === "platform"
+            ? `No provider WebSocket found — agents will register through the platform gateway (${best}).`
+            : `WebSocket endpoint detected and verified: ${best}`;
+
+      setTestResult({ configId, success: true, message, details: payload.discovery || null });
+      setBanner(message);
+    } catch (err) {
+      const message = err.message || "WebSocket detection failed";
+      setTestResult({ configId, success: false, message });
+      setError(message);
+    } finally {
+      setDetectingId("");
     }
   }
 
@@ -575,10 +668,13 @@ export default function VoipSettings({ embedded = false } = {}) {
                 const cfgProvider = getProviderById(config.providerId);
                 const testRes =
                   testResult?.configId === config.id ? testResult : null;
-                const readiness = configReadiness({
-                  ...config,
-                  lastTest: liveTests[config.id] || config.lastTest,
-                });
+                const readiness = configReadiness(
+                  {
+                    ...config,
+                    lastTest: liveTests[config.id] || config.lastTest,
+                  },
+                  { platformDefaultWss }
+                );
 
                 return (
                   <div
@@ -655,6 +751,24 @@ export default function VoipSettings({ embedded = false } = {}) {
                               <Phone size={14} />
                             )}
                             Test
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn--ghost"
+                            onClick={() => handleDetectWs(config.id)}
+                            disabled={Boolean(detectingId)}
+                            title={
+                              config.credentials?.sipWsUrl
+                                ? "Re-check the saved WebSocket URL and probe for a better one"
+                                : "Probe the provider's network and store the WebSocket endpoint agents need"
+                            }
+                          >
+                            {detectingId === config.id ? (
+                              <Loader2 size={14} className="workspace-spin" />
+                            ) : (
+                              <Radar size={14} />
+                            )}
+                            Detect WSS
                           </button>
                           <button
                             type="button"

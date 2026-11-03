@@ -90,7 +90,7 @@ const BRANDED_ADVANCED_FIELDS = [
     required: false,
     group: "advanced",
     placeholder: "wss://sip.provider.com:8089/ws",
-    hint: "Required for calling from the browser. Raw IP / UDP-only trunks cannot register in a browser without it.",
+    hint: "Optional. Leave empty and Help Centre Pro detects the provider's WebSocket automatically (or routes through the platform gateway). Paste a URL only to override the detection.",
   },
 ];
 
@@ -170,9 +170,9 @@ const CUSTOM_SIP_FIELDS = [
     key: "sipWsUrl",
     label: "WebSocket URL (WSS)",
     type: "text",
-    required: true,
+    required: false,
     placeholder: "wss://sip.example.com:8089/ws",
-    hint: "Required for browser calling. From your PBX / SIP admin.",
+    hint: "Optional. Leave empty and Help Centre Pro finds your PBX's WebSocket automatically. Paste one only if your PBX uses a custom path or port.",
   },
   {
     key: "sipUsername",
@@ -370,7 +370,12 @@ const BRANDED_CATALOG = [
   // ——— Nigeria ———
   ["twotalk", "2talk", "global", "https://2talk.com/", "sip.2talk.com", ["US", "GLOBAL"], "003"],
   // Stuncall hands out a raw SIP IP + port in its welcome email
-  // ("IP Address: 46.62.134.9 / Port Number: 5060"), not a hostname.
+  // ("IP Address: 46.62.134.9 / Port Number: 5060"), not a hostname. No `wss://`
+  // endpoint exists on that host or on stuncall.com (verified: no DNS for
+  // sip./voip./wss.stuncall.com, no WebSocket upgrade on the IP), so browser
+  // calling for Stuncall relies on either the provider supplying a WSS URL or
+  // the platform WebRTC gateway (VITE_SIP_DEFAULT_WSS / SIP_DEFAULT_WSS).
+  // Everything is auto-detected at registration time — agents never type it.
   ["stuncall", "Stuncall", "nigeria", "https://stuncall.com", "46.62.134.9", ["NG", "GH", "KE", "ZA"], "", "", "5060"],
   ["smilecoms", "SmileComs", "nigeria", "https://smilecoms.com", "sip.smilecoms.com", ["NG", "ZA", "KE", "GH", "TZ"]],
   ["terragon", "Terragon", "nigeria", "https://terragon.net", "sip.terragon.net", ["NG"]],

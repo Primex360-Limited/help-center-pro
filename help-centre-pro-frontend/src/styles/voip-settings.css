@@ -1078,3 +1078,40 @@
   font-size: 12.5px;
   line-height: 1.5;
 }
+
+/* ---------------------------------------------------------------- *
+ * WebSocket auto-detection (Advanced SIP settings)
+ * The field is optional: the softphone resolves the endpoint itself
+ * unless an admin pins one here.
+ * ---------------------------------------------------------------- */
+.voip-modal__ws {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 6px;
+}
+
+.voip-modal__ws-btn {
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 6px 10px;
+}
+
+.voip-modal__ws-status {
+  flex: 1 1 220px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #667085;
+}
+
+.voip-modal__ws-status:not(:empty) {
+  color: #475467;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .voip-modal__ws-btn {
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+}
+

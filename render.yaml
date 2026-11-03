@@ -42,6 +42,12 @@ services:
         value: https://helpcentre-pro-admin.onrender.com
       - key: CORS_ORIGINS
         value: https://helpcentre-pro-web.onrender.com,https://helpcentre-pro-admin.onrender.com
+      # Optional WebRTC gateway for SIP carriers that publish only IP + UDP 5060
+      # (Stuncall et al.). Set it in the Render dashboard to a Kamailio /
+      # FreeSWITCH / Asterisk `transport ws` endpoint — e.g.
+      # wss://sip.your-domain.com:8089/ws — and agents never need a WSS URL.
+      - key: SIP_DEFAULT_WSS
+        sync: false
       - key: DATABASE_URL_PRODUCTION
         fromDatabase:
           name: helpcentre-pro-db
@@ -87,6 +93,9 @@ services:
         value: https://helpcentre-pro-api.onrender.com
       - key: VITE_ADMIN_URL
         value: https://helpcentre-pro-admin.onrender.com
+      # Optional platform WebRTC gateway (see SIP_DEFAULT_WSS on the API).
+      - key: VITE_SIP_DEFAULT_WSS
+        sync: false
 
   # ── Admin frontend
   - type: web
@@ -108,6 +117,9 @@ services:
         value: https://helpcentre-pro-api.onrender.com
       - key: VITE_APP_URL
         value: https://helpcentre-pro-web.onrender.com
+      # Optional platform WebRTC gateway (see SIP_DEFAULT_WSS on the API).
+      - key: VITE_SIP_DEFAULT_WSS
+        sync: false
 
 databases:
   - name: helpcentre-pro-db

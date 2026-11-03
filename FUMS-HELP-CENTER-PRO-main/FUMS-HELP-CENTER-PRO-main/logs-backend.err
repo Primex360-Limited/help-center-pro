@@ -4,3 +4,1102 @@ MongoDB unavailable. Continuing with Postgres only.
 [IMAP] ebube.okechukwu@primex360.com: Connection not available
 [IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com (LOGIN): Unexpected close
 [IMAP] ebube.okechukwu@primex360.com: Connection not available
+[Ticket inactivity] cycle failed: 
+Invalid `prisma.tenant.findMany()` invocation:
+
+
+Can't reach database server at `localhost:5433`
+
+Please make sure your database server is running at `localhost:5433`.
+[IMAP Sync] Error for account ebubsebubs@gmail.com: PrismaClientKnownRequestError: 
+Invalid `prisma.emailAccount.findUnique()` invocation:
+
+
+Can't reach database server at `localhost:5433`
+
+Please make sure your database server is running at `localhost:5433`.
+    at ei.handleRequestError (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\@prisma\client\runtime\library.js:121:7268)
+    at ei.handleAndLogRequestError (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\@prisma\client\runtime\library.js:121:6593)
+    at ei.request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\@prisma\client\runtime\library.js:121:6300)
+    at async a (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\@prisma\client\runtime\library.js:130:9551)
+    at async getEmailAccountTokens (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/email-account.service.js:373:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:74:18)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  code: 'P1001',
+  meta: { modelName: 'EmailAccount', database_location: 'localhost:5433' },
+  clientVersion: '6.19.3'
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: 
+Invalid `prisma.emailAccount.findUnique()` invocation:
+
+
+Can't reach database server at `localhost:5433`
+
+Please make sure your database server is running at `localhost:5433`.
+[IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com (LOGIN): getaddrinfo ENOTFOUND imappro.zoho.com
+[IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com: getaddrinfo ENOTFOUND imappro.zoho.com
+[IMAP] ebube.okechukwu@primex360.com failed on imap.zoho.com (LOGIN): getaddrinfo ENOTFOUND imap.zoho.com
+[IMAP] ebube.okechukwu@primex360.com failed on imap.zoho.com: getaddrinfo ENOTFOUND imap.zoho.com
+[IMAP Sync] Error for account ebube.okechukwu@primex360.com: AppError: getaddrinfo ENOTFOUND imap.zoho.com
+    at connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:174:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 400,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebube.okechukwu@primex360.com: getaddrinfo ENOTFOUND imap.zoho.com
+Gmail token refresh error: GaxiosError: request to https://oauth2.googleapis.com/token failed, reason: getaddrinfo ENOTFOUND oauth2.googleapis.com
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:149:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 2,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793692995593,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: undefined,
+  error: FetchError: request to https://oauth2.googleapis.com/token failed, reason: getaddrinfo ENOTFOUND oauth2.googleapis.com
+      at ClientRequest.<anonymous> (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\node-fetch\lib\index.js:1501:11)
+      at ClientRequest.emit (node:events:518:28)
+      at emitErrorEvent (node:_http_client:104:11)
+      at TLSSocket.socketErrorListener (node:_http_client:518:5)
+      at TLSSocket.emit (node:events:518:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    type: 'system',
+    errno: 'ENOTFOUND',
+    code: 'ENOTFOUND'
+  },
+  code: 'ENOTFOUND',
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+[IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com (LOGIN): getaddrinfo ENOTFOUND imappro.zoho.com
+[IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com: getaddrinfo ENOTFOUND imappro.zoho.com
+[IMAP] ebube.okechukwu@primex360.com failed on imap.zoho.com (LOGIN): getaddrinfo ENOTFOUND imap.zoho.com
+[IMAP] ebube.okechukwu@primex360.com failed on imap.zoho.com: getaddrinfo ENOTFOUND imap.zoho.com
+[IMAP Sync] Error for account ebube.okechukwu@primex360.com: AppError: getaddrinfo ENOTFOUND imap.zoho.com
+    at connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:174:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 400,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebube.okechukwu@primex360.com: getaddrinfo ENOTFOUND imap.zoho.com
+Gmail token refresh error: GaxiosError: request to https://oauth2.googleapis.com/token failed, reason: getaddrinfo ENOTFOUND oauth2.googleapis.com
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:149:19)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 2,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693005776,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: undefined,
+  error: FetchError: request to https://oauth2.googleapis.com/token failed, reason: getaddrinfo ENOTFOUND oauth2.googleapis.com
+      at ClientRequest.<anonymous> (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\node-fetch\lib\index.js:1501:11)
+      at ClientRequest.emit (node:events:518:28)
+      at emitErrorEvent (node:_http_client:104:11)
+      at TLSSocket.socketErrorListener (node:_http_client:518:5)
+      at TLSSocket.emit (node:events:518:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    type: 'system',
+    errno: 'ENOTFOUND',
+    code: 'ENOTFOUND'
+  },
+  code: 'ENOTFOUND',
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693034762,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:03:54 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693061848,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:04:21 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693087622,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:04:47 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693104023,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:05:04 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693117490,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:05:17 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693137816,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:05:37 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693147747,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:05:47 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+[IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com (LOGIN): connect ECONNABORTED 136.143.191.131:993
+[IMAP] ebube.okechukwu@primex360.com failed on imappro.zoho.com: getaddrinfo ENOTFOUND imappro.zoho.com
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693174755,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:06:14 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693193113,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:06:33 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token
+Gmail token refresh error: GaxiosError: invalid_grant
+    at Gaxios._request (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\gaxios\build\src\gaxios.js:142:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async OAuth2Client.refreshTokenNoCache (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:212:19)
+    at async OAuth2Client.refreshAccessTokenAsync (C:\Users\USER\Documents\BetChief\Help_center_pro_project\Help_Center_Pro_webapp\FUMS-HELP-CENTER-PRO-main\FUMS-HELP-CENTER-PRO-main\node_modules\googleapis-common\node_modules\google-auth-library\build\src\auth\oauth2client.js:247:19)
+    at async refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:86:29)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  config: {
+    retry: true,
+    retryConfig: {
+      httpMethodsToRetry: [Array],
+      currentRetryAttempt: 0,
+      retry: 3,
+      noResponseRetries: 2,
+      retryDelayMultiplier: 2,
+      timeOfFirstRequest: 1793693207109,
+      totalTimeout: 9007199254740991,
+      maxRetryDelay: 9007199254740991,
+      statusCodesToRetry: [Array]
+    },
+    method: 'POST',
+    url: 'https://oauth2.googleapis.com/token',
+    data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'google-api-nodejs-client/9.15.1',
+      'x-goog-api-client': 'gl-node/22.16.0'
+    },
+    paramsSerializer: [Function: paramsSerializer],
+    body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+    validateStatus: [Function: validateStatus],
+    responseType: 'unknown',
+    errorRedactor: [Function: defaultErrorRedactor]
+  },
+  response: {
+    config: {
+      retry: true,
+      retryConfig: [Object],
+      method: 'POST',
+      url: 'https://oauth2.googleapis.com/token',
+      data: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      headers: [Object],
+      paramsSerializer: [Function: paramsSerializer],
+      body: '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.',
+      validateStatus: [Function: validateStatus],
+      responseType: 'unknown',
+      errorRedactor: [Function: defaultErrorRedactor]
+    },
+    data: {
+      error: 'invalid_grant',
+      error_description: 'Token has been expired or revoked.'
+    },
+    headers: {
+      'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000',
+      'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+      'content-encoding': 'gzip',
+      'content-type': 'application/json; charset=utf-8',
+      date: 'Tue, 03 Nov 2026 08:06:47 GMT',
+      expires: 'Mon, 01 Jan 1990 00:00:00 GMT',
+      pragma: 'no-cache',
+      server: 'scaffolding on HTTPServer2',
+      'transfer-encoding': 'chunked',
+      vary: 'Origin, X-Origin, Referer',
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'SAMEORIGIN',
+      'x-xss-protection': '0'
+    },
+    status: 400,
+    statusText: 'Bad Request',
+    request: { responseURL: 'https://oauth2.googleapis.com/token' }
+  },
+  error: undefined,
+  status: 400,
+  [Symbol(gaxios-gaxios-error)]: '6.7.1'
+}
+[IMAP Sync] Error for account ebubsebubs@gmail.com: AppError: Failed to refresh Gmail access token
+    at refreshGmailToken (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/oauth/gmail.oauth.service.js:99:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async connectToImap (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:122:5)
+    at async syncEmailAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/imap/imap-sync.service.js:369:27)
+    at async syncAccount (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:31:20)
+    at async Timeout.runSyncCycle [as _onTimeout] (file:///C:/Users/USER/Documents/BetChief/Help_center_pro_project/Help_Center_Pro_webapp/FUMS-HELP-CENTER-PRO-main/FUMS-HELP-CENTER-PRO-main/src/modules/email/worker/email-sync-worker.js:84:7) {
+  statusCode: 401,
+  success: false,
+  errors: []
+}
+[Email Sync] ✗ Failed to sync ebubsebubs@gmail.com: Failed to refresh Gmail access token

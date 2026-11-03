@@ -104,3 +104,22 @@ export const paystackInitializeSchema = z.object({
 export const paystackVerifySchema = z.object({
     reference: z.string().trim().min(1, "reference is required")
 });
+
+/**
+ * Body for `POST /workspace/voip/discover-ws`.
+ *
+ * `host` is optional when `configId` points at a stored provider (the host is
+ * read from its credentials), which is what the softphone uses so it never has
+ * to send anything but the config id.
+ */
+export const discoverVoipWebSocketSchema = z.object({
+    configId: z.string().trim().max(120).optional(),
+    providerId: z.string().trim().max(120).optional(),
+    host: z.string().trim().max(255).optional(),
+    providerDomain: z.string().trim().max(255).optional(),
+    providerWsUrl: z.string().trim().max(500).optional(),
+    /** Store the discovered URL on the config (requires settings:write). */
+    persist: z.boolean().optional(),
+    /** Ignore the memoised result and probe again. */
+    force: z.boolean().optional()
+});

@@ -3,13 +3,15 @@
  * No paid CPaaS SDKs (Twilio, etc.).
  */
 
-import { getVoipSettings } from "../api/workspace.api.js";
+import { getVoipSettings, discoverVoipWebSocket } from "../api/workspace.api.js";
+import { SIP_DEFAULT_WSS } from "../config/env.js";
+import { getProviderById, resolveSipCredentials } from "../constants/voipProviders.js";
 import {
-  getProviderById,
-  isRawHostEndpoint,
-  resolveSipCredentials,
-  wssFor,
-} from "../constants/voipProviders.js";
+  invalidateWsCache,
+  normalizeWsUrl,
+  providerWebDomain,
+  resolveSipWebSocket,
+} from "../utils/sipWebSocket.js";
 
 function pickSipHost(credentials = {}) {
   return (
@@ -87,28 +89,39 @@ function buildIceServers(credentials = {}) {
   return iceServers;
 }
 
-function buildWsUrl(credentials = {}, host) {
-  const explicit =
+/** A WebSocket URL the tenant saved, normalised (`https://` → `wss://`). */
+function explicitWsUrl(credentials = {}) {
+  return normalizeWsUrl(
     credentials.sipWsUrl ||
-    credentials.wssUrl ||
-    credentials.websocketUrl ||
-    credentials.sipWebsocket ||
-    "";
-  if (explicit) {
-    if (/^wss?:\/\//i.test(explicit)) return explicit;
-    return `wss://${explicit}`;
-  }
+      credentials.wssUrl ||
+      credentials.websocketUrl ||
+      credentials.sipWebsocket ||
+      ""
+  );
+}
 
-  // A bare IP / IP:port SIP endpoint cannot be turned into a WebSocket URL by
-  // guessing — say so instead of failing with a misleading socket error.
-  if (isRawHostEndpoint(host)) {
-    throw new Error(
-      `Browser calling needs the WebSocket (WSS) URL from your provider — “${host}” is a SIP host/IP only. Add it under Settings → VoIP/SIP → Edit → Advanced SIP settings.`
-    );
-  }
+/**
+ * Ask the backend to rank candidate endpoints before probing from the browser.
+ *
+ * A page cannot do DNS SRV lookups or open raw TCP sockets, so the server adds
+ * evidence the softphone could never gather on its own. Best effort on purpose:
+ * an offline API or a read-only agent must never block a call.
+ */
+async function fetchServerDiscovery({ provider, host, providerWsUrl }) {
+  const sipHost = String(host || "").trim();
+  if (!sipHost) return null;
 
-  // Hostname default used by Asterisk / FreeSWITCH / Kamailio deployments.
-  return wssFor(host);
+  try {
+    const response = await discoverVoipWebSocket({
+      providerId: provider?.id || "",
+      host: sipHost,
+      providerDomain: providerWebDomain(provider),
+      providerWsUrl: providerWsUrl || provider?.defaults?.sipWsUrl || "",
+    });
+    return response?.data || null;
+  } catch {
+    return null;
+  }
 }
 
 function remoteIdentity(session) {
@@ -143,6 +156,10 @@ class VoipService {
     this.remoteStream = null;
     this.pendingRecordingDataUrl = null;
     this.pendingQuality = null;
+    /** Resolution of the SIP WebSocket actually in use (see utils/sipWebSocket). */
+    this.wsInfo = null;
+    /** Platform gateway from the API (VITE_SIP_DEFAULT_WSS is the fallback). */
+    this.platformDefaultWss = "";
   }
 
   async initialize({ force = false } = {}) {
@@ -171,6 +188,9 @@ class VoipService {
         settings.acceptInbound === undefined
           ? true
           : Boolean(settings.acceptInbound);
+      // Server-side gateway wins over the build-time env (it can change without
+      // a redeploy), and it is what lets IP-only carriers work out of the box.
+      this.platformDefaultWss = settings.platformDefaultWss || "";
       const provider =
         getProviderById(activeConfig.providerId) || {
           id: activeConfig.providerId,
@@ -214,9 +234,46 @@ class VoipService {
       this.remoteStream = null;
       this.pendingRecordingDataUrl = null;
       this.pendingQuality = null;
+      this.wsInfo = null;
     }
 
-  buildUaConfiguration(credentials, JsSIP) {
+  /**
+   * Resolve the WebSocket this provider must be reached on.
+   *
+   * Precedence lives in `utils/sipWebSocket.js`: a URL the tenant saved always
+   * wins, then the provider preset, then the platform gateway, then whatever we
+   * learned/discovered earlier, then verified conventional endpoints. Nothing in
+   * the discovered layers is used before a real WebSocket handshake succeeds.
+   */
+  async resolveWebSocket(credentials, { force = false, skipTenant = false } = {}) {
+    const host = pickSipHost(credentials);
+    const provider = this.provider;
+    const explicit = skipTenant ? "" : explicitWsUrl(credentials);
+    const providerPreset = provider?.defaults?.sipWsUrl || "";
+    const platformDefault = this.platformDefaultWss || SIP_DEFAULT_WSS;
+
+    // Only ask the backend when the browser has nothing else to go on: a saved
+    // or operator-supplied URL must not pay for a network round-trip.
+    const discovery =
+      explicit || providerPreset || platformDefault
+        ? null
+        : await fetchServerDiscovery({ provider, host, providerWsUrl: providerPreset });
+
+    const resolution = await resolveSipWebSocket({
+      credentials,
+      provider,
+      host,
+      platformDefault,
+      discovery,
+      force,
+      skipTenant,
+    });
+
+    this.wsInfo = resolution;
+    return resolution;
+  }
+
+  async buildUaConfiguration(credentials, JsSIP, { force = false, skipTenant = false } = {}) {
     const host = pickSipHost(credentials);
     const user = pickSipUser(credentials);
     const password = pickSipPassword(credentials);
@@ -231,7 +288,10 @@ class VoipService {
       );
     }
 
-    const wsUrl = buildWsUrl(credentials, host);
+    const { wsUrl, source, warning } = await this.resolveWebSocket(credentials, {
+      force,
+      skipTenant,
+    });
     const socket = new JsSIP.WebSocketInterface(wsUrl);
     const configuration = {
       sockets: [socket],
@@ -245,75 +305,121 @@ class VoipService {
 
     const iceServers = buildIceServers(credentials);
     configuration.pcConfig = { iceServers };
-    return { configuration, host, user, wsUrl };
+    return { configuration, host, user, wsUrl, wsSource: source, wsWarning: warning };
   }
 
   async initializeJsSip(credentials) {
     const mod = await import("jssip");
     const JsSIP = mod.default || mod;
-    const { configuration, wsUrl } = this.buildUaConfiguration(credentials, JsSIP);
-    this.pcConfig = configuration.pcConfig;
 
-    this.device = new JsSIP.UA(configuration);
-    this.setupSipListeners();
+    /**
+     * One registration attempt. `forceWs` re-resolves the WebSocket instead of
+     * trusting the cached discovery result.
+     */
+    const attempt = async ({ forceWs = false, skipTenant = false } = {}) => {
+      const { configuration, wsUrl } = await this.buildUaConfiguration(
+        credentials,
+        JsSIP,
+        { force: forceWs, skipTenant }
+      );
+      this.pcConfig = configuration.pcConfig;
 
-    const stopDevice = () => {
-      try {
-        this.device?.unregister?.();
-        this.device?.stop?.();
-      } catch {
-        /* ignore */
-      }
-      this.device = null;
-      this.registered = false;
+      this.device = new JsSIP.UA(configuration);
+      this.setupSipListeners();
+
+      const stopDevice = () => {
+        try {
+          this.device?.unregister?.();
+          this.device?.stop?.();
+        } catch {
+          /* ignore */
+        }
+        this.device = null;
+        this.registered = false;
+      };
+
+      await new Promise((resolve, reject) => {
+        const fail = (error) => {
+          cleanup();
+          stopDevice();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        };
+
+        const timeout = setTimeout(
+          () =>
+            fail(
+              Object.assign(
+                new Error(
+                  "SIP registration timed out. Verify the WebSocket (WSS) URL, the server/port, and the username/password."
+                ),
+                { websocket: true, wsUrl }
+              )
+            ),
+          20000
+        );
+
+        const onRegistered = () => {
+          cleanup();
+          this.registered = true;
+          resolve();
+        };
+        const onFailed = (event) => {
+          const reason =
+            event?.cause ||
+            event?.response?.reason_phrase ||
+            "SIP registration failed";
+          const isSocketProblem = /websocket|connect/i.test(String(reason));
+          fail(
+            Object.assign(
+              new Error(
+                isSocketProblem
+                  ? `Cannot open the SIP WebSocket (${wsUrl}). Check the WSS URL, port and firewall.`
+                  : String(reason)
+              ),
+              { websocket: isSocketProblem, wsUrl }
+            )
+          );
+        };
+        const cleanup = () => {
+          clearTimeout(timeout);
+          this.device?.off("registered", onRegistered);
+          this.device?.off("registrationFailed", onFailed);
+        };
+
+        this.device.on("registered", onRegistered);
+        this.device.on("registrationFailed", onFailed);
+
+        try {
+          this.device.start();
+        } catch (error) {
+          fail(error);
+        }
+      });
     };
 
-    await new Promise((resolve, reject) => {
-      const fail = (message) => {
-        cleanup();
-        stopDevice();
-        reject(new Error(message));
-      };
+    try {
+      await attempt();
+    } catch (error) {
+      // An endpoint can go stale: a learned/discovered URL when the provider
+      // moved the WebSocket, or a saved URL that no longer answers. In both
+      // cases resolve once more instead of leaving the agent with a dead line —
+      // a *working* saved URL is never replaced, only a failing one.
+      const info = this.wsInfo || {};
+      const rediscoverable =
+        ["learned", "discovered", "derived"].includes(info.source) ||
+        (info.source === "tenant" && info.verification === "unverified");
 
-      const timeout = setTimeout(
-        () =>
-          fail(
-            "SIP registration timed out. Verify the WebSocket (WSS) URL, the server/port, and the username/password."
-          ),
-        20000
-      );
+      if (!error?.websocket || !rediscoverable) throw error;
 
-      const onRegistered = () => {
-        cleanup();
-        this.registered = true;
-        resolve();
-      };
-      const onFailed = (event) => {
-        const reason =
-          event?.cause ||
-          event?.response?.reason_phrase ||
-          "SIP registration failed";
-        fail(
-          /websocket|connect/i.test(String(reason))
-            ? `Cannot open the SIP WebSocket (${wsUrl}). Check the WSS URL, port and firewall.`
-            : String(reason)
-        );
-      };
-      const cleanup = () => {
-        clearTimeout(timeout);
-        this.device?.off("registered", onRegistered);
-        this.device?.off("registrationFailed", onFailed);
-      };
-
-      this.device.on("registered", onRegistered);
-      this.device.on("registrationFailed", onFailed);
-
-      try {
-        this.device.start();
-      } catch (error) {
-        fail(error?.message || "Unable to start the SIP stack");
+      if (info.source !== "tenant") {
+        invalidateWsCache(this.provider?.id, pickSipHost(credentials));
       }
-    });
+
+      await attempt({
+        forceWs: true,
+        skipTenant: info.source === "tenant",
+      });
+    }
   }
 
   /**
@@ -323,13 +429,23 @@ class VoipService {
     const mod = await import("jssip");
     const JsSIP = mod.default || mod;
     const merged = resolveSipCredentials(providerId, credentials || {});
-    const { configuration, host, user, wsUrl } = await this.buildUaConfiguration(
-      merged,
-      JsSIP
-    );
-    const ua = new JsSIP.UA(configuration);
+
+    // Test a provider that is not necessarily the active one, so the resolver
+    // must see that provider's catalog preset/domain — and the softphone's own
+    // session state must survive the probe untouched.
+    const previousProvider = this.provider;
+    const previousWsInfo = this.wsInfo;
+    if (providerId) {
+      this.provider = getProviderById(providerId) || previousProvider;
+    }
+
+    let ua = null;
 
     try {
+      const { configuration, host, user, wsUrl, wsSource } =
+        await this.buildUaConfiguration(merged, JsSIP);
+      ua = new JsSIP.UA(configuration);
+
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           cleanup();
@@ -365,17 +481,26 @@ class VoipService {
 
       return {
         success: true,
-        message: "Live SIP registration succeeded. Softphone is ready.",
-        details: { host, username: user, wsUrl },
+        message: wsSource === "tenant"
+          ? "Live SIP registration succeeded. Softphone is ready."
+          : `Live SIP registration succeeded on the auto-detected WebSocket (${wsUrl}).`,
+        details: { host, username: user, wsUrl, wsSource },
       };
     } finally {
+      this.provider = previousProvider;
+      this.wsInfo = previousWsInfo;
       try {
-        ua.unregister?.();
-        ua.stop?.();
+        ua?.unregister?.();
+        ua?.stop?.();
       } catch {
         /* ignore */
       }
     }
+  }
+
+  /** Which WebSocket the softphone is registered on — used by settings + logs. */
+  getWebSocketInfo() {
+    return this.wsInfo ? { ...this.wsInfo } : null;
   }
 
   setupSipListeners() {

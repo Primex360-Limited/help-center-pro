@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Calendar,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -19,6 +18,8 @@ import { listTickets, updateTicketStatus } from "../../api/tickets.api.js";
 import { listUsers } from "../../api/users.api.js";
 import ConfirmActionModal from "../../components/agents/ConfirmActionModal.jsx";
 import AssignTicketModal from "../../components/tickets/AssignTicketModal.jsx";
+import DateRangePicker from "../../components/tickets/DateRangePicker.jsx";
+import PeriodFilter from "../../components/tickets/PeriodFilter.jsx";
 import { formatTicketId, priorityLabel, statusLabel } from "../../utils/format.js";
 import {
   channelTicketPath,
@@ -193,8 +194,7 @@ export default function Tickets() {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [channelFilter, setChannelFilter] = useState(routeChannel);
   const [assigneeFilter, setAssigneeFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateRange, setDateRange] = useState({ from: null, to: null, period: null });
   const [searchQuery, setSearchQuery] = useState(params.get("q") || "");
 
   const [page, setPage] = useState(1);
@@ -298,8 +298,8 @@ export default function Tickets() {
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
-    const toTs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
+    const fromTs = dateRange?.from ? new Date(dateRange.from).getTime() : null;
+    const toTs = dateRange?.to ? new Date(dateRange.to).getTime() : null;
 
     const rows = tickets.filter((ticket) => {
       const channel = ticketChannel(ticket);
@@ -329,7 +329,7 @@ export default function Tickets() {
       return haystack.includes(q);
     });
     return sortTicketsNewestFirst(rows);
-  }, [tickets, searchQuery, channelFilter, dateFrom, dateTo]);
+  }, [tickets, searchQuery, channelFilter, dateRange]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, totalPages);
@@ -554,28 +554,22 @@ export default function Tickets() {
           </select>
         ) : null}
 
-        <label className="tickets-filters__dates">
-          <Calendar size={15} aria-hidden="true" />
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
+        <div className="tickets-filters__date-group">
+          <DateRangePicker
+            value={dateRange}
+            onChange={(range) => {
+              setDateRange(range);
               setPage(1);
             }}
-            aria-label="Date from"
           />
-          <span>–</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
+          <PeriodFilter
+            value={dateRange}
+            onChange={(range) => {
+              setDateRange(range);
               setPage(1);
             }}
-            aria-label="Date to"
           />
-        </label>
+        </div>
 
         <select
           className="tickets-filters__select"

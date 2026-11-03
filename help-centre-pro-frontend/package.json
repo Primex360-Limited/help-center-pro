@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "date-fns": "^4.4.0",
     "firebase": "^11.10.0",
     "i18next": "^26.4.5",
     "jssip": "^3.13.9",
     "lucide-react": "^1.54.0",
     "react": "^19.1.1",
+    "react-day-picker": "^10.0.2",
     "react-dom": "^19.1.1",
     "react-i18next": "^17.0.16",
     "react-router-dom": "^7.18.4"

@@ -13,6 +13,7 @@ import {
     getVoipSettingsHandler,
     saveVoipSettingsHandler,
     testVoipConnectionHandler,
+    discoverVoipWebSocketHandler,
     getApiKeysHandler,
     regenerateApiKeysHandler,
     getWebhooksHandler,
@@ -27,7 +28,8 @@ import {
     apiKeyModeParamSchema,
     saveWebhooksSchema,
     paystackInitializeSchema,
-    paystackVerifySchema
+    paystackVerifySchema,
+    discoverVoipWebSocketSchema
 } from "./workspace.validation.js";
 import { requireWorkspaceTenant } from "../tenants/require-workspace-tenant.js";
 
@@ -250,6 +252,59 @@ workspaceRoutes.post(
     bindTenantToUser,
     requirePermission("settings:write"),
     asyncHandler(testVoipConnectionHandler)
+);
+
+/**
+ * @openapi
+ * /workspace/voip/discover-ws:
+ *   post:
+ *     tags: [Workspace]
+ *     summary: Discover the provider's SIP-over-WebSocket endpoint
+ *     description: >
+ *       Probes DNS SRV records plus the conventional Asterisk / FreeSWITCH /
+ *       Kamailio WebSocket ports and paths, confirming each candidate with a
+ *       real `101 Switching Protocols` handshake and a browser-trusted
+ *       certificate. Lets a browser softphone register with SIP providers that
+ *       only publish an IP + UDP port. Send `persist: true` (requires
+ *       settings:write) to store the result on the provider configuration so
+ *       every agent inherits it.
+ *     security:
+ *       - bearerAuth: []
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               configId:
+ *                 type: string
+ *               providerId:
+ *                 type: string
+ *               host:
+ *                 type: string
+ *               providerDomain:
+ *                 type: string
+ *               providerWsUrl:
+ *                 type: string
+ *               persist:
+ *                 type: boolean
+ *               force:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Ranked WebSocket candidates plus the best usable endpoint
+ *       403:
+ *         description: Forbidden
+ */
+workspaceRoutes.post(
+    "/workspace/voip/discover-ws",
+    requireAuth,
+    bindTenantToUser,
+    requireWorkspaceTenant,
+    validate(discoverVoipWebSocketSchema),
+    asyncHandler(discoverVoipWebSocketHandler)
 );
 
 /**
