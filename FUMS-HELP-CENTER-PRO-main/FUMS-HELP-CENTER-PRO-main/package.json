@@ -36,13 +36,13 @@
     "http-proxy-middleware": "^3.0.7",
     "imapflow": "^1.0.162",
     "jsonwebtoken": "^9.0.3",
-    "mailparser": "^3.7.1",
-    "mongoose": "^9.3.3",
-    "morgan": "^1.10.1",
-    "nodemailer": "^6.9.16",
+    "mailparser": "^3.14.3",
+    "mongoose": "^9.11.4",
+    "morgan": "^1.12.1",
+    "nodemailer": "^10.1.4",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
-    "prisma": "^6.19.3",
+    "prisma": "^7.10.1",
     "redis": "^5.11.0",
     "resend": "^6.34.1",
     "sendgrid": "^5.2.3",
@@ -50,7 +50,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "twilio": "^6.0.2",
-    "zod": "^4.3.6"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "jest": "^30.2.0",
